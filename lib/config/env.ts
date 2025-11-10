@@ -58,7 +58,10 @@ const envSchema = z.object({
 
   RESEND_API_KEY: z
     .string()
-    .startsWith("re_", "RESEND_API_KEY must start with 're_'")
+    .refine(
+      (val) => !val || val.startsWith("re_"),
+      "RESEND_API_KEY must start with 're_' when provided"
+    )
     .optional(),
 
   ADMIN_EMAILS: z

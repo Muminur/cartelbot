@@ -91,6 +91,7 @@ export const API_ROUTES = {
     MAGIC_LINK: "/api/auth/magic-link",
     VERIFY: "/api/auth/verify",
     LOGOUT: "/api/auth/logout",
+    SESSION: "/api/auth/session",
   },
   SIGNALS: {
     CREATE: "/api/signals/create",

@@ -1,12 +1,34 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { API_ROUTES } from "@/lib/constants";
+
 export default function HomePage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const response = await fetch(API_ROUTES.AUTH.SESSION);
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          router.push("/dashboard");
+        } else {
+          router.push("/login");
+        }
+      } catch {
+        router.push("/login");
+      }
+    };
+
+    checkSession();
+  }, [router]);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm">
-        <h1 className="text-4xl font-bold text-center mb-4">CartelBot</h1>
-        <p className="text-center text-muted-foreground">
-          Automated Binance Spot Trading Bot
-        </p>
-      </div>
-    </main>
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+    </div>
   );
 }
