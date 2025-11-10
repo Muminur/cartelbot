@@ -94,6 +94,7 @@ export interface ParsedSignal {
   currentMarketPrice?: number;
   confidence: number;
   errors: string[];
+  extractedText?: string;
 }
 
 export interface BinanceOrderResponse {
@@ -133,21 +134,52 @@ export interface BinanceAccountInfo {
   }>;
 }
 
+export interface BinanceSymbolFilter {
+  filterType: string;
+  minPrice?: string;
+  maxPrice?: string;
+  tickSize?: string;
+  minQty?: string;
+  maxQty?: string;
+  stepSize?: string;
+  minNotional?: string;
+  maxNotional?: string;
+}
+
 export interface BinanceSymbolInfo {
   symbol: string;
   status: string;
   baseAsset: string;
   quoteAsset: string;
-  filters: Array<{
-    filterType: string;
-    minPrice?: string;
-    maxPrice?: string;
-    tickSize?: string;
-    minQty?: string;
-    maxQty?: string;
-    stepSize?: string;
-    minNotional?: string;
-  }>;
+  filters: BinanceSymbolFilter[];
+}
+
+export interface BinanceExchangeInfo {
+  timezone: string;
+  serverTime: number;
+  symbols: BinanceSymbolInfo[];
+}
+
+export interface BinanceTicker24hr {
+  symbol: string;
+  priceChange: string;
+  priceChangePercent: string;
+  weightedAvgPrice: string;
+  prevClosePrice: string;
+  lastPrice: string;
+  lastQty: string;
+  bidPrice: string;
+  askPrice: string;
+  openPrice: string;
+  highPrice: string;
+  lowPrice: string;
+  volume: string;
+  quoteVolume: string;
+  openTime: number;
+  closeTime: number;
+  firstId: number;
+  lastId: number;
+  count: number;
 }
 
 export interface APIResponse<T = unknown> {

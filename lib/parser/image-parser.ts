@@ -162,6 +162,9 @@ export async function parseImageSignal(
     );
   }
 
+  // Include the original extracted text for downstream use
+  parsed.extractedText = extractedText;
+
   return parsed;
 }
 

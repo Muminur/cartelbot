@@ -135,6 +135,7 @@ export default function SignalsPage() {
 
     try {
       let signalText = rawSignal;
+      let extractedText = "";
 
       if (imageFile) {
         const formData = new FormData();
@@ -151,7 +152,8 @@ export default function SignalsPage() {
           return;
         }
 
-        signalText = `Symbol: ${parseData.data.symbol}\nEntries: ${parseData.data.entries.join(", ")}\nTargets: ${parseData.data.targets.join(", ")}\nStop Loss: ${parseData.data.stopLoss}`;
+        extractedText = parseData.data.extractedText || "";
+        signalText = extractedText || `Symbol: ${parseData.data.symbol}\nEntries: ${parseData.data.entries.join(", ")}\nTargets: ${parseData.data.targets.join(", ")}\nStop Loss: ${parseData.data.stopLoss}`;
       }
 
       const response = await fetch(API_ROUTES.SIGNALS.LIST, {
