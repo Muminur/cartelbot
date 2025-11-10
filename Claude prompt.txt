@@ -1,0 +1,305 @@
+Create a detailed Product Requirements Document (PRD) for a web app called CartelBot, an automated Binance Spot trading bot that executes trades based on user-submitted buy/sell signal text or image. Include database schema, REST/WebSocket integration logic, example payloads, and data flow diagrams (in text).
+
+🔧 1. Overview
+
+CartelBot is a Next.js + TypeScript + MongoDB web app that:
+
+Accepts text or image-based trading signals.
+
+Parses signals (buy ranges, targets, stop loss).
+
+Executes trades via Binance Spot API (REST + WebSocket).
+
+Uses MARKET orders for buys.
+
+Uses OCO (One Cancels the Other) orders for sells.
+
+Runs on a IONOS VPS managed by Coolify.
+
+Uses MongoDB Public URI
+
+Authenticates users with magic link login (Resend API).
+
+Includes free and paid subscriptions (via TRON USDT).
+
+⚙️ 2. Tech Stack
+Layer	Technology
+Frontend	Next.js (App Router) + TypeScript + TailwindCSS
+Backend	Next.js API routes (Node.js)
+Database	MongoDB 
+Deployment	IONOS VPS (Dockerized via Coolify)
+Auth	Magic Link (Resend API + JWT)
+Payment	Manual USDT (TRC20) submission
+OCR	Tesseract.js or Cloud Vision API
+Realtime	Binance Spot WebSocket Streams
+Email	Resend
+Encryption	AES-256 for Binance keys
+🧾 3. Signal Input Examples
+
+Users can submit text or upload an image (OCR-processed) like:
+
+Buying $NEAR
+Entry: 2.270 - 2.124
+Targets:
+2.370
+2.510
+2.690
+2.820
+SL: 2.050
+
+
+App must parse:
+
+Symbol = NEARUSDT
+
+Entry range = 2.270–2.124
+
+Targets = 2.370, 2.510, 2.690, 2.820
+
+Stop Loss = 2.050
+
+Then:
+
+Execute MARKET BUY for the symbol.
+
+Place OCO SELL orders using parsed Targets and SL.
+
+🧩 4. Binance REST API — Core Endpoints
+
+Base URL:
+
+Mainnet: https://api.binance.com
+
+Testnet: https://testnet.binance.vision
+
+🟢 MARKET BUY — /api/v3/order
+
+Endpoint:
+POST /api/v3/order
+
+Parameters:
+
+Param	Type	Description
+symbol	string	e.g., "NEARUSDT"
+side	string	"BUY"
+type	string	"MARKET"
+quoteOrderQty	decimal	e.g., "50" (amount in USDT)
+timestamp	long	current UNIX timestamp (ms)
+signature	string	HMAC SHA256 using API secret
+
+Example Request:
+
+POST /api/v3/order
+symbol=NEARUSDT&side=BUY&type=MARKET&quoteOrderQty=50&timestamp=1695689200000
+
+
+Example JSON Response:
+
+{
+  "symbol": "NEARUSDT",
+  "orderId": 28457,
+  "status": "FILLED",
+  "executedQty": "21.978",
+  "cummulativeQuoteQty": "50.000",
+  "fills": [
+    {
+      "price": "2.275",
+      "qty": "21.978",
+      "commission": "0.021978",
+      "commissionAsset": "NEAR"
+    }
+  ]
+}
+
+🔴 SELL via OCO — /api/v3/order/oco
+
+Endpoint:
+POST /api/v3/order/oco
+
+Parameters:
+
+Param	Type	Description
+symbol	string	"NEARUSDT"
+side	string	"SELL"
+quantity	decimal	"21.978"
+price	decimal	Take-profit target
+stopPrice	decimal	Stop-loss trigger
+stopLimitPrice	decimal	Stop-limit
+stopLimitTimeInForce	string	"GTC"
+newClientOrderId	string	Unique per signal
+timestamp	long	UNIX time (ms)
+signature	string	HMAC SHA256
+
+Example Request:
+
+POST /api/v3/order/oco
+symbol=NEARUSDT&side=SELL&quantity=21.978&price=2.370&stopPrice=2.050&stopLimitPrice=2.045&stopLimitTimeInForce=GTC&timestamp=1695689230000
+
+
+Example JSON Response:
+
+{
+  "orderListId": 3123,
+  "contingencyType": "OCO",
+  "listClientOrderId": "tp_75pct_near_1",
+  "orders": [
+    {
+      "symbol": "NEARUSDT",
+      "orderId": 112233,
+      "clientOrderId": "sell_tp1"
+    },
+    {
+      "symbol": "NEARUSDT",
+      "orderId": 112234,
+      "clientOrderId": "sell_sl"
+    }
+  ]
+}
+
+🔌 5. Binance WebSocket Integration
+
+Base URL:
+wss://stream.binance.com:9443/ws
+
+🔸 User Data Stream (Private)
+
+Used to receive live updates of trade executions, balance updates, and OCO events.
+
+Requires a listenKey generated via POST /api/v3/userDataStream.
+
+Start User Stream:
+
+POST /api/v3/userDataStream
+
+
+Response:
+
+{ "listenKey": "qwertyuiopasdfghjklzxcvbnm123456" }
+
+
+WebSocket Subscribe:
+
+wss://stream.binance.com:9443/ws/qwertyuiopasdfghjklzxcvbnm123456
+
+
+Example Execution Report Event:
+
+{
+  "e": "executionReport",
+  "s": "NEARUSDT",
+  "S": "SELL",
+  "o": "LIMIT_MAKER",
+  "i": 112233,
+  "X": "FILLED",
+  "p": "2.370",
+  "q": "21.978",
+  "T": 1695689300000
+}
+
+
+App must listen to:
+
+"executionReport" → trade filled/cancelled
+
+"outboundAccountPosition" → update available balance
+
+"orderListStatus" → OCO update
+
+Auto-Renew:
+The listenKey expires after 60 minutes. Renew every 30 minutes with:
+
+PUT /api/v3/userDataStream?listenKey=qwertyuiopasdfghjklzxcvbnm123456
+
+📡 6. Trade Logic Flow
+
+User submits text/image signal.
+
+OCR parses token, entries, targets, SL.
+
+API validates symbol via /api/v3/exchangeInfo.
+
+Execute MARKET BUY using /api/v3/order.
+
+Retrieve executedQty from response.
+
+Place OCO SELL using /api/v3/order/oco.
+
+Listen to WebSocket userDataStream for confirmation.
+
+Store trade logs (symbol, TP, SL, filled qty, timestamps) in MongoDB.
+
+Update dashboard in real time via WebSocket.
+
+🔐 7. Security & Compliance
+
+Store API keys encrypted (AES-256).
+
+Sign all REST requests using HMAC SHA256 with secret key.
+
+Sync server time via /api/v3/time before order placement.
+
+Add recvWindow=5000 to all signed requests.
+
+Validate exchangeInfo filters (minQty, tickSize, stepSize) before order creation.
+
+Rate-limit order submissions to avoid bans:
+
+POST /api/v3/order weight = 1
+
+POST /api/v3/order/oco weight = 2
+
+Limit = 1200 weight/minute
+
+🧑‍💻 8. User Dashboard Pages
+Page	Description
+/dashboard	Overview of signals, current trades, subscription
+/signal/add	Submit text or image signal
+/signal/sell	Manual market sell
+/settings	Configure TP ratios (default 75/15/10)
+/subscription	Submit TRC20 USDT Tx hash
+/trade-log	View trade history with status from WebSocket
+🧮 9. Database Collections (MongoDB)
+Collection	Fields
+users	_id, email, binance_api_key, binance_api_secret_enc, subscription_status, createdAt
+signals	_id, userId, symbol, entry, targets, sl, source_text, parsed, createdAt
+trades	_id, signalId, orderId, ocoId, filledQty, status, tp_hit, createdAt
+subscriptions	_id, userId, trx_hash, status, approvedAt
+🧰 10. Admin Dashboard
+
+Approve/reject subscriptions
+
+View all user-submitted signals
+
+View logs of API calls and WebSocket events
+
+Suspend/activate user accounts
+
+Export trade logs CSV
+
+🪙 11. Subscription Logic
+Tier	Price	Method	Limits
+Free	$0	—	1 signal only
+Premium	$3/mo	USDT TRC20	Unlimited signals
+🚀 12. Deliverable Format (Claude Output)
+
+Produce a complete PRD document with:
+
+Executive Summary
+
+Functional + Technical Requirements
+
+API Schema (with JSON examples above)
+
+Database Design
+
+User Flow Diagram (text)
+
+WebSocket Event Flow (text)
+
+Security + Rate Limit Notes
+
+Deployment Strategy for Coolify
+
+Admin Panel Overview
+
+Future Enhancements (Telegram Bot, AI signal validation, etc.)

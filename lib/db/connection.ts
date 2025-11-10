@@ -4,6 +4,7 @@ import { env } from "@/lib/config";
 type ConnectionCache = {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
+  connecting: boolean;
 };
 
 declare global {
@@ -14,6 +15,7 @@ declare global {
 const cached: ConnectionCache = global.mongooseCache || {
   conn: null,
   promise: null,
+  connecting: false,
 };
 
 if (!global.mongooseCache) {
@@ -61,7 +63,15 @@ export async function connectDB(): Promise<typeof mongoose> {
     return cached.conn;
   }
 
+  // Wait for any ongoing connection attempt to complete
+  if (cached.connecting && cached.promise) {
+    return cached.promise;
+  }
+
   if (!cached.promise) {
+    // Set connecting flag to prevent race condition
+    cached.connecting = true;
+
     const options = {
       bufferCommands: false,
       maxPoolSize: 10,
@@ -96,14 +106,17 @@ export async function connectDB(): Promise<typeof mongoose> {
       1000 // Start with 1 second delay
     ).catch((error) => {
       cached.promise = null;
+      cached.connecting = false;
       throw error;
     });
   }
 
   try {
     cached.conn = await cached.promise;
+    cached.connecting = false;
   } catch (error) {
     cached.promise = null;
+    cached.connecting = false;
     throw error;
   }
 

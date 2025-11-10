@@ -31,7 +31,9 @@ export function generateSessionToken(userId: string, email: string): string {
 
 export function verifyMagicLinkToken(token: string): JWTPayload {
   try {
-    const payload = jwt.verify(token, env.JWT_SECRET) as JWTPayload;
+    const payload = jwt.verify(token, env.JWT_SECRET, {
+      algorithms: ['HS256']
+    }) as JWTPayload;
     if (payload.type !== "magic-link") {
       throw new Error("Invalid token type");
     }
@@ -49,7 +51,9 @@ export function verifyMagicLinkToken(token: string): JWTPayload {
 
 export function verifySessionToken(token: string): SessionPayload {
   try {
-    const payload = jwt.verify(token, env.JWT_SECRET) as SessionPayload;
+    const payload = jwt.verify(token, env.JWT_SECRET, {
+      algorithms: ['HS256']
+    }) as SessionPayload;
     if (payload.type !== "session") {
       throw new Error("Invalid token type");
     }

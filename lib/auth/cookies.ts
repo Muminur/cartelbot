@@ -6,13 +6,33 @@ const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 
 export async function setSessionCookie(token: string): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, token, {
+
+  const cookieOptions: {
+    httpOnly: boolean;
+    secure: boolean;
+    sameSite: "strict";
+    maxAge: number;
+    path: string;
+    domain?: string;
+  } = {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: "strict",
     maxAge: COOKIE_MAX_AGE,
     path: "/",
-  });
+  };
+
+  // Add domain in production for better security
+  if (env.NODE_ENV === "production" && env.NEXT_PUBLIC_API_URL) {
+    try {
+      const url = new URL(env.NEXT_PUBLIC_API_URL);
+      cookieOptions.domain = url.hostname;
+    } catch {
+      // If URL parsing fails, skip domain attribute
+    }
+  }
+
+  cookieStore.set(SESSION_COOKIE_NAME, token, cookieOptions);
 }
 
 export async function getSessionCookie(): Promise<string | undefined> {

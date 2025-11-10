@@ -10,16 +10,33 @@ export * from "./cookies";
 export async function getCurrentUser(): Promise<IUser | null> {
   try {
     const token = await getSessionCookie();
-    if (!token) return null;
+    if (!token) {
+      // Normal case - no session cookie found
+      return null;
+    }
 
     const payload = verifySessionToken(token);
     await connectDB();
 
     const user = await User.findById(payload.userId);
-    if (!user || !user.isActive) return null;
+    if (!user) {
+      console.warn(`getCurrentUser: User not found for ID: ${payload.userId}`);
+      return null;
+    }
+
+    if (!user.isActive) {
+      console.warn(`getCurrentUser: User account is inactive for ID: ${payload.userId}`);
+      return null;
+    }
 
     return user;
-  } catch {
+  } catch (error) {
+    // Log errors with context for debugging
+    console.error("getCurrentUser: Error retrieving current user", {
+      error: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : "Unknown",
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return null;
   }
 }

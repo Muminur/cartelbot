@@ -92,8 +92,32 @@ function getEnv(): Env {
   const parsed = envSchema.safeParse(env);
 
   if (!parsed.success) {
-    console.error("Invalid environment variables:", parsed.error.flatten().fieldErrors);
-    throw new Error("Invalid environment variables");
+    const errors = parsed.error.flatten().fieldErrors;
+
+    console.error("======================================");
+    console.error("ENVIRONMENT VALIDATION FAILED");
+    console.error("======================================");
+    console.error("");
+    console.error("The following environment variables are missing or invalid:");
+    console.error("");
+
+    // Display errors without showing secret values
+    for (const [field, messages] of Object.entries(errors)) {
+      if (messages && messages.length > 0) {
+        console.error(`  ${field}:`);
+        messages.forEach(msg => {
+          console.error(`    - ${msg}`);
+        });
+        console.error("");
+      }
+    }
+
+    console.error("Please check your .env file or environment configuration.");
+    console.error("See .env.example for required variables.");
+    console.error("======================================");
+
+    // Throw error - don't use process.exit() as it's not allowed in Edge Runtime
+    throw new Error("Invalid environment variables. Check logs for details.");
   }
 
   return parsed.data;
