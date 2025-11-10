@@ -15,7 +15,7 @@ export const TARGETS_PATTERNS = [
 ];
 
 export const STOP_LOSS_PATTERNS = [
-  /S[Ll]:\s*([0-9.]+)/i,
+  /S[LlIi]:\s*([0-9.]+)/i, // Handle OCR misreading L as I
   /Stop\s*[Ll]oss:\s*([0-9.]+)/i,
 ];
 

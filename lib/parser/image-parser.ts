@@ -126,7 +126,11 @@ export async function parseImageSignal(
 
   const extractedText = await extractTextFromImage(imageBuffer);
 
-  console.log("[OCR] Extracted text for parsing:", extractedText);
+  // Log full extracted text with proper formatting for debugging
+  console.log("[OCR] Extracted text for parsing (length: %d):", extractedText.length);
+  console.log("--- START EXTRACTED TEXT ---");
+  console.log(extractedText);
+  console.log("--- END EXTRACTED TEXT ---");
 
   if (!extractedText || extractedText.length < 10) {
     console.warn("[OCR] Insufficient text extracted from image");
