@@ -1,6 +1,7 @@
 import { ParsedSignal } from "@/types";
 import { parseSignal } from "./text-parser";
 import { createWorker, Worker } from "tesseract.js";
+import path from "path";
 
 let worker: Worker | null = null;
 let workerInitialized = false;
@@ -10,17 +11,42 @@ async function getWorker(): Promise<Worker> {
     if (!worker || !workerInitialized) {
       console.log("[OCR] Initializing Tesseract worker...");
 
-      // Create worker with English language
-      // Use CDN-hosted worker to avoid Next.js module resolution issues
-      worker = await createWorker("eng", 1, {
-        workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
-        corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.0',
-        logger: (m) => {
+      // Determine if running in Node.js (server-side) or browser
+      const isNode = typeof process !== 'undefined' && process.versions && process.versions.node;
+
+      // Configuration options
+      const workerOptions: any = {
+        logger: (m: any) => {
           if (m.status === "recognizing text") {
             console.log(`[OCR] Progress: ${Math.round(m.progress * 100)}%`);
           }
         },
-      });
+      };
+
+      if (isNode) {
+        // Server-side (Node.js): Explicitly provide absolute path to worker script
+        // This bypasses Next.js/Turbopack's faulty __dirname resolution which causes MODULE_NOT_FOUND
+        const workerPath = path.resolve(
+          process.cwd(),
+          'node_modules',
+          'tesseract.js',
+          'src',
+          'worker-script',
+          'node',
+          'index.js'
+        );
+
+        workerOptions.workerPath = workerPath;
+        console.log("[OCR] Initializing in Node.js environment (server-side)");
+        console.log("[OCR] Using explicit worker path:", workerPath);
+      } else {
+        // Client-side (Browser): Use worker from public directory
+        workerOptions.workerPath = '/tesseract/worker.min.js';
+        console.log("[OCR] Initializing in Browser environment (client-side)");
+        console.log("[OCR] Using public worker path:", workerOptions.workerPath);
+      }
+
+      worker = await createWorker("eng", 1, workerOptions);
 
       workerInitialized = true;
       console.log("[OCR] Tesseract worker initialized successfully");
