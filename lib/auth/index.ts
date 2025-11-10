@@ -44,7 +44,9 @@ export async function getCurrentUser(): Promise<IUser | null> {
 export async function requireAuth(): Promise<IUser> {
   const user = await getCurrentUser();
   if (!user) {
-    throw new Error("Authentication required");
+    const error = new Error("Authentication required");
+    error.name = "AuthenticationError";
+    throw error;
   }
   return user;
 }
