@@ -21,7 +21,26 @@ export async function POST(request: NextRequest) {
 
     const payload = verifyMagicLinkToken(result.data.token);
 
-    await connectDB();
+    // Attempt database connection with detailed error handling
+    try {
+      await connectDB();
+    } catch (dbError) {
+      console.error("Database connection failed during magic link verification:", {
+        error: dbError,
+        email: payload.email,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Provide user-friendly error message
+      const errorMessage =
+        dbError instanceof Error && dbError.message.includes("ETIMEDOUT")
+          ? "Database connection timeout. The server may be temporarily unavailable. Please try again in a few moments."
+          : dbError instanceof Error && dbError.message.includes("Authentication failed")
+          ? "Database authentication failed. Please contact support."
+          : "Unable to connect to database. Please try again later or contact support if the issue persists.";
+
+      throw new Error(errorMessage);
+    }
 
     let user = await User.findOne({ email: payload.email });
 
