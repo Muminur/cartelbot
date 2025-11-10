@@ -136,7 +136,12 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <Button variant="outline" size="sm" className="w-full" disabled>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => router.push("/signals")}
+                >
                   Submit Signal
                 </Button>
                 <Button variant="outline" size="sm" className="w-full" disabled>
