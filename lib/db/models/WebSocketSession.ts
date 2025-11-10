@@ -7,12 +7,10 @@ const webSocketSessionSchema = new Schema<IWebSocketSession>(
       type: String,
       required: [true, "User ID is required"],
       ref: "User",
-      index: true,
     },
     listenKey: {
       type: String,
       required: [true, "Listen key is required"],
-      unique: true,
       validate: {
         validator: (key: string) => key.length > 0,
         message: "Listen key cannot be empty",
@@ -21,13 +19,11 @@ const webSocketSessionSchema = new Schema<IWebSocketSession>(
     isActive: {
       type: Boolean,
       default: true,
-      index: true,
     },
     lastKeepAlive: {
       type: Date,
       required: [true, "Last keep alive timestamp is required"],
       default: Date.now,
-      index: true,
     },
     connectionState: {
       type: String,
@@ -36,7 +32,6 @@ const webSocketSessionSchema = new Schema<IWebSocketSession>(
         message: "Invalid connection state",
       },
       default: "connecting",
-      index: true,
     },
     errorMessage: {
       type: String,

@@ -7,7 +7,6 @@ const subscriptionSchema = new Schema<ISubscription>(
       type: String,
       required: [true, "User ID is required"],
       ref: "User",
-      index: true,
     },
     tier: {
       type: String,
@@ -36,7 +35,6 @@ const subscriptionSchema = new Schema<ISubscription>(
         validator: (hash: string) => !hash || /^(0x)?[0-9a-fA-F]{64}$/.test(hash),
         message: "Invalid transaction hash format",
       },
-      sparse: true,
     },
     fromAddress: {
       type: String,
@@ -52,7 +50,6 @@ const subscriptionSchema = new Schema<ISubscription>(
         message: "Invalid subscription status",
       },
       default: "pending",
-      index: true,
     },
     startDate: {
       type: Date,

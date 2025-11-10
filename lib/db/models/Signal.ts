@@ -7,7 +7,6 @@ const signalSchema = new Schema<ISignal>(
       type: String,
       required: [true, "User ID is required"],
       ref: "User",
-      index: true,
     },
     symbol: {
       type: String,
@@ -51,7 +50,6 @@ const signalSchema = new Schema<ISignal>(
         message: "Invalid signal status",
       },
       default: "pending",
-      index: true,
     },
     rawSignal: {
       type: String,

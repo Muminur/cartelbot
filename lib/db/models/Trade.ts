@@ -57,13 +57,11 @@ const tradeSchema = new Schema<ITrade>(
       type: String,
       required: [true, "User ID is required"],
       ref: "User",
-      index: true,
     },
     signalId: {
       type: String,
       required: [true, "Signal ID is required"],
       ref: "Signal",
-      index: true,
     },
     symbol: {
       type: String,
@@ -114,7 +112,6 @@ const tradeSchema = new Schema<ITrade>(
         message: "Invalid trade status",
       },
       default: "open",
-      index: true,
     },
     closeReason: {
       type: String,

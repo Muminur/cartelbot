@@ -4,7 +4,7 @@ import { verifySessionToken } from "@/lib/auth/jwt";
 const PUBLIC_PATHS = ["/", "/login", "/verify"];
 const API_PUBLIC_PATHS = ["/api/auth/magic-link", "/api/auth/verify"];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (PUBLIC_PATHS.includes(pathname) || API_PUBLIC_PATHS.some(p => pathname.startsWith(p))) {

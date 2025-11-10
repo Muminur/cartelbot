@@ -6,10 +6,8 @@ const userSchema = new Schema<IUser>(
     email: {
       type: String,
       required: [true, "Email is required"],
-      unique: true,
       lowercase: true,
       trim: true,
-      index: true,
       validate: {
         validator: (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
         message: "Invalid email format",
@@ -30,16 +28,13 @@ const userSchema = new Schema<IUser>(
         message: "Invalid subscription tier",
       },
       default: "free",
-      index: true,
     },
     subscriptionExpiry: {
       type: Date,
-      index: true,
     },
     isActive: {
       type: Boolean,
       default: true,
-      index: true,
     },
     lastLogin: {
       type: Date,
