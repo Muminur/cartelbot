@@ -11,7 +11,10 @@ async function getWorker(): Promise<Worker> {
       console.log("[OCR] Initializing Tesseract worker...");
 
       // Create worker with English language
+      // Use CDN-hosted worker to avoid Next.js module resolution issues
       worker = await createWorker("eng", 1, {
+        workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
+        corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.0',
         logger: (m) => {
           if (m.status === "recognizing text") {
             console.log(`[OCR] Progress: ${Math.round(m.progress * 100)}%`);
