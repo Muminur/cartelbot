@@ -12,6 +12,12 @@ export async function POST(request: NextRequest) {
 
     const { rawSignal, isImageSignal = false } = body;
 
+    console.log("POST /api/signals - Request received:", {
+      userId: user._id,
+      isImageSignal,
+      rawSignalLength: rawSignal?.length,
+    });
+
     if (!rawSignal || typeof rawSignal !== "string") {
       return NextResponse.json(
         {
@@ -24,13 +30,46 @@ export async function POST(request: NextRequest) {
 
     const parsed = parseSignal(rawSignal);
 
-    if (parsed.errors.length > 0 && parsed.confidence < 50) {
+    console.log("POST /api/signals - Parsed signal:", {
+      symbol: parsed.symbol,
+      entries: parsed.entries,
+      targets: parsed.targets,
+      stopLoss: parsed.stopLoss,
+      confidence: parsed.confidence,
+      errors: parsed.errors,
+    });
+
+    // Validate parsed signal has all required fields
+    const validationErrors: string[] = [];
+
+    if (!parsed.symbol || !/^[A-Z]{3,10}USDT$/.test(parsed.symbol)) {
+      validationErrors.push("Invalid or missing symbol");
+    }
+
+    if (!parsed.entries || parsed.entries.length === 0 || parsed.entries.some((e) => e <= 0)) {
+      validationErrors.push("Invalid or missing entry prices");
+    }
+
+    if (!parsed.targets || parsed.targets.length === 0 || parsed.targets.some((t) => t <= 0)) {
+      validationErrors.push("Invalid or missing target prices");
+    }
+
+    if (!parsed.stopLoss || parsed.stopLoss <= 0) {
+      validationErrors.push("Invalid or missing stop loss");
+    }
+
+    if (validationErrors.length > 0 || (parsed.errors.length > 0 && parsed.confidence < 50)) {
+      console.error("POST /api/signals - Validation failed:", {
+        confidence: parsed.confidence,
+        parsingErrors: parsed.errors,
+        validationErrors,
+      });
       return NextResponse.json(
         {
           success: false,
           error: {
-            message: "Failed to parse signal",
-            details: parsed.errors,
+            message: "Failed to parse signal - missing required fields",
+            details: [...parsed.errors, ...validationErrors],
             statusCode: 400,
           },
         },
@@ -39,6 +78,17 @@ export async function POST(request: NextRequest) {
     }
 
     await connectDB();
+
+    console.log("POST /api/signals - Creating signal document:", {
+      userId: user._id,
+      symbol: parsed.symbol,
+      entries: parsed.entries,
+      targets: parsed.targets,
+      stopLoss: parsed.stopLoss,
+      currentMarketPrice: parsed.currentMarketPrice,
+      status: parsed.errors.length === 0 ? "parsed" : "pending",
+      isImageSignal,
+    });
 
     const signal = await Signal.create({
       userId: user._id,
@@ -75,6 +125,18 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error("POST /api/signals error:", error);
+
+    // Enhanced logging for MongoDB validation errors
+    if (error && typeof error === "object" && "name" in error) {
+      if (error.name === "ValidationError") {
+        console.error("MongoDB Validation Error Details:", {
+          name: error.name,
+          message: (error as Error).message,
+          errors: "errors" in error ? error.errors : undefined,
+        });
+      }
+    }
+
     const errorResponse = formatErrorResponse(error);
     return NextResponse.json(
       { success: false, ...errorResponse },
