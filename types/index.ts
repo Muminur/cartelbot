@@ -8,6 +8,11 @@ export interface IUser extends Document {
   subscriptionExpiry?: Date;
   isActive: boolean;
   lastLogin?: Date;
+  maxPositionSize?: number;
+  maxDailyLoss?: number;
+  maxOpenPositions?: number;
+  requireApproval?: boolean;
+  emergencyStop?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -54,8 +59,13 @@ export interface ITrade extends Document {
   investedAmount: number;
   realizedPnL?: number;
   unrealizedPnL?: number;
-  status: "open" | "partial" | "closed" | "cancelled";
+  status: "pending_approval" | "open" | "partial" | "closed" | "cancelled";
   closeReason?: "target" | "stop_loss" | "manual" | "cancelled";
+  approvalStatus?: "pending" | "approved" | "rejected" | "not_required";
+  approvedAt?: Date;
+  approvedBy?: string;
+  targets?: number[];
+  stopLoss?: number;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -7,25 +7,47 @@ import { connectDB } from "@/lib/db";
 import { BinanceAPIError, ValidationError } from "@/lib/utils/errors";
 import { TRADE_DEFAULTS } from "@/lib/constants";
 import { Types } from "mongoose";
+import { calculatePositionSize, PositionSizingMethod } from "./position-sizing";
+import { validateTradeRisk, getUserRiskLimits } from "./risk-manager";
 
 interface TradeExecutionParams {
   userId: Types.ObjectId | unknown;
   signalId: Types.ObjectId;
   investmentAmount?: number;
+  positionSizingMethod?: PositionSizingMethod;
+  positionSizingPercentage?: number;
+  positionSizingRiskPercent?: number;
   testnet?: boolean;
 }
 
 interface TradeExecutionResult {
   success: boolean;
   tradeId?: Types.ObjectId;
-  buyOrder?: any;
+  buyOrder?: {
+    symbol: string;
+    orderId: number;
+    executedQty: string;
+    cummulativeQuoteQty: string;
+    status: string;
+    transactTime?: number;
+    fills?: Array<{ price: string; qty: string; commission: string; commissionAsset: string }>;
+  };
   error?: string;
+  requiresApproval?: boolean;
 }
 
 export async function executeSignalTrade(
   params: TradeExecutionParams
 ): Promise<TradeExecutionResult> {
-  const { userId: rawUserId, signalId, investmentAmount, testnet = false } = params;
+  const {
+    userId: rawUserId,
+    signalId,
+    investmentAmount,
+    positionSizingMethod = "fixed",
+    positionSizingPercentage,
+    positionSizingRiskPercent,
+    testnet = false,
+  } = params;
 
   try {
     await connectDB();
@@ -71,12 +93,81 @@ export async function executeSignalTrade(
     const ticker = await client.get24hrTicker(signal.symbol);
     const currentPrice = parseFloat(ticker.lastPrice);
 
-    const amount = investmentAmount || TRADE_DEFAULTS.INVESTMENT_AMOUNT;
+    const accountInfo = await client.getAccount();
+    const usdtBalance = parseFloat(
+      accountInfo.balances.find((b) => b.asset === "USDT")?.free || "0"
+    );
+
+    const riskLimits = await getUserRiskLimits(userId);
+
+    let amount: number;
+
+    if (positionSizingMethod === "fixed") {
+      amount = investmentAmount || TRADE_DEFAULTS.INVESTMENT_AMOUNT;
+    } else {
+      const positionSize = calculatePositionSize({
+        method: positionSizingMethod,
+        fixedAmount: investmentAmount,
+        percentage: positionSizingPercentage,
+        riskPercent: positionSizingRiskPercent,
+        balance: usdtBalance,
+        entryPrice: currentPrice,
+        stopLoss: signal.stopLoss,
+        maxPositionSize: riskLimits.maxPositionSize,
+      });
+      amount = positionSize.amount;
+    }
 
     if (amount < TRADE_DEFAULTS.MIN_INVESTMENT || amount > TRADE_DEFAULTS.MAX_INVESTMENT) {
       throw new ValidationError(
         `Investment amount must be between ${TRADE_DEFAULTS.MIN_INVESTMENT} and ${TRADE_DEFAULTS.MAX_INVESTMENT} USDT`
       );
+    }
+
+    const riskCheck = await validateTradeRisk({
+      userId,
+      positionSize: amount,
+      symbol: signal.symbol,
+    });
+
+    if (!riskCheck.allowed) {
+      throw new ValidationError(riskCheck.reason || "Trade rejected by risk management");
+    }
+
+    if (riskLimits.requireApproval) {
+      const trade = await Trade.create({
+        userId,
+        signalId,
+        symbol: signal.symbol,
+        buyOrder: {
+          orderId: 0,
+          symbol: signal.symbol,
+          side: "BUY" as const,
+          type: "MARKET" as const,
+          quantity: 0,
+          price: currentPrice,
+          executedQty: 0,
+          cummulativeQuoteQty: amount,
+          status: "PENDING",
+          timestamp: new Date(),
+        },
+        entryPrice: currentPrice,
+        quantity: 0,
+        investedAmount: amount,
+        status: "pending_approval",
+        approvalStatus: "pending",
+        targets: signal.targets,
+        stopLoss: signal.stopLoss,
+      });
+
+      signal.status = "executing";
+      await signal.save();
+
+      return {
+        success: true,
+        tradeId: trade._id,
+        requiresApproval: true,
+      };
     }
 
     const estimatedQuantity = amount / currentPrice;
@@ -101,10 +192,15 @@ export async function executeSignalTrade(
       symbol: signal.symbol,
       buyOrder: {
         orderId: buyOrder.orderId,
-        price: executedPrice,
+        symbol: buyOrder.symbol,
+        side: "BUY" as const,
+        type: "MARKET" as const,
         quantity: executedQty,
+        price: executedPrice,
+        executedQty: executedQty,
+        cummulativeQuoteQty: parseFloat(buyOrder.cummulativeQuoteQty || "0"),
         status: buyOrder.status,
-        transactTime: new Date(buyOrder.transactTime || Date.now()),
+        timestamp: new Date(buyOrder.transactTime || Date.now()),
       },
       entryPrice: executedPrice,
       quantity: executedQty,
@@ -139,10 +235,16 @@ export async function executeSignalTrade(
   }
 }
 
+interface OCOOrderResult {
+  orderId: number;
+  status: string;
+  transactTime?: number;
+}
+
 export async function createOCOOrders(
   tradeId: Types.ObjectId,
   testnet = false
-): Promise<{ success: boolean; orders?: any[]; error?: string }> {
+): Promise<{ success: boolean; orders?: OCOOrderResult[]; error?: string }> {
   try {
     await connectDB();
 
@@ -170,9 +272,8 @@ export async function createOCOOrders(
     const filters = symbolInfo.filters;
     const distribution = TRADE_DEFAULTS.TARGET_DISTRIBUTION;
     const targets = trade.targets.slice(0, TRADE_DEFAULTS.MAX_TARGETS);
-    const orders: any[] = [];
+    const orders: OCOOrderResult[] = [];
 
-    let remainingQty = trade.quantity;
     let totalAllocatedQty = 0;
 
     for (let i = 0; i < targets.length; i++) {
@@ -199,16 +300,25 @@ export async function createOCOOrders(
           stopLimitPrice
         );
 
-        orders.push(ocoOrder);
-        remainingQty -= adjustedQty;
+        orders.push({
+          orderId: ocoOrder.orderId,
+          status: ocoOrder.status,
+          transactTime: ocoOrder.transactTime,
+        });
         totalAllocatedQty += adjustedQty;
 
         trade.sellOrders.push({
           orderId: ocoOrder.orderId,
-          price: adjustedPrice,
+          symbol: trade.symbol,
+          side: "SELL" as const,
+          type: "OCO" as const,
           quantity: adjustedQty,
+          price: adjustedPrice,
+          stopPrice: trade.stopLoss,
+          executedQty: 0,
+          cummulativeQuoteQty: 0,
           status: ocoOrder.status,
-          transactTime: new Date(ocoOrder.transactTime || Date.now()),
+          timestamp: new Date(ocoOrder.transactTime || Date.now()),
         });
       } catch (error) {
         console.error(`Failed to create OCO for target ${i}:`, error);

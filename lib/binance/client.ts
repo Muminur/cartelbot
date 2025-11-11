@@ -260,6 +260,21 @@ export class BinanceClient {
     return result;
   }
 
+  async createMarketSellOrder(
+    symbol: string,
+    quantity: number
+  ): Promise<BinanceOrderResponse> {
+    await this.checkOrderRateLimit();
+    const result = await this.signedRequest<BinanceOrderResponse>("POST", "/api/v3/order", {
+      symbol,
+      side: "SELL",
+      type: "MARKET",
+      quantity: quantity.toFixed(8),
+    });
+    this.updateOrderRateLimit();
+    return result;
+  }
+
   async createOCOOrder(
     symbol: string,
     quantity: number,

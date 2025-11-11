@@ -39,6 +39,29 @@ const userSchema = new Schema<IUser>(
     lastLogin: {
       type: Date,
     },
+    maxPositionSize: {
+      type: Number,
+      default: 10000,
+      min: 10,
+    },
+    maxDailyLoss: {
+      type: Number,
+      default: 1000,
+      min: 0,
+    },
+    maxOpenPositions: {
+      type: Number,
+      default: 10,
+      min: 1,
+    },
+    requireApproval: {
+      type: Boolean,
+      default: false,
+    },
+    emergencyStop: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

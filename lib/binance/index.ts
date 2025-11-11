@@ -19,3 +19,22 @@ export {
   deleteConnection,
   hasConnection,
 } from "./connection-manager";
+export {
+  calculatePositionSize,
+  calculateFixedAmount,
+  calculatePercentageOfBalance,
+  calculateRiskBasedSize,
+  validatePositionSize,
+} from "./position-sizing";
+export type { PositionSizingMethod, PositionSizeParams, PositionSizeResult } from "./position-sizing";
+export {
+  getUserRiskLimits,
+  checkDailyLossLimit,
+  checkMaxPositionSize,
+  checkMaxOpenPositions,
+  validateTradeRisk,
+  getEmergencyStopStatus,
+  setEmergencyStop,
+  updateRiskLimits,
+} from "./risk-manager";
+export type { RiskLimits, RiskCheckParams, RiskCheckResult } from "./risk-manager";

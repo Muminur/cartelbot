@@ -9,7 +9,15 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth();
     const body = await request.json();
 
-    const { signalId, investmentAmount, testnet = false, createOCO = true } = body;
+    const {
+      signalId,
+      investmentAmount,
+      positionSizingMethod = "fixed",
+      positionSizingPercentage,
+      positionSizingRiskPercent,
+      testnet = false,
+      createOCO = true,
+    } = body;
 
     if (!signalId || !Types.ObjectId.isValid(signalId)) {
       return NextResponse.json(
@@ -25,6 +33,9 @@ export async function POST(request: NextRequest) {
       userId: user._id,
       signalId: new Types.ObjectId(signalId),
       investmentAmount,
+      positionSizingMethod,
+      positionSizingPercentage,
+      positionSizingRiskPercent,
       testnet,
     });
 
@@ -39,7 +50,7 @@ export async function POST(request: NextRequest) {
     }
 
     let ocoResult;
-    if (createOCO && result.tradeId) {
+    if (createOCO && result.tradeId && !result.requiresApproval) {
       ocoResult = await createOCOOrders(result.tradeId, testnet);
     }
 
@@ -50,6 +61,7 @@ export async function POST(request: NextRequest) {
           tradeId: result.tradeId,
           buyOrder: result.buyOrder,
           ocoOrders: ocoResult?.orders,
+          requiresApproval: result.requiresApproval,
         },
       },
       { status: 201 }

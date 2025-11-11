@@ -24,20 +24,25 @@ const orderSchema = new Schema<IOrder>(
     quantity: {
       type: Number,
       required: true,
+      min: 0,
     },
     price: {
       type: Number,
+      min: 0,
     },
     stopPrice: {
       type: Number,
+      min: 0,
     },
     executedQty: {
       type: Number,
       required: true,
+      min: 0,
     },
     cummulativeQuoteQty: {
       type: Number,
       required: true,
+      min: 0,
     },
     status: {
       type: String,
@@ -108,7 +113,7 @@ const tradeSchema = new Schema<ITrade>(
     status: {
       type: String,
       enum: {
-        values: ["open", "partial", "closed", "cancelled"],
+        values: ["pending_approval", "open", "partial", "closed", "cancelled"],
         message: "Invalid trade status",
       },
       default: "open",
@@ -119,6 +124,27 @@ const tradeSchema = new Schema<ITrade>(
         values: ["target", "stop_loss", "manual", "cancelled"],
         message: "Invalid close reason",
       },
+    },
+    approvalStatus: {
+      type: String,
+      enum: {
+        values: ["pending", "approved", "rejected", "not_required"],
+        message: "Invalid approval status",
+      },
+      default: "not_required",
+    },
+    approvedAt: {
+      type: Date,
+    },
+    approvedBy: {
+      type: String,
+    },
+    targets: {
+      type: [Number],
+      default: [],
+    },
+    stopLoss: {
+      type: Number,
     },
   },
   {
