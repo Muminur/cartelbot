@@ -6,8 +6,11 @@ import Image from "next/image";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import ConfirmationDialog from "@/components/signals/ConfirmationDialog";
 import { API_ROUTES } from "@/lib/constants";
 import { UserProfile, ParsedSignal } from "@/types";
+import { toast } from "sonner";
+import { History } from "lucide-react";
 
 export default function SignalsPage() {
   const router = useRouter();
@@ -20,6 +23,7 @@ export default function SignalsPage() {
   const [parsedSignal, setParsedSignal] = useState<ParsedSignal | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -115,17 +119,19 @@ export default function SignalsPage() {
       }
 
       setParsedSignal(data.data);
+      setShowConfirmDialog(true);
     } catch (err) {
       setError("An error occurred while parsing the signal");
+      toast.error("Failed to parse signal");
       console.error(err);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleSubmit = async () => {
-    if (!rawSignal && !imageFile) {
-      setError("Please provide a signal text or upload an image");
+  const handleConfirmSubmit = async () => {
+    if (!parsedSignal) {
+      toast.error("Please parse the signal first");
       return;
     }
 
@@ -134,33 +140,11 @@ export default function SignalsPage() {
     setSuccess(null);
 
     try {
-      let signalText = rawSignal;
-      let extractedText = "";
-
-      if (imageFile) {
-        const formData = new FormData();
-        formData.append("image", imageFile);
-        const parseResponse = await fetch("/api/signals/parse", {
-          method: "POST",
-          body: formData,
-        });
-
-        const parseData = await parseResponse.json();
-
-        if (!parseResponse.ok || !parseData.success) {
-          setError(parseData.error?.message || "Failed to parse image signal");
-          return;
-        }
-
-        extractedText = parseData.data.extractedText || "";
-        signalText = extractedText || `Symbol: ${parseData.data.symbol}\nEntries: ${parseData.data.entries.join(", ")}\nTargets: ${parseData.data.targets.join(", ")}\nStop Loss: ${parseData.data.stopLoss}`;
-      }
-
       const response = await fetch(API_ROUTES.SIGNALS.LIST, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          rawSignal: signalText,
+          rawSignal,
           isImageSignal: !!imageFile,
         }),
       });
@@ -169,16 +153,25 @@ export default function SignalsPage() {
 
       if (!response.ok || !data.success) {
         setError(data.error?.message || "Failed to submit signal");
+        toast.error(data.error?.message || "Failed to submit signal");
         return;
       }
 
       setSuccess("Signal submitted successfully!");
+      toast.success("Signal submitted successfully!");
       setParsedSignal(data.data.parsed);
-      setRawSignal("");
-      setImageFile(null);
-      setPreviewUrl(null);
+      setShowConfirmDialog(false);
+
+      setTimeout(() => {
+        setRawSignal("");
+        setImageFile(null);
+        setPreviewUrl(null);
+        setParsedSignal(null);
+        setSuccess(null);
+      }, 2000);
     } catch (err) {
       setError("An error occurred while submitting the signal");
+      toast.error("An error occurred while submitting the signal");
       console.error(err);
     } finally {
       setSubmitting(false);
@@ -218,6 +211,10 @@ export default function SignalsPage() {
               <span className="text-xl font-bold">CartelBot</span>
             </div>
             <div className="flex items-center space-x-4">
+              <Button variant="outline" size="sm" onClick={() => router.push("/signals/history")}>
+                <History className="mr-2 h-4 w-4" />
+                History
+              </Button>
               <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
                 Dashboard
               </Button>
@@ -299,17 +296,9 @@ export default function SignalsPage() {
                 <Button
                   onClick={handleParseOnly}
                   disabled={submitting || (!rawSignal && !imageFile)}
-                  variant="outline"
                   className="flex-1"
                 >
-                  {submitting ? "Parsing..." : "Parse Only"}
-                </Button>
-                <Button
-                  onClick={handleSubmit}
-                  disabled={submitting || (!rawSignal && !imageFile)}
-                  className="flex-1"
-                >
-                  {submitting ? "Submitting..." : "Submit Signal"}
+                  {submitting ? "Parsing..." : "Parse & Review"}
                 </Button>
                 <Button onClick={handleClear} variant="outline">
                   Clear
@@ -400,6 +389,16 @@ export default function SignalsPage() {
           )}
         </div>
       </main>
+
+      {parsedSignal && (
+        <ConfirmationDialog
+          isOpen={showConfirmDialog}
+          onClose={() => setShowConfirmDialog(false)}
+          onConfirm={handleConfirmSubmit}
+          parsedSignal={parsedSignal}
+          isSubmitting={submitting}
+        />
+      )}
     </div>
   );
 }

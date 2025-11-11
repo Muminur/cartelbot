@@ -56,3 +56,43 @@ export function parseSymbolToUsdt(symbol: string): string {
   }
   return `${cleaned}USDT`;
 }
+
+export function formatCurrency(amount: number, decimals: number = 2): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(amount);
+}
+
+export function formatNumber(value: number, decimals: number = 2): string {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(value);
+}
+
+export function formatDate(date: Date | string, format: "short" | "long" = "short"): string {
+  const dateObj = typeof date === "string" ? new Date(date) : date;
+
+  if (format === "long") {
+    return new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(dateObj);
+  }
+
+  // Short format: "Nov 11, 2025 14:30"
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(dateObj);
+}

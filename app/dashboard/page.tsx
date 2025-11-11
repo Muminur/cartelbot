@@ -2,28 +2,67 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { API_ROUTES } from "@/lib/constants";
 import { UserProfile } from "@/types";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { ActiveSignalsWidget } from "@/components/dashboard/ActiveSignalsWidget";
+import { OpenPositionsWidget } from "@/components/dashboard/OpenPositionsWidget";
+import { AccountBalanceWidget } from "@/components/dashboard/AccountBalanceWidget";
+import { PnLChartWidget } from "@/components/dashboard/PnLChartWidget";
+import { RecentTradesWidget } from "@/components/dashboard/RecentTradesWidget";
+import { useWebSocketStream } from "@/hooks/useWebSocketStream";
+import { TrendingUp, Signal, Wallet, Award } from "lucide-react";
+import { formatCurrency } from "@/lib/utils/format";
+
+interface DashboardStats {
+  activeSignals: number;
+  activeTrades: number;
+  completedTrades: number;
+  totalPnL: number;
+  winningTrades: number;
+  losingTrades: number;
+  winRate: number;
+}
 
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const { isConnected, lastEvent } = useWebSocketStream({
+    autoConnect: true,
+    onEvent: (event) => {
+      if (event.type === "executionReport" || event.type === "listStatus") {
+        setRefreshKey((prev) => prev + 1);
+      }
+    },
+  });
 
   useEffect(() => {
-    const fetchSession = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch(API_ROUTES.AUTH.SESSION);
-        const data = await response.json();
+        const [sessionResponse, statsResponse] = await Promise.all([
+          fetch(API_ROUTES.AUTH.SESSION),
+          fetch("/api/stats"),
+        ]);
 
-        if (!response.ok || !data.success) {
+        const sessionData = await sessionResponse.json();
+        const statsData = await statsResponse.json();
+
+        if (!sessionResponse.ok || !sessionData.success) {
           router.push("/login");
           return;
         }
 
-        setUser(data.data.user);
+        setUser(sessionData.data.user);
+
+        if (statsData.success) {
+          setStats(statsData.data);
+        }
       } catch {
         router.push("/login");
       } finally {
@@ -31,22 +70,13 @@ export default function DashboardPage() {
       }
     };
 
-    fetchSession();
-  }, [router]);
-
-  const handleLogout = async () => {
-    try {
-      await fetch(API_ROUTES.AUTH.LOGOUT, { method: "POST" });
-      router.push("/login");
-    } catch {
-      router.push("/login");
-    }
-  };
+    fetchData();
+  }, [router, refreshKey]);
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500" />
       </div>
     );
   }
@@ -56,140 +86,114 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <nav className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center">
-                <span className="text-lg font-bold text-white">CB</span>
+    <DashboardLayout userEmail={user.email}>
+      <div className="space-y-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+            <p className="text-gray-600 mt-2">Welcome back to CartelBot</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {isConnected && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-sm">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                Live
               </div>
-              <span className="text-xl font-bold">CartelBot</span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">{user.email}</span>
-              <Button variant="outline" size="sm" onClick={handleLogout}>
-                Logout
-              </Button>
-            </div>
+            )}
+            <Button onClick={() => router.push("/signals")}>
+              Submit Signal
+            </Button>
           </div>
         </div>
-      </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-2">Welcome back to CartelBot</p>
-        </div>
+        {stats && (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Active Signals</CardTitle>
+                <Signal className="w-4 h-4 text-gray-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.activeSignals}</div>
+                <p className="text-xs text-gray-500 mt-1">Pending execution</p>
+              </CardContent>
+            </Card>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Account Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Email</span>
-                  <span className="text-sm font-medium">{user.email}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Subscription</span>
-                  <span className="text-sm font-medium capitalize">{user.subscriptionTier}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Status</span>
-                  <span className={`text-sm font-medium ${user.isActive ? "text-green-600" : "text-red-600"}`}>
-                    {user.isActive ? "Active" : "Inactive"}
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Open Positions</CardTitle>
+                <TrendingUp className="w-4 h-4 text-gray-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.activeTrades}</div>
+                <p className="text-xs text-gray-500 mt-1">Currently trading</p>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>API Keys</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <p className="text-sm text-gray-600">
-                  {user.hasApiKeys
-                    ? "API keys configured"
-                    : "No API keys configured"}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Total P&L</CardTitle>
+                <Wallet className="w-4 h-4 text-gray-500" />
+              </CardHeader>
+              <CardContent>
+                <div
+                  className={`text-2xl font-bold ${
+                    stats.totalPnL >= 0 ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  {formatCurrency(stats.totalPnL)}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">All-time performance</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
+                <Award className="w-4 h-4 text-gray-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.winRate}%</div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {stats.winningTrades}W / {stats.losingTrades}L
                 </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push("/settings")}
-                  className="w-full"
-                >
-                  {user.hasApiKeys ? "Manage Keys" : "Add API Keys"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => router.push("/signals")}
-                >
-                  Submit Signal
-                </Button>
-                <Button variant="outline" size="sm" className="w-full" disabled>
-                  View Trades
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <ActiveSignalsWidget key={`signals-${refreshKey}`} />
+          <AccountBalanceWidget key={`balance-${refreshKey}`} />
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Getting Started</CardTitle>
-            <CardDescription>Follow these steps to start trading</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-start space-x-3">
-                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${user.hasApiKeys ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-600"}`}>
-                  1
-                </div>
-                <div>
-                  <h3 className="font-medium">Configure Binance API Keys</h3>
-                  <p className="text-sm text-gray-600">Add your Binance API keys to enable trading</p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3">
-                <div className="flex-shrink-0 w-8 h-8 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center">
-                  2
-                </div>
-                <div>
-                  <h3 className="font-medium">Submit Trading Signals</h3>
-                  <p className="text-sm text-gray-600">Submit signals via text or image upload</p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3">
-                <div className="flex-shrink-0 w-8 h-8 bg-gray-100 text-gray-600 rounded-full flex items-center justify-center">
-                  3
-                </div>
-                <div>
-                  <h3 className="font-medium">Monitor Your Trades</h3>
-                  <p className="text-sm text-gray-600">Track real-time trade execution and performance</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </main>
-    </div>
+        <PnLChartWidget key={`chart-${refreshKey}`} />
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <OpenPositionsWidget key={`positions-${refreshKey}`} />
+          <RecentTradesWidget key={`recent-${refreshKey}`} />
+        </div>
+
+        {!user.hasApiKeys && (
+          <Card className="border-yellow-200 bg-yellow-50">
+            <CardHeader>
+              <CardTitle className="text-yellow-800">Setup Required</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-yellow-700 mb-4">
+                Configure your Binance API keys to start trading automatically.
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => router.push("/settings")}
+                className="border-yellow-300 text-yellow-800 hover:bg-yellow-100"
+              >
+                Add API Keys
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </DashboardLayout>
   );
 }

@@ -2,38 +2,229 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { API_ROUTES } from "@/lib/constants";
 import { UserProfile } from "@/types";
+import { toast } from "sonner";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { Loader2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+
+interface TestConnectionResult {
+  canTrade: boolean;
+  canWithdraw: boolean;
+  canDeposit: boolean;
+  usdtBalance: number;
+  topBalances: Array<{ asset: string; free: string; locked: string }>;
+  accountType: string;
+}
 
 export default function SettingsPage() {
   const router = useRouter();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchSession = async () => {
-      try {
-        const response = await fetch(API_ROUTES.AUTH.SESSION);
-        const data = await response.json();
+  // API Keys state
+  const [apiKey, setApiKey] = useState("");
+  const [apiSecret, setApiSecret] = useState("");
+  const [hasApiKeys, setHasApiKeys] = useState(false);
+  const [apiKeyPreview, setApiKeyPreview] = useState<string | null>(null);
+  const [savingApiKeys, setSavingApiKeys] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionResult, setConnectionResult] = useState<TestConnectionResult | null>(null);
 
-        if (!response.ok || !data.success) {
+  // Trade Settings state
+  const [investmentAmount, setInvestmentAmount] = useState(100);
+  const [targetDistribution, setTargetDistribution] = useState([75, 15, 10]);
+  const [positionSizingMethod, setPositionSizingMethod] = useState<"fixed" | "percentage" | "risk_based">("fixed");
+  const [riskPercentage, setRiskPercentage] = useState(2);
+  const [maxPositionSize, setMaxPositionSize] = useState(10000);
+  const [maxDailyLoss, setMaxDailyLoss] = useState(1000);
+  const [maxOpenPositions, setMaxOpenPositions] = useState(10);
+  const [requireApproval, setRequireApproval] = useState(false);
+  const [emergencyStop, setEmergencyStop] = useState(false);
+  const [savingTradeSettings, setSavingTradeSettings] = useState(false);
+
+  // Notification Settings state
+  const [onTradeExecuted, setOnTradeExecuted] = useState(true);
+  const [onTargetHit, setOnTargetHit] = useState(true);
+  const [onStopLossHit, setOnStopLossHit] = useState(true);
+  const [dailySummary, setDailySummary] = useState(false);
+  const [emailFrequency, setEmailFrequency] = useState<"instant" | "hourly" | "daily">("instant");
+  const [savingNotifications, setSavingNotifications] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [sessionResponse, apiKeysResponse, settingsResponse] = await Promise.all([
+          fetch(API_ROUTES.AUTH.SESSION),
+          fetch("/api/user/api-keys"),
+          fetch("/api/user/settings"),
+        ]);
+
+        const sessionData = await sessionResponse.json();
+
+        if (!sessionResponse.ok || !sessionData.success) {
           router.push("/login");
           return;
         }
 
-        setUser(data.data.user);
-      } catch {
+        setUser(sessionData.data.user);
+
+        // Load API keys status
+        if (apiKeysResponse.ok) {
+          const apiKeysData = await apiKeysResponse.json();
+          if (apiKeysData.success) {
+            setHasApiKeys(apiKeysData.data.hasApiKeys);
+            setApiKeyPreview(apiKeysData.data.apiKeyPreview);
+          }
+        }
+
+        // Load trade settings
+        if (settingsResponse.ok) {
+          const settingsData = await settingsResponse.json();
+          if (settingsData.success) {
+            const data = settingsData.data;
+            setMaxPositionSize(data.maxPositionSize || 10000);
+            setMaxDailyLoss(data.maxDailyLoss || 1000);
+            setMaxOpenPositions(data.maxOpenPositions || 10);
+            setRequireApproval(data.requireApproval || false);
+            setEmergencyStop(data.emergencyStop || false);
+          }
+        }
+
+        // Load user-specific settings from session
+        if (sessionData.data.user) {
+          const userData = sessionData.data.user;
+          setInvestmentAmount(userData.investmentAmount || 100);
+          setTargetDistribution(userData.targetDistribution || [75, 15, 10]);
+          setPositionSizingMethod(userData.positionSizingMethod || "fixed");
+          setRiskPercentage(userData.riskPercentage || 2);
+
+          // Load notification preferences
+          if (userData.emailNotifications) {
+            setOnTradeExecuted(userData.emailNotifications.onTradeExecuted ?? true);
+            setOnTargetHit(userData.emailNotifications.onTargetHit ?? true);
+            setOnStopLossHit(userData.emailNotifications.onStopLossHit ?? true);
+            setDailySummary(userData.emailNotifications.dailySummary ?? false);
+          }
+          setEmailFrequency(userData.emailFrequency || "instant");
+        }
+      } catch (error) {
+        console.error("Failed to fetch settings:", error);
         router.push("/login");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchSession();
+    fetchData();
   }, [router]);
+
+  const handleSaveApiKeys = async () => {
+    if (!apiKey || !apiSecret) {
+      toast.error("Please enter both API key and secret");
+      return;
+    }
+
+    if (apiKey.length < 64 || apiSecret.length < 64) {
+      toast.error("Invalid API key or secret format");
+      return;
+    }
+
+    setSavingApiKeys(true);
+    setConnectionResult(null);
+
+    try {
+      const response = await fetch("/api/user/api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey, apiSecret }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success("API keys saved successfully");
+        setHasApiKeys(true);
+        setApiKey("");
+        setApiSecret("");
+        setApiKeyPreview(`${apiKey.substring(0, 8)}...`);
+      } else {
+        toast.error(data.error?.message || "Failed to save API keys");
+      }
+    } catch (error) {
+      console.error("Error saving API keys:", error);
+      toast.error("Failed to save API keys");
+    } finally {
+      setSavingApiKeys(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setTestingConnection(true);
+    setConnectionResult(null);
+
+    try {
+      const response = await fetch("/api/user/test-connection", {
+        method: "POST",
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success("Connection successful!");
+        setConnectionResult(data.data);
+      } else {
+        toast.error(data.error?.message || "Connection test failed");
+      }
+    } catch (error) {
+      console.error("Error testing connection:", error);
+      toast.error("Failed to test connection");
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
+  const handleSaveTradeSettings = async () => {
+    setSavingTradeSettings(true);
+
+    try {
+      const response = await fetch("/api/user/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          maxPositionSize,
+          maxDailyLoss,
+          maxOpenPositions,
+          requireApproval,
+          emergencyStop,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success("Trade settings saved successfully");
+      } else {
+        toast.error(data.error?.message || "Failed to save trade settings");
+      }
+    } catch (error) {
+      console.error("Error saving trade settings:", error);
+      toast.error("Failed to save trade settings");
+    } finally {
+      setSavingTradeSettings(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -57,36 +248,17 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <nav className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center">
-                <span className="text-lg font-bold text-white">CB</span>
-              </div>
-              <span className="text-xl font-bold">CartelBot</span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard")}>
-                Dashboard
-              </Button>
-              <span className="text-sm text-gray-600">{user.email}</span>
-              <Button variant="outline" size="sm" onClick={handleLogout}>
-                Logout
-              </Button>
-            </div>
+    <DashboardLayout userEmail={user.email}>
+      <div className="space-y-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
+            <p className="text-gray-600 mt-2">Manage your account and trading preferences</p>
           </div>
-        </div>
-      </nav>
-
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-          <p className="text-gray-600 mt-2">Manage your account and API keys</p>
         </div>
 
         <div className="space-y-6">
+          {/* Account Information */}
           <Card>
             <CardHeader>
               <CardTitle>Account Information</CardTitle>
@@ -94,17 +266,18 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Email Address</label>
-                <Input type="email" value={user.email} disabled />
+                <Label htmlFor="email">Email Address</Label>
+                <Input id="email" type="email" value={user.email} disabled />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Subscription Tier</label>
-                <Input value={user.subscriptionTier.toUpperCase()} disabled />
+                <Label htmlFor="subscription">Subscription Tier</Label>
+                <Input id="subscription" value={user.subscriptionTier.toUpperCase()} disabled />
               </div>
               {user.subscriptionExpiry && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Subscription Expiry</label>
+                  <Label htmlFor="expiry">Subscription Expiry</Label>
                   <Input
+                    id="expiry"
                     value={new Date(user.subscriptionExpiry).toLocaleDateString()}
                     disabled
                   />
@@ -113,6 +286,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
+          {/* Binance API Keys */}
           <Card>
             <CardHeader>
               <CardTitle>Binance API Keys</CardTitle>
@@ -128,42 +302,99 @@ export default function SettingsPage() {
                 </p>
               </div>
 
+              {hasApiKeys && apiKeyPreview && (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-md flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  <div>
+                    <p className="text-sm font-medium text-green-900">API Keys Configured</p>
+                    <p className="text-xs text-green-700">Current key: {apiKeyPreview}</p>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
-                <label className="text-sm font-medium">API Key</label>
+                <Label htmlFor="apiKey">API Key</Label>
                 <Input
+                  id="apiKey"
                   type="password"
-                  placeholder={user.hasApiKeys ? "••••••••••••••••" : "Enter your Binance API key"}
-                  disabled
+                  placeholder={hasApiKeys ? "Enter new API key to update" : "Enter your Binance API key"}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">API Secret</label>
+                <Label htmlFor="apiSecret">API Secret</Label>
                 <Input
+                  id="apiSecret"
                   type="password"
-                  placeholder={user.hasApiKeys ? "••••••••••••••••" : "Enter your Binance API secret"}
-                  disabled
+                  placeholder={hasApiKeys ? "Enter new API secret to update" : "Enter your Binance API secret"}
+                  value={apiSecret}
+                  onChange={(e) => setApiSecret(e.target.value)}
                 />
-              </div>
-
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm text-blue-900">
-                  <strong>Coming Soon:</strong> API key management will be available in the next update.
-                  This feature is part of Milestone 3 and will allow you to securely store and test your Binance API keys.
-                </p>
               </div>
 
               <div className="flex space-x-3">
-                <Button disabled className="flex-1">
-                  Save API Keys
+                <Button
+                  onClick={handleSaveApiKeys}
+                  disabled={savingApiKeys || (!apiKey && !apiSecret)}
+                  className="flex-1"
+                >
+                  {savingApiKeys ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save API Keys"
+                  )}
                 </Button>
-                <Button variant="outline" disabled>
-                  Test Connection
+                <Button
+                  variant="outline"
+                  onClick={handleTestConnection}
+                  disabled={!hasApiKeys || testingConnection}
+                >
+                  {testingConnection ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Testing...
+                    </>
+                  ) : (
+                    "Test Connection"
+                  )}
                 </Button>
               </div>
+
+              {connectionResult && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-md space-y-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-blue-600" />
+                    <p className="text-sm font-medium text-blue-900">Connection Successful</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-blue-700">Can Trade:</span>{" "}
+                      <span className="font-medium">{connectionResult.canTrade ? "Yes" : "No"}</span>
+                    </div>
+                    <div>
+                      <span className="text-blue-700">Account Type:</span>{" "}
+                      <span className="font-medium">{connectionResult.accountType}</span>
+                    </div>
+                    <div>
+                      <span className="text-blue-700">USDT Balance:</span>{" "}
+                      <span className="font-medium">{connectionResult.usdtBalance.toFixed(2)} USDT</span>
+                    </div>
+                    <div>
+                      <span className="text-blue-700">Assets:</span>{" "}
+                      <span className="font-medium">{connectionResult.topBalances.length}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
+          {/* Trading Settings */}
           <Card>
             <CardHeader>
               <CardTitle>Trading Settings</CardTitle>
@@ -171,34 +402,217 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Default Investment Amount (USDT)</label>
-                <Input type="number" placeholder="100" disabled />
+                <Label htmlFor="investmentAmount">Default Investment Amount (USDT)</Label>
+                <Input
+                  id="investmentAmount"
+                  type="number"
+                  value={investmentAmount}
+                  onChange={(e) => setInvestmentAmount(parseFloat(e.target.value))}
+                  min="10"
+                  max="100000"
+                />
+                <p className="text-xs text-gray-500">
+                  Amount to invest per signal when using fixed position sizing
+                </p>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Target Distribution (%)</label>
+                <Label>Target Distribution (%)</Label>
                 <div className="grid grid-cols-3 gap-2">
-                  <Input type="number" placeholder="75" disabled />
-                  <Input type="number" placeholder="15" disabled />
-                  <Input type="number" placeholder="10" disabled />
+                  <div>
+                    <Input
+                      type="number"
+                      value={targetDistribution[0]}
+                      onChange={(e) =>
+                        setTargetDistribution([
+                          parseFloat(e.target.value),
+                          targetDistribution[1],
+                          targetDistribution[2],
+                        ])
+                      }
+                      min="0"
+                      max="100"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Target 1</p>
+                  </div>
+                  <div>
+                    <Input
+                      type="number"
+                      value={targetDistribution[1]}
+                      onChange={(e) =>
+                        setTargetDistribution([
+                          targetDistribution[0],
+                          parseFloat(e.target.value),
+                          targetDistribution[2],
+                        ])
+                      }
+                      min="0"
+                      max="100"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Target 2</p>
+                  </div>
+                  <div>
+                    <Input
+                      type="number"
+                      value={targetDistribution[2]}
+                      onChange={(e) =>
+                        setTargetDistribution([
+                          targetDistribution[0],
+                          targetDistribution[1],
+                          parseFloat(e.target.value),
+                        ])
+                      }
+                      min="0"
+                      max="100"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Target 3</p>
+                  </div>
                 </div>
                 <p className="text-xs text-gray-500">
-                  Distribution for first, second, and third targets
+                  Distribution of position across targets (must sum to 100%)
                 </p>
               </div>
 
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm text-blue-900">
-                  <strong>Coming Soon:</strong> Trading settings will be available in the next update.
-                </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="maxPositionSize">Max Position Size (USDT)</Label>
+                  <Input
+                    id="maxPositionSize"
+                    type="number"
+                    value={maxPositionSize}
+                    onChange={(e) => setMaxPositionSize(parseFloat(e.target.value))}
+                    min="10"
+                    max="100000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maxDailyLoss">Max Daily Loss (USDT)</Label>
+                  <Input
+                    id="maxDailyLoss"
+                    type="number"
+                    value={maxDailyLoss}
+                    onChange={(e) => setMaxDailyLoss(parseFloat(e.target.value))}
+                    min="0"
+                    max="50000"
+                  />
+                </div>
               </div>
 
-              <Button disabled className="w-full">
-                Save Settings
+              <div className="space-y-2">
+                <Label htmlFor="maxOpenPositions">Max Open Positions</Label>
+                <Input
+                  id="maxOpenPositions"
+                  type="number"
+                  value={maxOpenPositions}
+                  onChange={(e) => setMaxOpenPositions(parseInt(e.target.value))}
+                  min="1"
+                  max="50"
+                />
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Require Manual Approval</Label>
+                    <p className="text-xs text-gray-500">
+                      Review trades before execution
+                    </p>
+                  </div>
+                  <Switch checked={requireApproval} onCheckedChange={setRequireApproval} />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Emergency Stop</Label>
+                    <p className="text-xs text-gray-500">
+                      Disable all automated trading
+                    </p>
+                  </div>
+                  <Switch checked={emergencyStop} onCheckedChange={setEmergencyStop} />
+                </div>
+              </div>
+
+              {emergencyStop && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-md flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-600" />
+                  <p className="text-sm text-red-900">
+                    Emergency stop is active. All automated trading is disabled.
+                  </p>
+                </div>
+              )}
+
+              <Button onClick={handleSaveTradeSettings} disabled={savingTradeSettings} className="w-full">
+                {savingTradeSettings ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Trade Settings"
+                )}
               </Button>
             </CardContent>
           </Card>
 
+          {/* Notification Preferences */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Notification Preferences</CardTitle>
+              <CardDescription>Configure email notifications for trading events</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Trade Executed</Label>
+                    <p className="text-xs text-gray-500">
+                      Notify when a new trade is executed
+                    </p>
+                  </div>
+                  <Switch checked={onTradeExecuted} onCheckedChange={setOnTradeExecuted} />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Target Hit</Label>
+                    <p className="text-xs text-gray-500">
+                      Notify when a take-profit target is reached
+                    </p>
+                  </div>
+                  <Switch checked={onTargetHit} onCheckedChange={setOnTargetHit} />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Stop Loss Hit</Label>
+                    <p className="text-xs text-gray-500">
+                      Notify when a stop loss is triggered
+                    </p>
+                  </div>
+                  <Switch checked={onStopLossHit} onCheckedChange={setOnStopLossHit} />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Daily Summary</Label>
+                    <p className="text-xs text-gray-500">
+                      Receive a daily summary of all trades
+                    </p>
+                  </div>
+                  <Switch checked={dailySummary} onCheckedChange={setDailySummary} />
+                </div>
+              </div>
+
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-900">
+                  <strong>Coming Soon:</strong> Email notification preferences will be fully functional in the next update.
+                  Currently configured preferences are saved but emails are not yet being sent.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Danger Zone */}
           <Card className="border-red-200">
             <CardHeader>
               <CardTitle className="text-red-600">Danger Zone</CardTitle>
@@ -219,7 +633,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         </div>
-      </main>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }

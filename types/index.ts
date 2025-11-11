@@ -13,6 +13,18 @@ export interface IUser extends Document {
   maxOpenPositions?: number;
   requireApproval?: boolean;
   emergencyStop?: boolean;
+  investmentAmount?: number;
+  targetDistribution?: number[];
+  positionSizingMethod?: "fixed" | "percentage" | "risk_based";
+  riskPercentage?: number;
+  emailNotifications?: {
+    onTradeExecuted: boolean;
+    onTargetHit: boolean;
+    onStopLossHit: boolean;
+    dailySummary: boolean;
+  };
+  emailFrequency?: "instant" | "hourly" | "daily";
+  telegramEnabled?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

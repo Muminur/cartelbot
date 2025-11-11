@@ -92,10 +92,36 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
     const status = searchParams.get("status");
+    const symbol = searchParams.get("symbol");
+    const isImageSignal = searchParams.get("isImageSignal");
+    const dateFrom = searchParams.get("dateFrom");
+    const dateTo = searchParams.get("dateTo");
 
     const query: Record<string, unknown> = { userId: user._id };
+
     if (status) {
       query.status = status;
+    }
+
+    if (symbol) {
+      query.symbol = { $regex: symbol, $options: "i" };
+    }
+
+    if (isImageSignal !== null && isImageSignal !== undefined) {
+      query.isImageSignal = isImageSignal === "true";
+    }
+
+    if (dateFrom || dateTo) {
+      const dateFilter: Record<string, Date> = {};
+      if (dateFrom) {
+        dateFilter.$gte = new Date(dateFrom);
+      }
+      if (dateTo) {
+        const endDate = new Date(dateTo);
+        endDate.setHours(23, 59, 59, 999);
+        dateFilter.$lte = endDate;
+      }
+      query.createdAt = dateFilter;
     }
 
     const skip = (page - 1) * limit;

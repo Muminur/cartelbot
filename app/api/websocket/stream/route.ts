@@ -3,6 +3,9 @@ import { requireAuth } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { getConnection } from "@/lib/binance/connection-manager";
 
+// Force dynamic rendering for SSE
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
@@ -55,9 +58,11 @@ export async function GET(req: NextRequest) {
 
     return new Response(stream, {
       headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "Content-Encoding": "none",
+        "X-Accel-Buffering": "no",
       },
     });
   } catch (error) {

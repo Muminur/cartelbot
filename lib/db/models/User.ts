@@ -62,6 +62,49 @@ const userSchema = new Schema<IUser>(
       type: Boolean,
       default: false,
     },
+    investmentAmount: {
+      type: Number,
+      default: 100,
+      min: 10,
+    },
+    targetDistribution: {
+      type: [Number],
+      default: [75, 15, 10],
+    },
+    positionSizingMethod: {
+      type: String,
+      enum: ["fixed", "percentage", "risk_based"],
+      default: "fixed",
+    },
+    riskPercentage: {
+      type: Number,
+      default: 2,
+      min: 0.5,
+      max: 10,
+    },
+    emailNotifications: {
+      type: {
+        onTradeExecuted: { type: Boolean, default: true },
+        onTargetHit: { type: Boolean, default: true },
+        onStopLossHit: { type: Boolean, default: true },
+        dailySummary: { type: Boolean, default: false },
+      },
+      default: {
+        onTradeExecuted: true,
+        onTargetHit: true,
+        onStopLossHit: true,
+        dailySummary: false,
+      },
+    },
+    emailFrequency: {
+      type: String,
+      enum: ["instant", "hourly", "daily"],
+      default: "instant",
+    },
+    telegramEnabled: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

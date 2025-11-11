@@ -50,3 +50,43 @@ export async function requireAuth(): Promise<IUser> {
   }
   return user;
 }
+
+export async function getUserFromRequest(request: Request): Promise<{
+  user: IUser | null;
+  error: string | null;
+}> {
+  try {
+    const cookieHeader = request.headers.get("cookie");
+    if (!cookieHeader) {
+      return { user: null, error: "No session found" };
+    }
+
+    const sessionToken = cookieHeader
+      .split("; ")
+      .find((c) => c.startsWith("session="))
+      ?.split("=")[1];
+
+    if (!sessionToken) {
+      return { user: null, error: "No session token" };
+    }
+
+    const payload = verifySessionToken(sessionToken);
+    await connectDB();
+
+    const user = await User.findById(payload.userId);
+    if (!user) {
+      return { user: null, error: "User not found" };
+    }
+
+    if (!user.isActive) {
+      return { user: null, error: "Account inactive" };
+    }
+
+    return { user, error: null };
+  } catch (error) {
+    return {
+      user: null,
+      error: error instanceof Error ? error.message : "Authentication failed",
+    };
+  }
+}
