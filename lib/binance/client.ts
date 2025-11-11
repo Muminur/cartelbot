@@ -21,13 +21,20 @@ interface RateLimitInfo {
   lastReset: number;
 }
 
+interface OrderRateLimitInfo {
+  orders: { timestamp: number }[];
+}
+
 export class BinanceClient {
   private axios: AxiosInstance;
   private apiKey: string;
   private apiSecret: string;
   private baseURL: string;
   private rateLimit: RateLimitInfo = { weight: 0, lastReset: Date.now() };
+  private orderRateLimit: OrderRateLimitInfo = { orders: [] };
+  private serverTimeOffset: number = 0;
   private readonly MAX_WEIGHT_PER_MINUTE = 6000;
+  private readonly MAX_ORDERS_PER_10_SECONDS = 50;
   private readonly RECV_WINDOW = 5000;
 
   constructor(config: BinanceClientConfig) {
@@ -58,7 +65,7 @@ export class BinanceClient {
         if (error.response?.data) {
           const { code, msg } = error.response.data;
           throw new BinanceAPIError(
-            msg || "Binance API error",
+            this.getErrorMessage(code, msg),
             code || error.response.status
           );
         }
@@ -67,12 +74,109 @@ export class BinanceClient {
     );
   }
 
+  private getErrorMessage(code: number, defaultMsg: string): string {
+    switch (code) {
+      case -1021:
+        return "Timestamp synchronization failed. Please try again.";
+      case -2010:
+        return "Insufficient balance to execute this order.";
+      case 429:
+        return "Rate limit exceeded. Please wait before retrying.";
+      default:
+        return defaultMsg || "Binance API error";
+    }
+  }
+
+  private async retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    maxRetries: number = 3,
+    initialDelay: number = 1000,
+    skipRetryOnCodes: number[] = [-2010]
+  ): Promise<T> {
+    let lastError: Error | BinanceAPIError = new Error("Unknown error");
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn();
+      } catch (error: unknown) {
+        lastError = error instanceof Error || error instanceof BinanceAPIError
+          ? error
+          : new Error(String(error));
+
+        if (error instanceof BinanceAPIError && error.binanceCode !== undefined) {
+          if (skipRetryOnCodes.includes(error.binanceCode)) {
+            throw error;
+          }
+
+          if (error.binanceCode === -1021) {
+            await this.syncServerTime();
+            const delay = initialDelay * Math.pow(2, attempt);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            continue;
+          }
+
+          if (error.binanceCode === 429) {
+            const delay = initialDelay * Math.pow(2, attempt + 1);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            continue;
+          }
+        }
+
+        if (attempt < maxRetries) {
+          const delay = initialDelay * Math.pow(2, attempt);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    throw lastError;
+  }
+
   private updateRateLimit(weight: number): void {
     const now = Date.now();
     if (now - this.rateLimit.lastReset > 60000) {
       this.rateLimit = { weight, lastReset: now };
     } else {
       this.rateLimit.weight = weight;
+    }
+  }
+
+  private updateOrderRateLimit(): void {
+    const now = Date.now();
+    const tenSecondsAgo = now - 10000;
+
+    this.orderRateLimit.orders = this.orderRateLimit.orders.filter(
+      (order) => order.timestamp > tenSecondsAgo
+    );
+
+    this.orderRateLimit.orders.push({ timestamp: now });
+  }
+
+  private async checkOrderRateLimit(): Promise<void> {
+    const now = Date.now();
+    const tenSecondsAgo = now - 10000;
+
+    const recentOrders = this.orderRateLimit.orders.filter(
+      (order) => order.timestamp > tenSecondsAgo
+    );
+
+    if (recentOrders.length >= this.MAX_ORDERS_PER_10_SECONDS) {
+      const oldestOrder = recentOrders[0];
+      const waitTime = 10000 - (now - oldestOrder.timestamp);
+
+      if (waitTime > 0) {
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+      }
+    }
+  }
+
+  async syncServerTime(): Promise<void> {
+    try {
+      const serverTime = await this.getServerTime();
+      const localTime = Date.now();
+      this.serverTimeOffset = serverTime - localTime;
+    } catch {
+      this.serverTimeOffset = 0;
     }
   }
 
@@ -86,31 +190,33 @@ export class BinanceClient {
   private async signedRequest<T>(
     method: "GET" | "POST" | "DELETE",
     endpoint: string,
-    params: Record<string, any> = {}
+    params: Record<string, string | number | boolean | undefined> = {}
   ): Promise<T> {
-    const timestamp = Date.now();
-    const queryParams = {
-      ...params,
-      timestamp,
-      recvWindow: this.RECV_WINDOW,
-    };
+    return this.retryWithBackoff(async () => {
+      const timestamp = Date.now() + this.serverTimeOffset;
+      const queryParams = {
+        ...params,
+        timestamp,
+        recvWindow: this.RECV_WINDOW,
+      };
 
-    const queryString = new URLSearchParams(
-      Object.entries(queryParams)
-        .filter(([, v]) => v !== undefined && v !== null)
-        .map(([k, v]) => [k, String(v)])
-    ).toString();
+      const queryString = new URLSearchParams(
+        Object.entries(queryParams)
+          .filter(([, v]) => v !== undefined && v !== null)
+          .map(([k, v]) => [k, String(v)])
+      ).toString();
 
-    const signature = this.createSignature(queryString);
-    const url = `${endpoint}?${queryString}&signature=${signature}`;
+      const signature = this.createSignature(queryString);
+      const url = `${endpoint}?${queryString}&signature=${signature}`;
 
-    if (this.rateLimit.weight >= this.MAX_WEIGHT_PER_MINUTE * 0.9) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
+      if (this.rateLimit.weight >= this.MAX_WEIGHT_PER_MINUTE * 0.9) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
 
-    const config: AxiosRequestConfig = { method, url };
-    const response = await this.axios.request<T>(config);
-    return response.data;
+      const config: AxiosRequestConfig = { method, url };
+      const response = await this.axios.request<T>(config);
+      return response.data;
+    });
   }
 
   async getServerTime(): Promise<number> {
@@ -143,12 +249,15 @@ export class BinanceClient {
     symbol: string,
     quoteOrderQty: number
   ): Promise<BinanceOrderResponse> {
-    return this.signedRequest<BinanceOrderResponse>("POST", "/api/v3/order", {
+    await this.checkOrderRateLimit();
+    const result = await this.signedRequest<BinanceOrderResponse>("POST", "/api/v3/order", {
       symbol,
       side: "BUY",
       type: "MARKET",
       quoteOrderQty: quoteOrderQty.toFixed(2),
     });
+    this.updateOrderRateLimit();
+    return result;
   }
 
   async createOCOOrder(
@@ -158,7 +267,8 @@ export class BinanceClient {
     stopPrice: number,
     stopLimitPrice: number
   ): Promise<BinanceOrderResponse> {
-    return this.signedRequest<BinanceOrderResponse>("POST", "/api/v3/order/oco", {
+    await this.checkOrderRateLimit();
+    const result = await this.signedRequest<BinanceOrderResponse>("POST", "/api/v3/order/oco", {
       symbol,
       side: "SELL",
       quantity: quantity.toFixed(8),
@@ -167,6 +277,8 @@ export class BinanceClient {
       stopLimitPrice: stopLimitPrice.toFixed(8),
       stopLimitTimeInForce: "GTC",
     });
+    this.updateOrderRateLimit();
+    return result;
   }
 
   async getOpenOrders(symbol?: string): Promise<BinanceOrderResponse[]> {
@@ -186,10 +298,13 @@ export class BinanceClient {
   }
 
   async cancelOrder(symbol: string, orderId: number): Promise<BinanceOrderResponse> {
-    return this.signedRequest<BinanceOrderResponse>("DELETE", "/api/v3/order", {
+    await this.checkOrderRateLimit();
+    const result = await this.signedRequest<BinanceOrderResponse>("DELETE", "/api/v3/order", {
       symbol,
       orderId,
     });
+    this.updateOrderRateLimit();
+    return result;
   }
 
   getSymbolFilters(
@@ -202,6 +317,42 @@ export class BinanceClient {
 
   getRateLimitInfo(): RateLimitInfo {
     return { ...this.rateLimit };
+  }
+
+  async createUserDataStream(): Promise<{ listenKey: string }> {
+    const response = await this.axios.post<{ listenKey: string }>(
+      "/api/v3/userDataStream",
+      null,
+      {
+        headers: {
+          "X-MBX-APIKEY": this.apiKey,
+        },
+      }
+    );
+    return response.data;
+  }
+
+  async keepAliveUserDataStream(listenKey: string): Promise<void> {
+    await this.axios.put("/api/v3/userDataStream", null, {
+      params: { listenKey },
+      headers: {
+        "X-MBX-APIKEY": this.apiKey,
+      },
+    });
+  }
+
+  async closeUserDataStream(listenKey: string): Promise<void> {
+    await this.axios.delete("/api/v3/userDataStream", {
+      params: { listenKey },
+      headers: {
+        "X-MBX-APIKEY": this.apiKey,
+      },
+    });
+  }
+
+  getWebSocketURL(): string {
+    const isTestnet = this.baseURL.includes("testnet.binance.vision");
+    return isTestnet ? env.BINANCE_TESTNET_WS : env.BINANCE_WS_URL;
   }
 }
 

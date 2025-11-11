@@ -9,7 +9,7 @@ import { TRADE_DEFAULTS } from "@/lib/constants";
 import { Types } from "mongoose";
 
 interface TradeExecutionParams {
-  userId: Types.ObjectId;
+  userId: Types.ObjectId | unknown;
   signalId: Types.ObjectId;
   investmentAmount?: number;
   testnet?: boolean;
@@ -25,10 +25,12 @@ interface TradeExecutionResult {
 export async function executeSignalTrade(
   params: TradeExecutionParams
 ): Promise<TradeExecutionResult> {
-  const { userId, signalId, investmentAmount, testnet = false } = params;
+  const { userId: rawUserId, signalId, investmentAmount, testnet = false } = params;
 
   try {
     await connectDB();
+
+    const userId = rawUserId instanceof Types.ObjectId ? rawUserId : new Types.ObjectId(String(rawUserId));
 
     const signal = await Signal.findById(signalId);
     if (!signal) {
@@ -43,7 +45,7 @@ export async function executeSignalTrade(
       throw new ValidationError(`Signal status must be 'parsed', got '${signal.status}'`);
     }
 
-    const apiKeys = await getUserApiKeys(userId as any);
+    const apiKeys = await getUserApiKeys(userId);
     if (!apiKeys || !("encryptedApiKey" in apiKeys) || !("encryptedApiSecret" in apiKeys) || !apiKeys.encryptedApiKey || !apiKeys.encryptedApiSecret) {
       throw new ValidationError("Binance API keys not configured");
     }
@@ -53,7 +55,7 @@ export async function executeSignalTrade(
 
     const client = new BinanceClient({ apiKey, apiSecret, testnet });
 
-    await client.getServerTime();
+    await client.syncServerTime();
 
     const exchangeInfo = await client.getExchangeInfo(signal.symbol);
     const symbolInfo = exchangeInfo.symbols.find((s) => s.symbol === signal.symbol);
@@ -149,7 +151,7 @@ export async function createOCOOrders(
       throw new ValidationError("Trade not found");
     }
 
-    const apiKeys = await getUserApiKeys(trade.userId as any);
+    const apiKeys = await getUserApiKeys(trade.userId);
     if (!apiKeys || !("encryptedApiKey" in apiKeys) || !("encryptedApiSecret" in apiKeys) || !apiKeys.encryptedApiKey || !apiKeys.encryptedApiSecret) {
       throw new ValidationError("Binance API keys not configured");
     }
@@ -171,6 +173,7 @@ export async function createOCOOrders(
     const orders: any[] = [];
 
     let remainingQty = trade.quantity;
+    let totalAllocatedQty = 0;
 
     for (let i = 0; i < targets.length; i++) {
       const targetPrice = targets[i];
@@ -179,6 +182,7 @@ export async function createOCOOrders(
 
       const validation = validateAllFilters(targetPrice, qtyForTarget, filters);
       if (!validation.isValid) {
+        console.warn(`Skipping target ${i} due to filter validation: ${validation.errors.join(", ")}`);
         continue;
       }
 
@@ -197,6 +201,7 @@ export async function createOCOOrders(
 
         orders.push(ocoOrder);
         remainingQty -= adjustedQty;
+        totalAllocatedQty += adjustedQty;
 
         trade.sellOrders.push({
           orderId: ocoOrder.orderId,
@@ -208,6 +213,21 @@ export async function createOCOOrders(
       } catch (error) {
         console.error(`Failed to create OCO for target ${i}:`, error);
       }
+    }
+
+    const quantityDifference = Math.abs(totalAllocatedQty - trade.quantity);
+    const tolerance = trade.quantity * 0.01;
+
+    if (quantityDifference > tolerance) {
+      console.warn(
+        `OCO quantity mismatch: allocated ${totalAllocatedQty.toFixed(8)}, ` +
+        `buy quantity ${trade.quantity.toFixed(8)}, ` +
+        `difference: ${quantityDifference.toFixed(8)} (${((quantityDifference / trade.quantity) * 100).toFixed(2)}%)`
+      );
+    }
+
+    if (orders.length === 0) {
+      throw new ValidationError("Failed to create any OCO orders. All targets failed validation.");
     }
 
     await trade.save();

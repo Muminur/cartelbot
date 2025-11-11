@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await executeSignalTrade({
-      userId: user._id as any,
+      userId: user._id,
       signalId: new Types.ObjectId(signalId),
       investmentAmount,
       testnet,

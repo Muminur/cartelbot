@@ -103,7 +103,7 @@ export async function DELETE(
     const { searchParams } = new URL(request.url);
     const testnet = searchParams.get("testnet") === "true";
 
-    const apiKeys = await getUserApiKeys(user._id as any);
+    const apiKeys = await getUserApiKeys(user._id);
     if (!apiKeys || !("encryptedApiKey" in apiKeys) || !("encryptedApiSecret" in apiKeys) || !apiKeys.encryptedApiKey || !apiKeys.encryptedApiSecret) {
       return NextResponse.json(
         {

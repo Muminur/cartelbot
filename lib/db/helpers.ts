@@ -12,11 +12,12 @@ export async function findUserById(userId: string) {
   return await User.findById(userId).lean();
 }
 
-export async function getUserApiKeys(userId: string) {
-  if (!Types.ObjectId.isValid(userId)) {
+export async function getUserApiKeys(userId: string | Types.ObjectId | unknown) {
+  const id = userId instanceof Types.ObjectId ? userId.toString() : String(userId);
+  if (!Types.ObjectId.isValid(id)) {
     throw new Error("Invalid user ID format");
   }
-  return await User.findById(userId).select("+encryptedApiKey +encryptedApiSecret").lean();
+  return await User.findById(id).select("+encryptedApiKey +encryptedApiSecret").lean();
 }
 
 export async function updateUserSubscription(
