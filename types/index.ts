@@ -243,6 +243,16 @@ export interface UserProfile {
   isActive: boolean;
   hasApiKeys: boolean;
   stats?: TradeStats;
+  investmentAmount?: number;
+  positionSizingMethod?: "fixed" | "percentage" | "risk_based";
+  riskPercentage?: number;
+  useTestnet?: boolean;
+  targetDistribution?: number[];
+  maxPositionSize?: number;
+  maxDailyLoss?: number;
+  maxOpenPositions?: number;
+  requireApproval?: boolean;
+  emergencyStop?: boolean;
 }
 
 export interface SignalSubmission {

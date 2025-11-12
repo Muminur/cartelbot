@@ -160,6 +160,7 @@ export default function SignalsPage() {
         rawSignalPreview: payload.rawSignal.substring(0, 100),
       });
 
+      // Step 1: Submit signal
       const response = await fetch(API_ROUTES.SIGNALS.LIST, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -174,23 +175,50 @@ export default function SignalsPage() {
         return;
       }
 
-      setSuccess("Signal submitted successfully!");
+      const signalId = data.data._id;
+      console.log("[SIGNALS] Signal submitted successfully, ID:", signalId);
       toast.success("Signal submitted successfully!");
-      setParsedSignal(data.data.parsed);
       setShowConfirmDialog(false);
 
-      setTimeout(() => {
-        setRawSignal("");
-        setImageFile(null);
-        setPreviewUrl(null);
-        setParsedSignal(null);
-        setSuccess(null);
-      }, 2000);
+      // Step 2: Automatically execute trade
+      console.log("[SIGNALS] Executing trade automatically...");
+      const executeResponse = await fetch("/api/trades/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          signalId,
+          investmentAmount: user?.investmentAmount || 100,
+          positionSizingMethod: user?.positionSizingMethod || "fixed",
+          positionSizingPercentage: user?.riskPercentage,
+          testnet: user?.useTestnet || false,
+          createOCO: true,
+        }),
+      });
+
+      const executeData = await executeResponse.json();
+
+      if (!executeResponse.ok || !executeData.success) {
+        console.error("[SIGNALS] Trade execution failed:", executeData.error);
+        toast.error(executeData.error?.message || "Trade execution failed");
+        // Still redirect to history even on failure
+        router.push(`/signals/history?highlight=${signalId}`);
+        return;
+      }
+
+      console.log("[SIGNALS] Trade executed successfully:", executeData.data);
+
+      if (executeData.data.requiresApproval) {
+        toast.success("Signal submitted! Trade requires manual approval in dashboard.");
+      } else {
+        toast.success("Signal submitted and trade executed successfully!");
+      }
+
+      // Redirect to signal history with highlight
+      router.push(`/signals/history?highlight=${signalId}`);
     } catch (err) {
-      setError("An error occurred while submitting the signal");
-      toast.error("An error occurred while submitting the signal");
+      setError("An error occurred while processing the signal");
+      toast.error("An error occurred while processing the signal");
       console.error(err);
-    } finally {
       setSubmitting(false);
     }
   };
