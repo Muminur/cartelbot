@@ -1658,3 +1658,9 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 **Fixed testnet toggle not registering (1378b18)**: Session API missing user preferences (useTestnet + 11 other fields). Frontend received undefined → defaulted to mainnet. Added all trading/risk/notification fields to session response. Quality 7.5/10→9/10.
 
 **Signal deletion with OCO cancellation & orphaned coins (177504f)**: Full feature (1,256 LOC, 6 new files). Two deletion modes (sell/keep), OCO cancellation via Binance, OrphanedCoin model with TTL index, dedicated management page. Testnet/mainnet aware. Quality 9.3/10.
+
+---
+
+## Session: Dashboard Stats Display Fix (Nov 12, 2025)
+
+**Fixed dashboard zeros bug (e4aa06c)**: /api/stats querying wrong field (userEmail vs userId) causing all stats to show 0. Changed 6 queries to use userId: String(user._id), removed redundant "Setup Required" warning. Dashboard now displays actual Active Signals, Open Positions, Total P&L, Win Rate. TypeScript clean, code quality 9.2/10.
