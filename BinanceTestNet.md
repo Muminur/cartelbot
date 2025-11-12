@@ -4401,3 +4401,14 @@ API Key: gy7BWAiu6fNUqh914ZO80KGb0oWBAovwSDh5u0JNyVdW5P6w5vmRCBknG1zPWRns
 
 Secret Key: tQvL4w2jMVSCc6fi4cDR1rltFqdwvTSpuzsGMLEnXQp4BsrEXZoyRecrCHp3zCS8
 
+
+## Bug Fix: Trade Execute Route 404 Error (Nov 12, 2025)
+
+**Issue**: `GET /trades/execute?signalId=...` returning 404 errors
+**Root Cause**: Missing page route - only API endpoint existed at `/api/trades/execute`
+**Fix**: Created `app/trades/execute/page.tsx` (318 lines) with:
+- Signal details display (symbol, entries, targets, stop loss, risk/reward)
+- Position sizing UI (fixed amount, percentage, risk-based)
+- Execute confirmation button
+- Error handling and redirects
+**Result**: Route now returns 200, users can execute trades with confirmation
