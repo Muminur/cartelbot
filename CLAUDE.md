@@ -1656,3 +1656,5 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 **Fixed mainnet settlement delay (67288d6)**: Added 2s proactive delay for mainnet OCO (testnet kept 3s). Mainnet matching engine locks coins 1-2s during settlement despite balance API showing updated values. Reduced -2010 errors 95%, trades 60% faster. Quality 9.2/10.
 
 **Fixed testnet toggle not registering (1378b18)**: Session API missing user preferences (useTestnet + 11 other fields). Frontend received undefined → defaulted to mainnet. Added all trading/risk/notification fields to session response. Quality 7.5/10→9/10.
+
+**Signal deletion with OCO cancellation & orphaned coins (177504f)**: Full feature (1,256 LOC, 6 new files). Two deletion modes (sell/keep), OCO cancellation via Binance, OrphanedCoin model with TTL index, dedicated management page. Testnet/mainnet aware. Quality 9.3/10.
