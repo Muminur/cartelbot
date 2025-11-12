@@ -27,7 +27,12 @@ import {
   Edit,
   Play,
   ListOrdered,
+  RefreshCw,
 } from "lucide-react";
+
+// Constants for polling configuration
+const MAX_POLLING_ATTEMPTS = 10;
+const POLLING_INTERVAL_MS = 3000;
 
 interface SignalDetailModalProps {
   signal: ISignal | null;
@@ -88,32 +93,110 @@ export default function SignalDetailModal({
   const [isProcessing, setIsProcessing] = useState(false);
   const [trade, setTrade] = useState<ITrade | null>(null);
   const [loadingTrade, setLoadingTrade] = useState(false);
+  const [pollingAttempts, setPollingAttempts] = useState(0);
+  const [pollingFailed, setPollingFailed] = useState(false);
+
+  // Reset polling attempts when modal is closed or signal changes
+  useEffect(() => {
+    if (!isOpen) {
+      setPollingAttempts(0);
+      setPollingFailed(false);
+      setTrade(null);
+    }
+  }, [isOpen, signal?._id]);
 
   // Fetch trade data when signal is executing or completed
   useEffect(() => {
+    // FIX #2: Prevent concurrent fetches with abort controller
+    const abortController = new AbortController();
+    let isMounted = true;
+    let timeoutId: NodeJS.Timeout | null = null;
+
     const fetchTradeData = async () => {
       if (!signal || !isOpen) return;
       if (signal.status !== "executing" && signal.status !== "completed") return;
 
+      // Prevent concurrent fetch requests
+      if (loadingTrade) return;
+
       setLoadingTrade(true);
       try {
         // Fetch trades associated with this signal
-        const response = await fetch(`/api/trades?signalId=${signal._id}`);
+        const response = await fetch(`/api/trades?signalId=${signal._id}`, {
+          signal: abortController.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch trade data: ${response.statusText}`);
+        }
+
         const data = await response.json();
+
+        // Only update state if component is still mounted
+        if (!isMounted) return;
 
         if (data.success && data.data && data.data.length > 0) {
           // Get the most recent trade for this signal
-          setTrade(data.data[0]);
+          const latestTrade = data.data[0];
+          setTrade(latestTrade);
+
+          // If trade exists but has no OCO orders yet, poll again after 3 seconds
+          // This handles the race condition where OCO orders are still being created
+          // Limit to MAX_POLLING_ATTEMPTS (30 seconds total) to prevent infinite loop
+          if (
+            latestTrade &&
+            latestTrade.sellOrders.length === 0 &&
+            signal.status === "executing" &&
+            pollingAttempts < MAX_POLLING_ATTEMPTS
+          ) {
+            console.log(
+              `Trade found but no OCO orders yet, will retry in ${POLLING_INTERVAL_MS / 1000} seconds... (attempt ${pollingAttempts + 1}/${MAX_POLLING_ATTEMPTS})`
+            );
+
+            // FIX #1: Store timeout ID for cleanup
+            timeoutId = setTimeout(() => {
+              if (isMounted) {
+                setPollingAttempts((prev) => prev + 1);
+              }
+            }, POLLING_INTERVAL_MS);
+          } else if (
+            latestTrade &&
+            latestTrade.sellOrders.length === 0 &&
+            signal.status === "executing" &&
+            pollingAttempts >= MAX_POLLING_ATTEMPTS
+          ) {
+            // FIX ENHANCEMENT #1: Set polling failed state after max attempts
+            console.warn(
+              `Failed to load OCO orders after ${MAX_POLLING_ATTEMPTS} attempts (${(MAX_POLLING_ATTEMPTS * POLLING_INTERVAL_MS) / 1000} seconds)`
+            );
+            setPollingFailed(true);
+          }
         }
       } catch (error) {
-        console.error("Failed to fetch trade data:", error);
+        // Only log error if not an abort error
+        if (error instanceof Error && error.name !== "AbortError") {
+          console.error("Failed to fetch trade data:", error);
+        }
       } finally {
-        setLoadingTrade(false);
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setLoadingTrade(false);
+        }
       }
     };
 
     fetchTradeData();
-  }, [signal, isOpen]);
+
+    // FIX #1: Cleanup function to clear timeout and abort fetch
+    return () => {
+      isMounted = false;
+      abortController.abort();
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+    // FIX #3: Use signal._id instead of full signal object to prevent infinite loops
+  }, [signal?._id, isOpen, pollingAttempts, loadingTrade]);
 
   if (!signal) return null;
 
@@ -288,7 +371,10 @@ export default function SignalDetailModal({
                 </div>
 
                 {loadingTrade ? (
-                  <div className="text-sm text-gray-500">Loading trade details...</div>
+                  <div className="text-sm text-gray-500 flex items-center gap-2">
+                    <Clock className="h-4 w-4 animate-spin" />
+                    Loading trade details...
+                  </div>
                 ) : trade ? (
                   <div className="space-y-4">
                     {/* Buy Order */}
@@ -316,8 +402,8 @@ export default function SignalDetailModal({
                       </div>
                     </div>
 
-                    {/* OCO Sell Orders */}
-                    {trade.sellOrders && trade.sellOrders.length > 0 && (
+                    {/* OCO Sell Orders - or loading state */}
+                    {trade.sellOrders && trade.sellOrders.length > 0 ? (
                       <div className="space-y-2">
                         <div className="text-xs font-semibold text-gray-700">OCO SELL ORDERS (Take Profit & Stop Loss)</div>
                         {trade.sellOrders.map((order: IOrder, index: number) => (
@@ -378,7 +464,42 @@ export default function SignalDetailModal({
                           </div>
                         ))}
                       </div>
-                    )}
+                    ) : signal.status === "executing" ? (
+                      pollingFailed ? (
+                        // FIX ENHANCEMENT #1: Show error after max polling attempts with manual refresh option
+                        <div className="bg-red-50 p-3 rounded-lg border border-red-200">
+                          <div className="flex items-center gap-2 text-sm text-red-800">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span className="font-medium">OCO orders taking longer than expected</span>
+                          </div>
+                          <p className="text-xs text-red-700 mt-2">
+                            The system has been waiting for {(MAX_POLLING_ATTEMPTS * POLLING_INTERVAL_MS) / 1000} seconds but OCO orders haven&apos;t appeared yet. This could indicate a Binance API delay or connectivity issue.
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-3 border-red-300 text-red-700 hover:bg-red-100"
+                            onClick={() => {
+                              setPollingFailed(false);
+                              setPollingAttempts(0);
+                            }}
+                          >
+                            <RefreshCw className="h-3 w-3 mr-2" />
+                            Retry Loading Orders
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                          <div className="flex items-center gap-2 text-sm text-yellow-800">
+                            <Clock className="h-4 w-4 animate-spin" />
+                            <span className="font-medium">Creating OCO orders (Take Profit & Stop Loss)...</span>
+                          </div>
+                          <p className="text-xs text-yellow-700 mt-2">
+                            This may take a few seconds. The orders will appear automatically when ready. (Attempt {pollingAttempts + 1}/{MAX_POLLING_ATTEMPTS})
+                          </p>
+                        </div>
+                      )
+                    ) : null}
 
                     {/* Trade Summary */}
                     <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-3 rounded-lg border border-purple-200">
