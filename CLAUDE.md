@@ -1448,6 +1448,8 @@ import { toast } from "sonner";
 
 **Testnet/Mainnet Toggle Implemented (Nov 12, 2025)**: Completed full testnet/mainnet user configuration with Settings UI toggle, User model `useTestnet` field, and 7 API endpoints updated to use stored preference with fallback chain (explicit parameter > user preference > mainnet default). Build successful, TypeScript clean, backward compatible.
 
+**Bug Fixes (Nov 12, 2025)**: Fixed 5 critical issues - React object rendering error (extracted `.message` from error objects before rendering), signal submission 400 errors (pre-insert validation), service worker 404 (created `/public/sw.js`), image signal OCR text not captured (`setRawSignal(extractedText)` after parsing), test connection error display (red card UI with troubleshooting checklist). All fixes production-ready, 7 commits pushed to GitHub.
+
 ---
 
 ## Bug Fix: WebSocket Stream 404 Error (Nov 11, 2025)
