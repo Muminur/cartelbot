@@ -100,9 +100,6 @@ export async function DELETE(
       );
     }
 
-    const { searchParams } = new URL(request.url);
-    const testnet = searchParams.get("testnet") === "true";
-
     const apiKeys = await getUserApiKeys(user._id);
     if (!apiKeys || !("encryptedApiKey" in apiKeys) || !("encryptedApiSecret" in apiKeys) || !apiKeys.encryptedApiKey || !apiKeys.encryptedApiSecret) {
       return NextResponse.json(
@@ -114,9 +111,16 @@ export async function DELETE(
       );
     }
 
+    // Use user's testnet preference with fallback chain
+    const { searchParams } = new URL(request.url);
+    const testnetParam = searchParams.get("testnet");
+    const useTestnet = testnetParam !== null
+      ? testnetParam === "true"
+      : ("useTestnet" in apiKeys ? apiKeys.useTestnet : false);
+
     const apiKey = decrypt(apiKeys.encryptedApiKey as string);
     const apiSecret = decrypt(apiKeys.encryptedApiSecret as string);
-    const client = new BinanceClient({ apiKey, apiSecret, testnet });
+    const client = new BinanceClient({ apiKey, apiSecret, testnet: useTestnet });
 
     const openOrders = await client.getOpenOrders(trade.symbol);
     const cancelledOrders = [];

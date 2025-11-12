@@ -234,6 +234,7 @@ export default function SettingsPage() {
           maxOpenPositions,
           requireApproval,
           emergencyStop,
+          useTestnet,
         }),
       });
 
@@ -418,11 +419,11 @@ export default function SettingsPage() {
                     </div>
                     <div>
                       <span className="text-blue-700">USDT Balance:</span>{" "}
-                      <span className="font-medium">{connectionResult.usdtBalance.toFixed(2)} USDT</span>
+                      <span className="font-medium">{connectionResult.usdtBalance?.toFixed(2) || "0.00"} USDT</span>
                     </div>
                     <div className="col-span-2">
                       <span className="text-blue-700">Assets:</span>{" "}
-                      <span className="font-medium">{connectionResult.topBalances.length}</span>
+                      <span className="font-medium">{connectionResult.topBalances?.length || 0}</span>
                     </div>
                   </div>
                 </div>
@@ -440,7 +441,7 @@ export default function SettingsPage() {
                       <p className="font-medium text-red-800">Common causes:</p>
                       <ul className="list-disc list-inside space-y-1 ml-2">
                         <li>API key or secret is incorrect</li>
-                        <li>API key doesn't match the selected environment (testnet/mainnet)</li>
+                        <li>API key does not match the selected environment (testnet/mainnet)</li>
                         <li>Server IP not whitelisted on Binance</li>
                         <li>Spot & Margin Trading permission not enabled</li>
                       </ul>

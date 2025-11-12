@@ -14,10 +14,7 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth();
     const body = await request.json();
 
-    const { tradeId, approved, testnet: testnetParam } = body;
-
-    // Use testnet parameter if provided, otherwise use user preference
-    const testnet = testnetParam ?? user.useTestnet ?? false;
+    const { tradeId, approved } = body;
 
     if (!tradeId || !Types.ObjectId.isValid(tradeId)) {
       return NextResponse.json(
@@ -109,9 +106,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Use user's testnet preference
+    const useTestnet = ("useTestnet" in apiKeys ? apiKeys.useTestnet : false) || false;
+
     const apiKey = decrypt(apiKeys.encryptedApiKey as string);
     const apiSecret = decrypt(apiKeys.encryptedApiSecret as string);
-    const client = new BinanceClient({ apiKey, apiSecret, testnet });
+    const client = new BinanceClient({ apiKey, apiSecret, testnet: useTestnet });
 
     await client.syncServerTime();
 

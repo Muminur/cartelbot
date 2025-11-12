@@ -689,7 +689,45 @@
 
 ---
 
-**Last Updated**: November 11, 2025
-**Current Milestone**: 7 - User Interface Development (COMPLETED)
+## Milestone 7.1: Portfolio Display Feature
+**Goal**: Show Binance portfolio with testnet/mainnet toggle
+
+### Backend Fixes
+- [ ] Fix useTestnet toggle save in Settings page (app/settings/page.tsx)
+- [ ] Include useTestnet in getUserApiKeys helper (lib/db/helpers.ts)
+- [ ] Standardize testnet handling in /api/trades/[id] endpoint
+- [ ] Standardize testnet handling in /api/trades/close/[id] endpoint
+- [ ] Standardize testnet handling in /api/trades/approve endpoint
+
+### Frontend Development
+- [ ] Create PortfolioWidget component with:
+  - [ ] Fetch account balances from Binance API
+  - [ ] Fetch 24hr ticker data for price changes
+  - [ ] Calculate total portfolio value in USDT
+  - [ ] Display asset allocations as percentages
+  - [ ] Show locked vs free balances
+  - [ ] Implement auto-refresh (30 seconds)
+  - [ ] Add loading and error states
+  - [ ] Responsive design for mobile/tablet/desktop
+- [ ] Integrate PortfolioWidget into dashboard page
+
+### Testing
+- [ ] Test useTestnet toggle saves to database
+- [ ] Test getUserApiKeys returns useTestnet field
+- [ ] Test testnet parameter fallback chain works
+- [ ] Test all endpoints respect user's testnet preference
+- [ ] Test PortfolioWidget displays correctly with testnet
+- [ ] Test PortfolioWidget displays correctly with mainnet
+- [ ] Test edge cases (no assets, API errors, rate limits)
+- [ ] Run production build and verify no TypeScript errors
+
+### Documentation
+- [ ] Update TASKS.md with completion status
+- [ ] Update CLAUDE.md with technical summary (5 lines max)
+
+---
+
+**Last Updated**: November 12, 2025
+**Current Milestone**: 7.1 - Portfolio Display Feature (IN PROGRESS)
 **Next Milestone**: 8 - Subscription System
 **Overall Progress**: 163/200 tasks completed (Milestone 1: ✓, Milestone 2: ✓, Milestone 3: ✓, Milestone 4: ✓, Milestone 5: ✓, Milestone 6: ✓, Milestone 7: ✓)

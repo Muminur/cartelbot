@@ -17,7 +17,7 @@ export async function getUserApiKeys(userId: string | Types.ObjectId | unknown) 
   if (!Types.ObjectId.isValid(id)) {
     throw new Error("Invalid user ID format");
   }
-  return await User.findById(id).select("+encryptedApiKey +encryptedApiSecret").lean();
+  return await User.findById(id).select("+encryptedApiKey +encryptedApiSecret useTestnet").lean();
 }
 
 export async function updateUserSubscription(
