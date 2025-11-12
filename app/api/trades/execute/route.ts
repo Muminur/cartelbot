@@ -55,16 +55,17 @@ export async function POST(request: NextRequest) {
 
     let ocoResult;
     if (createOCO && result.tradeId && !result.requiresApproval) {
-      // Wait for balance settlement on testnet (Binance testnet has delays)
-      if (testnet) {
-        const settlementDelay = TRADE_EXECUTION.TESTNET_SETTLEMENT_DELAY_MS;
-        console.log(
-          `[Trade Execute] Testnet mode detected - waiting ${settlementDelay}ms for balance settlement ` +
-          `before creating OCO orders (tradeId: ${result.tradeId})`
-        );
-        await new Promise(resolve => setTimeout(resolve, settlementDelay));
-        console.log(`[Trade Execute] Settlement delay complete, proceeding with OCO creation`);
-      }
+      // Wait for balance settlement (both testnet and mainnet have settlement delays)
+      const settlementDelay = testnet
+        ? TRADE_EXECUTION.TESTNET_SETTLEMENT_DELAY_MS
+        : TRADE_EXECUTION.MAINNET_SETTLEMENT_DELAY_MS;
+
+      console.log(
+        `[Trade Execute] Waiting ${settlementDelay}ms for balance settlement ` +
+        `(${testnet ? 'testnet' : 'mainnet'}) before creating OCO orders (tradeId: ${result.tradeId})`
+      );
+      await new Promise(resolve => setTimeout(resolve, settlementDelay));
+      console.log(`[Trade Execute] Settlement delay complete, proceeding with OCO creation`);
 
       const ocoStartTime = Date.now();
       ocoResult = await createOCOOrders(result.tradeId, testnet);

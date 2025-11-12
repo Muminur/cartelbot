@@ -48,6 +48,7 @@ export const TRADE_DEFAULTS = {
 
 export const TRADE_EXECUTION = {
   TESTNET_SETTLEMENT_DELAY_MS: 3000, // 3 seconds for testnet balance settlement
+  MAINNET_SETTLEMENT_DELAY_MS: 2000, // 2 seconds for mainnet balance settlement (Binance matching engine delay)
   OCO_RETRY_MAX_ATTEMPTS: 3,
   OCO_RETRY_BASE_DELAY_MS: 2000,
   OCO_RETRY_MAX_TOTAL_DURATION_MS: 20000, // 20 seconds max total wait (3s initial + 2s + 4s + 8s retries)
