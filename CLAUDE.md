@@ -1628,3 +1628,9 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: Signal Status Logic Fix (Nov 12, 2025)
 
 **Fixed signal status premature completion bug**: Signals now wait for OCO orders to fill before marking "completed". Created centralized signal-status-manager.ts helper to prevent race conditions. Fixed 3 critical bugs: missing signal update on manual close, incorrect status on trade approval, duplicate logic in WebSocket handlers. Lifecycle: parsed→executing(trade created)→completed(OCO filled). Commit 42637da.
+
+---
+
+## Session: OCO Order Details in Signal Detail Modal (Nov 12, 2025)
+
+**Added comprehensive trade execution details to signal modal**: Signal detail modal now displays buy order info (ID/status/quantity/amount), OCO sell orders (TP/SL with prices and execution status), and trade summary (P&L percentage, close reason). Added signalId filter to /api/trades endpoint. Auto-fetches trade data when signal is executing/completed. Color-coded badges for order status (FILLED=green, CANCELED=gray, NEW=yellow). TypeScript clean, commit b4cd2b8.
