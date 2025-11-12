@@ -1609,3 +1609,10 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 **TypeScript**: ✅ Passing
 **Production Ready**: ✅ Yes (pending full build test)
 
+
+
+---
+
+## Session: Critical Bug Fixes - Trade History & OCO Allocation (Nov 12, 2025)
+
+**Fixed 3 critical bugs**: Trade history display (MongoDB $in operator for comma-separated filters), OCO quantity mismatch (110%→100% by limiting to 3 targets), useLivePrices parallel requests (400 error fix). Code review score 8.7/10, production-ready. Commit c47da9e.
