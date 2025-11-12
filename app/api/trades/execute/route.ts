@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { executeSignalTrade, createOCOOrders } from "@/lib/binance";
 import { formatErrorResponse } from "@/lib/utils/errors";
+import { TRADE_EXECUTION } from "@/lib/constants";
 import { Types } from "mongoose";
 
 export async function POST(request: NextRequest) {
@@ -54,6 +55,12 @@ export async function POST(request: NextRequest) {
 
     let ocoResult;
     if (createOCO && result.tradeId && !result.requiresApproval) {
+      // Wait for balance settlement on testnet (Binance testnet has delays)
+      if (testnet) {
+        console.log(`[OCO] Waiting ${TRADE_EXECUTION.TESTNET_SETTLEMENT_DELAY_MS}ms for testnet balance settlement...`);
+        await new Promise(resolve => setTimeout(resolve, TRADE_EXECUTION.TESTNET_SETTLEMENT_DELAY_MS));
+      }
+
       ocoResult = await createOCOOrders(result.tradeId, testnet);
     }
 

@@ -46,6 +46,14 @@ export const TRADE_DEFAULTS = {
   MAX_TARGETS: 5,
 } as const;
 
+export const TRADE_EXECUTION = {
+  TESTNET_SETTLEMENT_DELAY_MS: 3000, // 3 seconds for testnet balance settlement
+  OCO_RETRY_MAX_ATTEMPTS: 3,
+  OCO_RETRY_BASE_DELAY_MS: 2000,
+  OCO_RETRY_MAX_TOTAL_DURATION_MS: 10000, // 10 seconds max total wait
+  BALANCE_TOLERANCE: 0.00000001, // 1e-8 for Binance precision (floating point tolerance)
+} as const;
+
 export const SIGNAL_STATUS = {
   PENDING: "pending",
   PARSED: "parsed",

@@ -5,7 +5,7 @@ import { decrypt } from "@/lib/encryption";
 import { Signal, Trade } from "@/lib/db/models";
 import { connectDB } from "@/lib/db";
 import { BinanceAPIError, ValidationError } from "@/lib/utils/errors";
-import { TRADE_DEFAULTS } from "@/lib/constants";
+import { TRADE_DEFAULTS, TRADE_EXECUTION } from "@/lib/constants";
 import { Types } from "mongoose";
 import { calculatePositionSize, PositionSizingMethod } from "./position-sizing";
 import { validateTradeRisk, getUserRiskLimits } from "./risk-manager";
@@ -242,6 +242,46 @@ interface OCOOrderResult {
   transactTime?: number;
 }
 
+/**
+ * Helper function for retry with exponential backoff
+ * Used to handle settlement delays on testnet
+ */
+async function retryOCOCreation<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = TRADE_EXECUTION.OCO_RETRY_MAX_ATTEMPTS,
+  baseDelay: number = TRADE_EXECUTION.OCO_RETRY_BASE_DELAY_MS
+): Promise<T> {
+  const startTime = Date.now();
+  const MAX_TOTAL_DURATION = TRADE_EXECUTION.OCO_RETRY_MAX_TOTAL_DURATION_MS;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    // Check if total time exceeded
+    if (Date.now() - startTime > MAX_TOTAL_DURATION) {
+      throw new Error(`OCO creation timeout - exceeded maximum duration of ${MAX_TOTAL_DURATION}ms`);
+    }
+
+    try {
+      return await fn();
+    } catch (error: unknown) {
+      const isInsufficientBalance =
+        error instanceof BinanceAPIError && error.binanceCode === -2010;
+      const isLastAttempt = attempt === maxRetries;
+
+      if (isInsufficientBalance && !isLastAttempt) {
+        const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
+        console.log(`[OCO] Retry ${attempt}/${maxRetries} after ${delay}ms (insufficient balance)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  // This should never be reached, but TypeScript needs it
+  throw new Error('Retry logic failed unexpectedly');
+}
+
 export async function createOCOOrders(
   tradeId: Types.ObjectId,
   testnet = false
@@ -275,6 +315,29 @@ export async function createOCOOrders(
     const maxOCOOrders = distribution.length; // Limit to 3 OCO orders
     const targets = trade.targets.slice(0, maxOCOOrders); // Take only first 3 targets
     const orders: OCOOrderResult[] = [];
+
+    // Verify balance before creating OCO orders
+    const accountInfo = await client.getAccount();
+
+    // Use baseAsset from symbol info instead of string replace
+    const baseAsset = symbolInfo.baseAsset;
+    if (!baseAsset) {
+      throw new ValidationError(`Unable to determine base asset for ${trade.symbol}`);
+    }
+
+    const assetBalance = accountInfo.balances.find(b => b.asset === baseAsset);
+    const availableBalance = parseFloat(assetBalance?.free || '0');
+
+    console.log(`[OCO] Balance check for ${baseAsset}: Available=${availableBalance}, Required=${trade.quantity}`);
+
+    // Add floating point tolerance for balance comparison
+    if (availableBalance < trade.quantity - TRADE_EXECUTION.BALANCE_TOLERANCE) {
+      throw new ValidationError(
+        `Insufficient ${baseAsset} balance for OCO orders. ` +
+        `Required: ${trade.quantity}, Available: ${availableBalance}. ` +
+        `This may indicate a settlement delay on testnet.`
+      );
+    }
 
     // Log warning if signal has more targets than distribution
     if (trade.targets.length > maxOCOOrders) {
@@ -325,12 +388,15 @@ export async function createOCOOrders(
       });
 
       try {
-        const ocoOrder = await client.createOCOOrder(
-          trade.symbol,
-          adjustedQty,
-          adjustedPrice,
-          adjustedStopPrice,
-          adjustedStopLimitPrice
+        // Use retry logic for OCO creation (handles testnet settlement delays)
+        const ocoOrder = await retryOCOCreation(
+          () => client.createOCOOrder(
+            trade.symbol,
+            adjustedQty,
+            adjustedPrice,
+            adjustedStopPrice,
+            adjustedStopLimitPrice
+          )
         );
 
         orders.push({
