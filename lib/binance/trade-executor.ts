@@ -181,10 +181,46 @@ export async function executeSignalTrade(
     signal.status = "executing";
     await signal.save();
 
+    console.log(`[Trade Executor] Executing buy order for ${signal.symbol}:`, {
+      symbol: signal.symbol,
+      investmentAmount: amount,
+      estimatedQuantity: estimatedQuantity,
+      currentPrice: currentPrice,
+      testnet: testnet,
+    });
+
     const buyOrder = await client.createMarketBuyOrder(signal.symbol, amount);
+
+    console.log(`[Trade Executor] Buy order executed successfully:`, {
+      orderId: buyOrder.orderId,
+      symbol: buyOrder.symbol,
+      status: buyOrder.status,
+      executedQty: buyOrder.executedQty,
+      cummulativeQuoteQty: buyOrder.cummulativeQuoteQty,
+      fills: buyOrder.fills?.map(f => ({
+        price: f.price,
+        qty: f.qty,
+        commission: f.commission,
+        commissionAsset: f.commissionAsset,
+      })),
+      transactTime: buyOrder.transactTime,
+    });
 
     const executedQty = parseFloat(buyOrder.executedQty || "0");
     const executedPrice = parseFloat(buyOrder.fills?.[0]?.price || "0");
+
+    if (executedQty === 0) {
+      throw new ValidationError(
+        `Buy order executed with 0 quantity. Order ID: ${buyOrder.orderId}. ` +
+        `This may indicate an order rejection or API issue.`
+      );
+    }
+
+    console.log(`[Trade Executor] Buy order processed:`, {
+      executedQuantity: executedQty,
+      executedPrice: executedPrice,
+      totalCost: parseFloat(buyOrder.cummulativeQuoteQty || "0"),
+    });
 
     const trade = await Trade.create({
       userId,
@@ -210,9 +246,26 @@ export async function executeSignalTrade(
       stopLoss: signal.stopLoss,
     });
 
+    console.log(`[Trade Executor] Trade document created:`, {
+      tradeId: trade._id,
+      symbol: trade.symbol,
+      quantity: trade.quantity,
+      entryPrice: trade.entryPrice,
+      investedAmount: trade.investedAmount,
+      status: trade.status,
+      targets: trade.targets,
+      stopLoss: trade.stopLoss,
+    });
+
     // Don't mark signal as completed yet - wait for OCO orders to fill
     signal.status = "executing";
     await signal.save();
+
+    console.log(`[Trade Executor] Trade execution successful - ready for OCO creation`, {
+      tradeId: trade._id,
+      executedQuantity: executedQty,
+      symbol: signal.symbol,
+    });
 
     return {
       success: true,
@@ -220,6 +273,14 @@ export async function executeSignalTrade(
       buyOrder,
     };
   } catch (error) {
+    console.error(`[Trade Executor] Trade execution failed:`, {
+      signalId: signalId,
+      error: error instanceof Error ? error.message : "Unknown error",
+      errorType: error instanceof BinanceAPIError ? "BinanceAPIError" :
+                 error instanceof ValidationError ? "ValidationError" : "Unknown",
+      binanceCode: error instanceof BinanceAPIError ? error.binanceCode : undefined,
+    });
+
     await Signal.findByIdAndUpdate(signalId, { status: "failed" });
 
     if (error instanceof BinanceAPIError || error instanceof ValidationError) {
@@ -316,6 +377,16 @@ export async function createOCOOrders(
       throw new ValidationError("Trade not found");
     }
 
+    console.log(`[OCO Creation] Starting OCO order creation:`, {
+      tradeId: trade._id,
+      symbol: trade.symbol,
+      buyQuantity: trade.quantity,
+      entryPrice: trade.entryPrice,
+      targets: trade.targets,
+      stopLoss: trade.stopLoss,
+      testnet: testnet,
+    });
+
     const apiKeys = await getUserApiKeys(trade.userId);
     if (!apiKeys || !("encryptedApiKey" in apiKeys) || !("encryptedApiSecret" in apiKeys) || !apiKeys.encryptedApiKey || !apiKeys.encryptedApiSecret) {
       throw new ValidationError("Binance API keys not configured");
@@ -342,8 +413,8 @@ export async function createOCOOrders(
     console.log(`[OCO] ${trade.symbol} - Fetching account balance for verification...`);
     const accountInfo = await client.getAccount();
 
-    // Use baseAsset from symbol info instead of string replace
-    const baseAsset = symbolInfo.baseAsset;
+    // Use baseAsset from symbol info with fallback to string parsing
+    const baseAsset = symbolInfo.baseAsset || trade.symbol.replace(/USDT$/, '');
     if (!baseAsset) {
       throw new ValidationError(`Unable to determine base asset for ${trade.symbol}`);
     }
@@ -356,9 +427,20 @@ export async function createOCOOrders(
       `[OCO] ${trade.symbol} - Balance check for ${baseAsset}:`,
       `Available=${availableBalance.toFixed(8)},`,
       `Locked=${lockedBalance.toFixed(8)},`,
-      `Required=${trade.quantity.toFixed(8)},`,
+      `Required (from buy order)=${trade.quantity.toFixed(8)},`,
+      `Buy Order ID=${trade.buyOrder?.orderId || 'N/A'},`,
+      `Buy Order Executed Qty=${trade.buyOrder?.executedQty?.toFixed(8) || 'N/A'},`,
       `Shortfall=${Math.max(0, trade.quantity - availableBalance).toFixed(8)}`
     );
+
+    // Critical diagnostic: Verify trade.quantity matches buyOrder.executedQty
+    if (trade.buyOrder && trade.buyOrder.executedQty !== trade.quantity) {
+      console.warn(
+        `[OCO] ${trade.symbol} - MISMATCH DETECTED:`,
+        `trade.quantity (${trade.quantity}) !== buyOrder.executedQty (${trade.buyOrder.executedQty}). ` +
+        `Using trade.quantity for OCO orders.`
+      );
+    }
 
     // Add floating point tolerance for balance comparison
     if (availableBalance < trade.quantity - TRADE_EXECUTION.BALANCE_TOLERANCE) {
@@ -465,7 +547,7 @@ export async function createOCOOrders(
     const unallocatedQty = trade.quantity - totalAllocatedQty;
     const allocationPercentage = (totalAllocatedQty / trade.quantity) * 100;
 
-    if (Math.abs(unallocatedQty) > 0.00000001) { // Floating point tolerance
+    if (Math.abs(unallocatedQty) > TRADE_EXECUTION.BALANCE_TOLERANCE) { // Floating point tolerance
       console.warn(
         `OCO allocation mismatch for ${trade.symbol}:`,
         {

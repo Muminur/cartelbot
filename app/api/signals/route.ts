@@ -4,6 +4,7 @@ import { connectDB } from "@/lib/db";
 import { Signal } from "@/lib/db/models";
 import { parseSignal } from "@/lib/parser";
 import { formatErrorResponse } from "@/lib/utils/errors";
+import { BinanceClient } from "@/lib/binance";
 
 export async function POST(request: NextRequest) {
   try {
@@ -77,6 +78,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Fetch current market price from Binance mainnet (always mainnet for accurate prices)
+    let currentMarketPrice = parsed.currentMarketPrice; // Use CMP from signal if available
+
+    if (!currentMarketPrice && parsed.symbol) {
+      try {
+        console.log(`[Signal Creation] Fetching current market price for ${parsed.symbol} from mainnet...`);
+        const mainnetClient = new BinanceClient({
+          apiKey: "", // Public endpoint - no auth needed
+          apiSecret: "",
+          testnet: false, // ALWAYS use mainnet for price fetching
+        });
+
+        // Add 5-second timeout to prevent slow mainnet from blocking signal creation
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Price fetch timeout after 5 seconds")), 5000)
+        );
+
+        const ticker = await Promise.race([
+          mainnetClient.get24hrTicker(parsed.symbol),
+          timeoutPromise,
+        ]);
+        currentMarketPrice = parseFloat(ticker.lastPrice);
+
+        console.log(`[Signal Creation] Current market price for ${parsed.symbol}: ${currentMarketPrice}`);
+      } catch (priceError) {
+        console.warn(
+          `[Signal Creation] Failed to fetch current price for ${parsed.symbol}:`,
+          priceError instanceof Error ? priceError.message : "Unknown error"
+        );
+        // Don't fail the entire signal creation if price fetch fails
+        // The price will be fetched again during trade execution
+      }
+    }
+
     await connectDB();
 
     console.log("POST /api/signals - Creating signal document:", {
@@ -85,7 +120,7 @@ export async function POST(request: NextRequest) {
       entries: parsed.entries,
       targets: parsed.targets,
       stopLoss: parsed.stopLoss,
-      currentMarketPrice: parsed.currentMarketPrice,
+      currentMarketPrice: currentMarketPrice,
       status: parsed.errors.length === 0 ? "parsed" : "pending",
       isImageSignal,
     });
@@ -96,7 +131,7 @@ export async function POST(request: NextRequest) {
       entries: parsed.entries,
       targets: parsed.targets,
       stopLoss: parsed.stopLoss,
-      currentMarketPrice: parsed.currentMarketPrice,
+      currentMarketPrice: currentMarketPrice,
       status: parsed.errors.length === 0 ? "parsed" : "pending",
       rawSignal,
       isImageSignal,
