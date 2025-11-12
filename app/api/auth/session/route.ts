@@ -18,6 +18,21 @@ export async function GET() {
         subscriptionExpiry: user.subscriptionExpiry,
         isActive: user.isActive,
         hasApiKeys: !!(user.encryptedApiKey && user.encryptedApiSecret),
+        // Trading settings
+        investmentAmount: user.investmentAmount,
+        targetDistribution: user.targetDistribution,
+        positionSizingMethod: user.positionSizingMethod,
+        riskPercentage: user.riskPercentage,
+        useTestnet: user.useTestnet,
+        // Risk management
+        maxPositionSize: user.maxPositionSize,
+        maxDailyLoss: user.maxDailyLoss,
+        maxOpenPositions: user.maxOpenPositions,
+        requireApproval: user.requireApproval,
+        emergencyStop: user.emergencyStop,
+        // Notification settings
+        emailNotifications: user.emailNotifications,
+        emailFrequency: user.emailFrequency,
       },
     });
   } catch (error) {

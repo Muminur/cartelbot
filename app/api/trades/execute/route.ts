@@ -23,6 +23,15 @@ export async function POST(request: NextRequest) {
     // Use testnet parameter if provided, otherwise use user preference
     const testnet = testnetParam ?? user.useTestnet ?? false;
 
+    // Debug logging to trace testnet resolution
+    console.log("[Trade Execute] Testnet configuration:", {
+      testnetParam,
+      userUseTestnet: user.useTestnet,
+      resolvedTestnet: testnet,
+      userId: user._id,
+      userEmail: user.email,
+    });
+
     if (!signalId || !Types.ObjectId.isValid(signalId)) {
       return NextResponse.json(
         {

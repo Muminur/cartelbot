@@ -181,6 +181,12 @@ export default function SignalsPage() {
 
       // Step 2: Automatically execute trade
       console.log("[SIGNALS] Executing trade automatically...");
+      console.log("[SIGNALS] User testnet preference:", {
+        userUseTestnet: user?.useTestnet,
+        resolvedTestnet: user?.useTestnet || false,
+        userEmail: user?.email,
+      });
+
       const executeResponse = await fetch("/api/trades/execute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
