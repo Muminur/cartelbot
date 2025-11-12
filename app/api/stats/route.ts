@@ -19,21 +19,21 @@ export async function GET(request: NextRequest) {
     const [activeSignals, activeTrades, completedTrades, totalPnL] =
       await Promise.all([
         Signal.countDocuments({
-          userEmail: user.email,
+          userId: String(user._id),
           status: { $in: ["pending", "executing"] },
         }),
         Trade.countDocuments({
-          userEmail: user.email,
+          userId: String(user._id),
           status: "open",
         }),
         Trade.countDocuments({
-          userEmail: user.email,
+          userId: String(user._id),
           status: "closed",
         }),
         Trade.aggregate([
           {
             $match: {
-              userEmail: user.email,
+              userId: String(user._id),
               status: "closed",
               realizedPnL: { $exists: true },
             },
@@ -48,13 +48,13 @@ export async function GET(request: NextRequest) {
       ]);
 
     const winningTrades = await Trade.countDocuments({
-      userEmail: user.email,
+      userId: String(user._id),
       status: "closed",
       realizedPnL: { $gt: 0 },
     });
 
     const losingTrades = await Trade.countDocuments({
-      userEmail: user.email,
+      userId: String(user._id),
       status: "closed",
       realizedPnL: { $lt: 0 },
     });

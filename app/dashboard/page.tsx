@@ -173,26 +173,6 @@ export default function DashboardPage() {
           <OpenPositionsWidget key={`positions-${refreshKey}`} />
           <RecentTradesWidget key={`recent-${refreshKey}`} />
         </div>
-
-        {!user.hasApiKeys && (
-          <Card className="border-yellow-200 bg-yellow-50">
-            <CardHeader>
-              <CardTitle className="text-yellow-800">Setup Required</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-yellow-700 mb-4">
-                Configure your Binance API keys to start trading automatically.
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => router.push("/settings")}
-                className="border-yellow-300 text-yellow-800 hover:bg-yellow-100"
-              >
-                Add API Keys
-              </Button>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </DashboardLayout>
   );
