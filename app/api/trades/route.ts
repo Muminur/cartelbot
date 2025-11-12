@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
 
     // Filter by signalId if provided
     if (signalId) {
+      // Try both string and ObjectId format for compatibility
       query.signalId = signalId;
     }
 

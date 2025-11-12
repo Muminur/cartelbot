@@ -149,10 +149,6 @@ export default function SignalDetailModal({
             signal.status === "executing" &&
             pollingAttempts < MAX_POLLING_ATTEMPTS
           ) {
-            console.log(
-              `Trade found but no OCO orders yet, will retry in ${POLLING_INTERVAL_MS / 1000} seconds... (attempt ${pollingAttempts + 1}/${MAX_POLLING_ATTEMPTS})`
-            );
-
             // FIX #1: Store timeout ID for cleanup
             timeoutId = setTimeout(() => {
               if (isMounted) {
@@ -196,7 +192,10 @@ export default function SignalDetailModal({
       }
     };
     // FIX #3: Use signal._id instead of full signal object to prevent infinite loops
-  }, [signal?._id, isOpen, pollingAttempts, loadingTrade]);
+    // FIX #4: Removed loadingTrade from dependencies - it's a guard, not a trigger
+    //         Having it in dependencies causes the effect to re-run when setLoadingTrade(true) is called,
+    //         but the guard check (line 120) prevents execution, leaving loadingTrade stuck at true
+  }, [signal?._id, isOpen, pollingAttempts]);
 
   if (!signal) return null;
 
