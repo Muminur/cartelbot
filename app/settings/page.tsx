@@ -20,12 +20,14 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Loader2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 
 interface TestConnectionResult {
-  canTrade: boolean;
-  canWithdraw: boolean;
-  canDeposit: boolean;
-  usdtBalance: number;
-  topBalances: Array<{ asset: string; free: string; locked: string }>;
-  accountType: string;
+  connected: boolean;
+  canTrade?: boolean;
+  canWithdraw?: boolean;
+  canDeposit?: boolean;
+  usdtBalance?: number;
+  topBalances?: Array<{ asset: string; free: string; locked: string }>;
+  accountType?: string;
+  error?: string;
 }
 
 export default function SettingsPage() {
@@ -192,13 +194,28 @@ export default function SettingsPage() {
 
       if (data.success) {
         toast.success("Connection successful!");
-        setConnectionResult(data.data);
+        setConnectionResult({
+          connected: true,
+          ...data.data,
+        });
       } else {
-        toast.error(data.error?.message || "Connection test failed");
+        const errorMessage = data.error?.message || "Connection test failed";
+        toast.error(errorMessage);
+        // Set error state to display in UI
+        setConnectionResult({
+          connected: false,
+          error: errorMessage,
+        });
       }
     } catch (error) {
       console.error("Error testing connection:", error);
-      toast.error("Failed to test connection");
+      const errorMessage = error instanceof Error ? error.message : "Failed to test connection";
+      toast.error(errorMessage);
+      // Set error state to display in UI
+      setConnectionResult({
+        connected: false,
+        error: errorMessage,
+      });
     } finally {
       setTestingConnection(false);
     }
@@ -374,7 +391,7 @@ export default function SettingsPage() {
                 </Button>
               </div>
 
-              {connectionResult && (
+              {connectionResult && connectionResult.connected && (
                 <div className="p-4 bg-blue-50 border border-blue-200 rounded-md space-y-3">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="w-5 h-5 text-blue-600" />
@@ -408,6 +425,35 @@ export default function SettingsPage() {
                       <span className="font-medium">{connectionResult.topBalances.length}</span>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {connectionResult && !connectionResult.connected && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-md space-y-3">
+                  <div className="flex items-center gap-2">
+                    <XCircle className="w-5 h-5 text-red-600" />
+                    <p className="text-sm font-medium text-red-900">Connection Failed</p>
+                  </div>
+                  <div className="text-sm text-red-700">
+                    <p className="font-medium mb-2">{connectionResult.error}</p>
+                    <div className="space-y-1 text-xs">
+                      <p className="font-medium text-red-800">Common causes:</p>
+                      <ul className="list-disc list-inside space-y-1 ml-2">
+                        <li>API key or secret is incorrect</li>
+                        <li>API key doesn't match the selected environment (testnet/mainnet)</li>
+                        <li>Server IP not whitelisted on Binance</li>
+                        <li>Spot & Margin Trading permission not enabled</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTestConnection}
+                    className="w-full"
+                  >
+                    Retry Connection
+                  </Button>
                 </div>
               )}
 
