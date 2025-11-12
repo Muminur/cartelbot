@@ -1619,6 +1619,12 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 ---
 
+## Session: Auto-Execute Signal Feature + Critical Bug Fixes (Nov 12, 2025)
+
+**Auto-execute signals implemented (86a4244)**: Signal submission now triggers automatic trade execution via /api/trades/execute, redirects to /signals/history with auto-open detail modal. Fixed signalId extraction bug (data.data.signalId not ._id), added finally block for state management, improved dialog timing and toast messages. Code review 7.5/10→9.5/10 after fixes. TypeScript clean, commit 74e1941.
+
+---
+
 ## Session: Signal Status Logic Fix (Nov 12, 2025)
 
 **Fixed signal status premature completion bug**: Signals now wait for OCO orders to fill before marking "completed". Created centralized signal-status-manager.ts helper to prevent race conditions. Fixed 3 critical bugs: missing signal update on manual close, incorrect status on trade approval, duplicate logic in WebSocket handlers. Lifecycle: parsed→executing(trade created)→completed(OCO filled). Commit 42637da.
