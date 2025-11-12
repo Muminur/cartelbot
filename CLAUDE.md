@@ -1452,6 +1452,8 @@ import { toast } from "sonner";
 
 **Execute Trade Page Fix (Nov 12, 2025)**: Fixed 404 error on `/trades/execute?signalId=...` by creating missing UI page. Implemented signal details display, three position sizing methods (fixed/percentage/risk-based), risk/reward calculation, and proper error handling with redirects. Page integrates with existing `/api/trades/execute` endpoint. File created: app/trades/execute/page.tsx (318 LOC).
 
+**OCO Order PRICE_FILTER Fix (Nov 12, 2025)**: Fixed Binance -1013 error in OCO order creation by dynamically fetching symbol tick size and formatting prices with correct precision instead of hardcoded 8 decimals. Updated createOCOOrder to validate stopPrice and stopLimitPrice through filter validation before API submission. Modified: lib/binance/client.ts (69 lines), lib/binance/trade-executor.ts (27 lines). Test validation: 85.7% pass rate.
+
 ---
 
 ## Bug Fix: WebSocket Stream 404 Error (Nov 11, 2025)

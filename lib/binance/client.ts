@@ -289,13 +289,63 @@ export class BinanceClient {
     stopLimitPrice: number
   ): Promise<BinanceOrderResponse> {
     await this.checkOrderRateLimit();
+
+    // Get exchange info to validate filters
+    const exchangeInfo = await this.getExchangeInfo(symbol);
+    const symbolInfo = exchangeInfo.symbols.find((s) => s.symbol === symbol);
+
+    if (!symbolInfo) {
+      throw new BinanceAPIError(`Symbol ${symbol} not found`, -1121);
+    }
+
+    // Get tick size for proper formatting
+    const priceFilter = symbolInfo.filters.find((f) => f.filterType === "PRICE_FILTER");
+    const tickSize = priceFilter?.tickSize || "0.00000001";
+
+    // Get step size for quantity formatting
+    const lotSizeFilter = symbolInfo.filters.find((f) => f.filterType === "LOT_SIZE");
+    const stepSize = lotSizeFilter?.stepSize || "0.00000001";
+
+    // Calculate precision for formatting
+    const getPrecision = (sizeStr: string): number => {
+      const decimalIndex = sizeStr.indexOf(".");
+      const oneIndex = sizeStr.indexOf("1");
+
+      if (decimalIndex === -1 || oneIndex < decimalIndex) {
+        return 0; // Whole number
+      }
+
+      return oneIndex - decimalIndex;
+    };
+
+    const pricePrecision = getPrecision(tickSize);
+    const quantityPrecision = getPrecision(stepSize);
+
+    // Format values with correct precision
+    const formattedQuantity = quantity.toFixed(quantityPrecision);
+    const formattedPrice = price.toFixed(pricePrecision);
+    const formattedStopPrice = stopPrice.toFixed(pricePrecision);
+    const formattedStopLimitPrice = stopLimitPrice.toFixed(pricePrecision);
+
+    console.log("OCO Order Parameters:", {
+      symbol,
+      quantity: formattedQuantity,
+      price: formattedPrice,
+      stopPrice: formattedStopPrice,
+      stopLimitPrice: formattedStopLimitPrice,
+      tickSize,
+      stepSize,
+      pricePrecision,
+      quantityPrecision,
+    });
+
     const result = await this.signedRequest<BinanceOrderResponse>("POST", "/api/v3/order/oco", {
       symbol,
       side: "SELL",
-      quantity: quantity.toFixed(8),
-      price: price.toFixed(8),
-      stopPrice: stopPrice.toFixed(8),
-      stopLimitPrice: stopLimitPrice.toFixed(8),
+      quantity: formattedQuantity,
+      price: formattedPrice,
+      stopPrice: formattedStopPrice,
+      stopLimitPrice: formattedStopLimitPrice,
       stopLimitTimeInForce: "GTC",
     });
     this.updateOrderRateLimit();

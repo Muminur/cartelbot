@@ -281,6 +281,7 @@ export async function createOCOOrders(
       const percentage = distribution[i] || distribution[distribution.length - 1];
       const qtyForTarget = (trade.quantity * percentage) / 100;
 
+      // Validate and adjust target price and quantity
       const validation = validateAllFilters(targetPrice, qtyForTarget, filters);
       if (!validation.isValid) {
         console.warn(`Skipping target ${i} due to filter validation: ${validation.errors.join(", ")}`);
@@ -289,15 +290,35 @@ export async function createOCOOrders(
 
       const adjustedQty = validation.adjustedQuantity || qtyForTarget;
       const adjustedPrice = validation.adjustedPrice || targetPrice;
-      const stopLimitPrice = trade.stopLoss * 0.99;
+
+      // Validate and adjust stop loss price
+      const stopPriceValidation = validateAllFilters(trade.stopLoss, adjustedQty, filters);
+      const adjustedStopPrice = stopPriceValidation.adjustedPrice || trade.stopLoss;
+
+      // Calculate and validate stop limit price (0.5% below stop loss for sell orders)
+      const rawStopLimitPrice = adjustedStopPrice * 0.995;
+      const stopLimitValidation = validateAllFilters(rawStopLimitPrice, adjustedQty, filters);
+      const adjustedStopLimitPrice = stopLimitValidation.adjustedPrice || rawStopLimitPrice;
+
+      console.log(`Creating OCO for target ${i}:`, {
+        symbol: trade.symbol,
+        targetPrice: targetPrice,
+        adjustedPrice: adjustedPrice,
+        quantity: qtyForTarget.toFixed(8),
+        adjustedQty: adjustedQty.toFixed(8),
+        stopLoss: trade.stopLoss,
+        adjustedStopPrice: adjustedStopPrice,
+        rawStopLimitPrice: rawStopLimitPrice,
+        adjustedStopLimitPrice: adjustedStopLimitPrice,
+      });
 
       try {
         const ocoOrder = await client.createOCOOrder(
           trade.symbol,
           adjustedQty,
           adjustedPrice,
-          trade.stopLoss,
-          stopLimitPrice
+          adjustedStopPrice,
+          adjustedStopLimitPrice
         );
 
         orders.push({
