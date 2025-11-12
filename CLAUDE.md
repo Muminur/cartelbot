@@ -1616,3 +1616,9 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: Critical Bug Fixes - Trade History & OCO Allocation (Nov 12, 2025)
 
 **Fixed 3 critical bugs**: Trade history display (MongoDB $in operator for comma-separated filters), OCO quantity mismatch (110%→100% by limiting to 3 targets), useLivePrices parallel requests (400 error fix). Code review score 8.7/10, production-ready. Commit c47da9e.
+
+---
+
+## Session: Signal Status Logic Fix (Nov 12, 2025)
+
+**Fixed signal status premature completion bug**: Signals now wait for OCO orders to fill before marking "completed". Created centralized signal-status-manager.ts helper to prevent race conditions. Fixed 3 critical bugs: missing signal update on manual close, incorrect status on trade approval, duplicate logic in WebSocket handlers. Lifecycle: parsed→executing(trade created)→completed(OCO filled). Commit 42637da.
