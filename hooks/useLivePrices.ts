@@ -2,11 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 
-interface PriceData {
-  symbol: string;
-  price: number;
-}
-
 interface UseLivePricesOptions {
   symbols: string[];
   enabled?: boolean;
@@ -25,29 +20,42 @@ export function useLivePrices({ symbols, enabled = true, refreshInterval = 5000 
     }
 
     try {
-      // Build query string with all symbols
-      const symbolsParam = symbols.join(",");
-      const response = await fetch(`/api/binance/ticker?symbols=${symbolsParam}`);
+      // Make parallel requests for each symbol (avoids 400 error with comma-separated symbols)
+      const pricePromises = symbols.map(async (symbol) => {
+        try {
+          const response = await fetch(`/api/binance/ticker?symbol=${symbol}`);
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch prices: ${response.statusText}`);
-      }
+          if (!response.ok) {
+            console.warn(`Failed to fetch price for ${symbol}: ${response.statusText}`);
+            return null;
+          }
 
-      const data = await response.json();
+          const data = await response.json();
 
-      if (!data.success) {
-        throw new Error(data.error?.message || "Failed to fetch prices");
-      }
+          if (!data.success) {
+            console.warn(`Error fetching ${symbol}:`, data.error?.message);
+            return null;
+          }
 
-      // Update prices map
+          return {
+            symbol: data.data.symbol,
+            price: parseFloat(data.data.lastPrice),
+          };
+        } catch (error) {
+          console.warn(`Exception fetching ${symbol}:`, error);
+          return null;
+        }
+      });
+
+      // Wait for all requests to complete
+      const results = await Promise.all(pricePromises);
+
+      // Filter out failed requests and update prices map
       const newPrices = new Map<string, number>();
 
-      // Handle both single ticker and array of tickers
-      const tickers = Array.isArray(data.data) ? data.data : [data.data];
-
-      tickers.forEach((ticker: PriceData) => {
-        if (ticker.symbol && ticker.price) {
-          newPrices.set(ticker.symbol, ticker.price);
+      results.forEach((result) => {
+        if (result && result.symbol && result.price) {
+          newPrices.set(result.symbol, result.price);
         }
       });
 
