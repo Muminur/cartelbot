@@ -527,6 +527,7 @@ export async function createOCOOrders(
 
         trade.sellOrders.push({
           orderId: ocoOrder.orderId,
+          orderListId: ocoOrder.orderListId, // Store orderListId for easy cancellation
           symbol: trade.symbol,
           side: "SELL" as const,
           type: "OCO" as const,

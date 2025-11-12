@@ -48,6 +48,7 @@ export interface ISignal extends Document {
 
 export interface IOrder {
   orderId: number;
+  orderListId?: number; // For OCO orders - used to cancel the entire OCO group
   symbol: string;
   side: "BUY" | "SELL";
   type: "MARKET" | "LIMIT" | "OCO";
@@ -105,6 +106,21 @@ export interface IWebSocketSession extends Document {
   lastKeepAlive: Date;
   connectionState: "connecting" | "connected" | "disconnected" | "error";
   errorMessage?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IOrphanedCoin extends Document {
+  userId: string;
+  signalId: string;
+  tradeId: string;
+  symbol: string;
+  quantity: number;
+  buyPrice: number;
+  buyOrderId: number;
+  buyTimestamp: Date;
+  currentMarketPrice?: number;
+  status: "active" | "sold" | "expired";
   createdAt: Date;
   updatedAt: Date;
 }

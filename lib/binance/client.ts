@@ -271,11 +271,48 @@ export class BinanceClient {
     quantity: number
   ): Promise<BinanceOrderResponse> {
     await this.checkOrderRateLimit();
+
+    // Get exchange info to validate filters and determine correct precision
+    const exchangeInfo = await this.getExchangeInfo(symbol);
+    const symbolInfo = exchangeInfo.symbols.find((s) => s.symbol === symbol);
+
+    if (!symbolInfo) {
+      throw new BinanceAPIError(`Symbol ${symbol} not found`, -1121);
+    }
+
+    // Get step size for quantity formatting
+    const lotSizeFilter = symbolInfo.filters.find((f) => f.filterType === "LOT_SIZE");
+    const stepSize = lotSizeFilter?.stepSize || "0.00000001";
+
+    // Calculate precision for formatting
+    const getPrecision = (sizeStr: string): number => {
+      const decimalIndex = sizeStr.indexOf(".");
+      const oneIndex = sizeStr.indexOf("1");
+
+      if (decimalIndex === -1 || oneIndex < decimalIndex) {
+        return 0; // Whole number
+      }
+
+      return oneIndex - decimalIndex;
+    };
+
+    const quantityPrecision = getPrecision(stepSize);
+
+    // Format quantity with correct precision
+    const formattedQuantity = quantity.toFixed(quantityPrecision);
+
+    console.log("Market Sell Order Parameters:", {
+      symbol,
+      quantity: formattedQuantity,
+      stepSize,
+      quantityPrecision,
+    });
+
     const result = await this.signedRequest<BinanceOrderResponse>("POST", "/api/v3/order", {
       symbol,
       side: "SELL",
       type: "MARKET",
-      quantity: quantity.toFixed(8),
+      quantity: formattedQuantity,
     });
     this.updateOrderRateLimit();
     return result;
@@ -374,6 +411,23 @@ export class BinanceClient {
       symbol,
       orderId,
     });
+    this.updateOrderRateLimit();
+    return result;
+  }
+
+  async cancelOCOOrder(
+    symbol: string,
+    orderListId: number
+  ): Promise<BinanceOrderResponse> {
+    await this.checkOrderRateLimit();
+    const result = await this.signedRequest<BinanceOrderResponse>(
+      "DELETE",
+      "/api/v3/orderList",
+      {
+        symbol,
+        orderListId,
+      }
+    );
     this.updateOrderRateLimit();
     return result;
   }

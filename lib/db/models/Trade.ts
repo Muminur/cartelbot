@@ -7,6 +7,10 @@ const orderSchema = new Schema<IOrder>(
       type: Number,
       required: true,
     },
+    orderListId: {
+      type: Number,
+      // Optional - only for OCO orders. Used to cancel entire OCO group.
+    },
     symbol: {
       type: String,
       required: true,
