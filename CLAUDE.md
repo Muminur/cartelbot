@@ -1448,6 +1448,8 @@ import { toast } from "sonner";
 
 **Milestone 7.1 Completed**: Implemented comprehensive Binance portfolio display showing all assets with real-time prices, 24hr changes, allocations, and locked balances. Fixed testnet/mainnet toggle with atomic save (API keys + preference in single transaction), standardized testnet resolution across 7 endpoints using `resolveTestnetPreference()` helper with fallback chain. Created `PortfolioWidget` (350 LOC) with auto-refresh, stablecoin handling (USDT/BUSD/USDC/DAI/TUSD), and `useCallback` memory leak fix. Code review conducted, all critical issues resolved. Build: 89s, 31 routes, TypeScript clean, code quality 9.0/10. Files: 2 created, 9 modified.
 
+**Portfolio Page Refactor (Nov 12, 2025)**: Moved PortfolioWidget from dashboard to dedicated `/portfolio` page with authentication, WebSocket live updates, manual refresh button, and consistent DashboardLayout. Updated navigation with Portfolio link. Files: 1 created (app/portfolio/page.tsx), 2 modified (dashboard, sidebar).
+
 ---
 
 ## Bug Fix: WebSocket Stream 404 Error (Nov 11, 2025)

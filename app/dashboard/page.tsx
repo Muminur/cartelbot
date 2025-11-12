@@ -12,7 +12,6 @@ import { OpenPositionsWidget } from "@/components/dashboard/OpenPositionsWidget"
 import { AccountBalanceWidget } from "@/components/dashboard/AccountBalanceWidget";
 import { PnLChartWidget } from "@/components/dashboard/PnLChartWidget";
 import { RecentTradesWidget } from "@/components/dashboard/RecentTradesWidget";
-import { PortfolioWidget } from "@/components/dashboard/PortfolioWidget";
 import { useWebSocketStream } from "@/hooks/useWebSocketStream";
 import { TrendingUp, Signal, Wallet, Award } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
@@ -167,8 +166,6 @@ export default function DashboardPage() {
           <ActiveSignalsWidget key={`signals-${refreshKey}`} />
           <AccountBalanceWidget key={`balance-${refreshKey}`} />
         </div>
-
-        <PortfolioWidget key={`portfolio-${refreshKey}`} />
 
         <PnLChartWidget key={`chart-${refreshKey}`} />
 

@@ -7,7 +7,8 @@ import {
   Signal,
   TrendingUp,
   Settings,
-  BarChart3
+  BarChart3,
+  Wallet
 } from "lucide-react";
 
 interface SidebarProps {
@@ -16,6 +17,7 @@ interface SidebarProps {
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Portfolio", href: "/portfolio", icon: Wallet },
   { name: "Signals", href: "/signals", icon: Signal },
   { name: "Trades", href: "/trades", icon: TrendingUp },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
