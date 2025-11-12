@@ -172,13 +172,12 @@ export default function SignalsPage() {
       if (!response.ok || !data.success) {
         setError(data.error?.message || "Failed to submit signal");
         toast.error(data.error?.message || "Failed to submit signal");
+        setSubmitting(false);
         return;
       }
 
-      const signalId = data.data._id;
+      const signalId = data.data.signalId;
       console.log("[SIGNALS] Signal submitted successfully, ID:", signalId);
-      toast.success("Signal submitted successfully!");
-      setShowConfirmDialog(false);
 
       // Step 2: Automatically execute trade
       console.log("[SIGNALS] Executing trade automatically...");
@@ -197,10 +196,14 @@ export default function SignalsPage() {
 
       const executeData = await executeResponse.json();
 
+      // Close dialog after trade execution completes
+      setShowConfirmDialog(false);
+
       if (!executeResponse.ok || !executeData.success) {
         console.error("[SIGNALS] Trade execution failed:", executeData.error);
         toast.error(executeData.error?.message || "Trade execution failed");
         // Still redirect to history even on failure
+        setSubmitting(false);
         router.push(`/signals/history?highlight=${signalId}`);
         return;
       }
@@ -208,9 +211,9 @@ export default function SignalsPage() {
       console.log("[SIGNALS] Trade executed successfully:", executeData.data);
 
       if (executeData.data.requiresApproval) {
-        toast.success("Signal submitted! Trade requires manual approval in dashboard.");
+        toast.success("Signal submitted! Trade awaiting approval in dashboard.");
       } else {
-        toast.success("Signal submitted and trade executed successfully!");
+        toast.success("Trade executed successfully!");
       }
 
       // Redirect to signal history with highlight
@@ -219,6 +222,7 @@ export default function SignalsPage() {
       setError("An error occurred while processing the signal");
       toast.error("An error occurred while processing the signal");
       console.error(err);
+    } finally {
       setSubmitting(false);
     }
   };
