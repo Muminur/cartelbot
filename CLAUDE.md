@@ -1450,6 +1450,8 @@ import { toast } from "sonner";
 
 **Portfolio Page Refactor (Nov 12, 2025)**: Moved PortfolioWidget from dashboard to dedicated `/portfolio` page with authentication, WebSocket live updates, manual refresh button, and consistent DashboardLayout. Updated navigation with Portfolio link. Files: 1 created (app/portfolio/page.tsx), 2 modified (dashboard, sidebar).
 
+**Execute Trade Page Fix (Nov 12, 2025)**: Fixed 404 error on `/trades/execute?signalId=...` by creating missing UI page. Implemented signal details display, three position sizing methods (fixed/percentage/risk-based), risk/reward calculation, and proper error handling with redirects. Page integrates with existing `/api/trades/execute` endpoint. File created: app/trades/execute/page.tsx (318 LOC).
+
 ---
 
 ## Bug Fix: WebSocket Stream 404 Error (Nov 11, 2025)
