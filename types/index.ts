@@ -25,6 +25,7 @@ export interface IUser extends Document {
   };
   emailFrequency?: "instant" | "hourly" | "daily";
   telegramEnabled?: boolean;
+  useTestnet?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

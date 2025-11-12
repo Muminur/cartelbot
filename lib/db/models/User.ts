@@ -105,6 +105,10 @@ const userSchema = new Schema<IUser>(
       type: Boolean,
       default: false,
     },
+    useTestnet: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

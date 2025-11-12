@@ -1444,6 +1444,12 @@ import { toast } from "sonner";
 
 ---
 
+## Session: Testnet/Mainnet Configuration Completed (Nov 12, 2025)
+
+**Testnet/Mainnet Toggle Implemented (Nov 12, 2025)**: Completed full testnet/mainnet user configuration with Settings UI toggle, User model `useTestnet` field, and 7 API endpoints updated to use stored preference with fallback chain (explicit parameter > user preference > mainnet default). Build successful, TypeScript clean, backward compatible.
+
+---
+
 ## Bug Fix: WebSocket Stream 404 Error (Nov 11, 2025)
 
 **Issue**: `/api/websocket/stream` returning 404 errors, breaking dashboard real-time updates.

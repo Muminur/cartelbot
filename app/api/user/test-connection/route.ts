@@ -62,10 +62,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Test the connection with Binance
+    // Use user's testnet preference (default to mainnet)
     const binanceClient = new BinanceClient({
       apiKey,
       apiSecret,
-      testnet: false, // Use mainnet for testing
+      testnet: userDoc.useTestnet || false,
     });
 
     try {

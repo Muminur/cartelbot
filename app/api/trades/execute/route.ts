@@ -15,9 +15,12 @@ export async function POST(request: NextRequest) {
       positionSizingMethod = "fixed",
       positionSizingPercentage,
       positionSizingRiskPercent,
-      testnet = false,
+      testnet: testnetParam,
       createOCO = true,
     } = body;
+
+    // Use testnet parameter if provided, otherwise use user preference
+    const testnet = testnetParam ?? user.useTestnet ?? false;
 
     if (!signalId || !Types.ObjectId.isValid(signalId)) {
       return NextResponse.json(

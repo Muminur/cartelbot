@@ -60,7 +60,10 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { testnet = false } = body;
+    const { testnet: testnetParam } = body;
+
+    // Use testnet parameter if provided, otherwise use user preference
+    const testnet = testnetParam ?? user.useTestnet ?? false;
 
     const apiKeys = await getUserApiKeys(user._id as Types.ObjectId);
     if (

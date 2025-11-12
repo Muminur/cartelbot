@@ -14,7 +14,10 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth();
     const body = await request.json();
 
-    const { tradeId, approved, testnet = false } = body;
+    const { tradeId, approved, testnet: testnetParam } = body;
+
+    // Use testnet parameter if provided, otherwise use user preference
+    const testnet = testnetParam ?? user.useTestnet ?? false;
 
     if (!tradeId || !Types.ObjectId.isValid(tradeId)) {
       return NextResponse.json(

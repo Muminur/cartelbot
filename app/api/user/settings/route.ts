@@ -10,6 +10,7 @@ const updateSettingsSchema = z.object({
   maxOpenPositions: z.number().min(1).max(50).optional(),
   requireApproval: z.boolean().optional(),
   emergencyStop: z.boolean().optional(),
+  useTestnet: z.boolean().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -40,6 +41,7 @@ export async function GET(request: NextRequest) {
         maxOpenPositions: userDoc.maxOpenPositions,
         requireApproval: userDoc.requireApproval,
         emergencyStop: userDoc.emergencyStop,
+        useTestnet: userDoc.useTestnet || false,
       },
     });
   } catch (error) {
@@ -94,6 +96,7 @@ export async function POST(request: NextRequest) {
         maxOpenPositions: updatedUser.maxOpenPositions,
         requireApproval: updatedUser.requireApproval,
         emergencyStop: updatedUser.emergencyStop,
+        useTestnet: updatedUser.useTestnet || false,
       },
     });
   } catch (error) {

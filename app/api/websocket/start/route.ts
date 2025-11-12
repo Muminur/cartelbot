@@ -58,7 +58,8 @@ export async function POST(req: NextRequest) {
     const apiSecret = decrypt(userDoc.encryptedApiSecret);
 
     const body = await req.json().catch(() => ({}));
-    const testnet = body.testnet || false;
+    // Use testnet parameter if provided, otherwise use user preference
+    const testnet = body.testnet ?? userDoc.useTestnet ?? false;
 
     const binanceClient = createBinanceClient(apiKey, apiSecret, testnet);
 

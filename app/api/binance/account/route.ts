@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const user = await requireAuth();
 
     const { searchParams } = new URL(request.url);
-    const testnet = searchParams.get("testnet") === "true";
+    const testnetParam = searchParams.get("testnet");
 
     // Check if user has API keys configured BEFORE making Binance call
     const apiKeys = await getUserApiKeys(user._id as any);
@@ -69,8 +69,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Use testnet parameter if provided, otherwise use user preference
+    const useTestnet = testnetParam === "true" || apiKeys.useTestnet || false;
+
     // Create Binance client and fetch account
-    const client = new BinanceClient({ apiKey, apiSecret, testnet });
+    const client = new BinanceClient({ apiKey, apiSecret, testnet: useTestnet });
 
     try {
       const account = await client.getAccount();
@@ -78,7 +81,7 @@ export async function GET(request: NextRequest) {
       console.log(`Successfully fetched account for user ${user.email}`, {
         timestamp: new Date().toISOString(),
         canTrade: account.canTrade,
-        testnet,
+        testnet: useTestnet,
       });
 
       return NextResponse.json({
@@ -90,7 +93,7 @@ export async function GET(request: NextRequest) {
       console.error("Binance API error while fetching account:", {
         email: user.email,
         error: binanceError,
-        testnet,
+        testnet: useTestnet,
         timestamp: new Date().toISOString(),
       });
 

@@ -41,6 +41,7 @@ export default function SettingsPage() {
   const [savingApiKeys, setSavingApiKeys] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionResult, setConnectionResult] = useState<TestConnectionResult | null>(null);
+  const [useTestnet, setUseTestnet] = useState(false);
 
   // Trade Settings state
   const [investmentAmount, setInvestmentAmount] = useState(100);
@@ -99,6 +100,7 @@ export default function SettingsPage() {
             setMaxOpenPositions(data.maxOpenPositions || 10);
             setRequireApproval(data.requireApproval || false);
             setEmergencyStop(data.emergencyStop || false);
+            setUseTestnet(data.useTestnet || false);
           }
         }
 
@@ -154,6 +156,13 @@ export default function SettingsPage() {
       const data = await response.json();
 
       if (data.success) {
+        // Also save testnet preference
+        await fetch("/api/user/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ useTestnet }),
+        });
+
         toast.success("API keys saved successfully");
         setHasApiKeys(true);
         setApiKey("");
@@ -373,6 +382,16 @@ export default function SettingsPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
+                      <span className="text-blue-700">Environment:</span>{" "}
+                      <span className={`font-medium px-2 py-1 rounded text-xs ${
+                        useTestnet
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-green-100 text-green-800"
+                      }`}>
+                        {useTestnet ? "TESTNET" : "MAINNET"}
+                      </span>
+                    </div>
+                    <div>
                       <span className="text-blue-700">Can Trade:</span>{" "}
                       <span className="font-medium">{connectionResult.canTrade ? "Yes" : "No"}</span>
                     </div>
@@ -384,13 +403,39 @@ export default function SettingsPage() {
                       <span className="text-blue-700">USDT Balance:</span>{" "}
                       <span className="font-medium">{connectionResult.usdtBalance.toFixed(2)} USDT</span>
                     </div>
-                    <div>
+                    <div className="col-span-2">
                       <span className="text-blue-700">Assets:</span>{" "}
                       <span className="font-medium">{connectionResult.topBalances.length}</span>
                     </div>
                   </div>
                 </div>
               )}
+
+              {/* Testnet/Mainnet Toggle */}
+              <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="flex-1">
+                  <Label htmlFor="useTestnet" className="text-base font-medium text-blue-900">
+                    Use Binance Testnet
+                  </Label>
+                  <p className="text-sm text-blue-700 mt-1">
+                    Enable this to use Binance Testnet for testing without real funds.
+                    You will need testnet API keys from{" "}
+                    <a
+                      href="https://testnet.binance.vision"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline hover:text-blue-900"
+                    >
+                      testnet.binance.vision
+                    </a>
+                  </p>
+                </div>
+                <Switch
+                  id="useTestnet"
+                  checked={useTestnet}
+                  onCheckedChange={setUseTestnet}
+                />
+              </div>
             </CardContent>
           </Card>
 
