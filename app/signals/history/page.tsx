@@ -16,6 +16,7 @@ import {
 import SignalFilters, { SignalFilterValues } from "@/components/signals/SignalFilters";
 import SignalDetailModal from "@/components/signals/SignalDetailModal";
 import EditSignalModal from "@/components/signals/EditSignalModal";
+import DeleteSignalDialog from "@/components/signals/DeleteSignalDialog";
 import SignalActions from "@/components/signals/SignalActions";
 import { ISignal, UserProfile } from "@/types";
 import { API_ROUTES } from "@/lib/constants";
@@ -62,6 +63,7 @@ export default function SignalHistoryPage() {
   const [selectedSignal, setSelectedSignal] = useState<ISignal | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -227,6 +229,34 @@ export default function SignalHistoryPage() {
     router.push(`/trades/execute?signalId=${signal._id}`);
   };
 
+  const handleDelete = (signal: ISignal) => {
+    setSelectedSignal(signal);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async (signalId: string, sellRemaining: boolean) => {
+    try {
+      const response = await fetch(`/api/signals/${signalId}/delete`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sellRemaining }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error?.message || "Failed to delete signal");
+      }
+
+      toast.success(data.data.message || "Signal deleted successfully");
+      fetchSignals();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete signal";
+      toast.error(message);
+      throw error;
+    }
+  };
+
   if (loading && !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -376,6 +406,7 @@ export default function SignalHistoryPage() {
                                 onEdit={handleEdit}
                                 onCancel={(s) => handleCancel(String(s._id))}
                                 onExecute={handleExecute}
+                                onDelete={handleDelete}
                               />
                             </TableCell>
                           </TableRow>
@@ -436,6 +467,16 @@ export default function SignalHistoryPage() {
           setSelectedSignal(null);
         }}
         onSave={handleSaveEdit}
+      />
+
+      <DeleteSignalDialog
+        signal={selectedSignal}
+        isOpen={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setSelectedSignal(null);
+        }}
+        onConfirm={handleConfirmDelete}
       />
     </div>
   );

@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ISignal } from "@/types";
-import { MoreVertical, Eye, Edit, XCircle, Play } from "lucide-react";
+import { MoreVertical, Eye, Edit, XCircle, Play, Trash2 } from "lucide-react";
 
 interface SignalActionsProps {
   signal: ISignal;
@@ -17,6 +17,7 @@ interface SignalActionsProps {
   onEdit?: (signal: ISignal) => void;
   onCancel?: (signal: ISignal) => void;
   onExecute?: (signal: ISignal) => void;
+  onDelete?: (signal: ISignal) => void;
 }
 
 export default function SignalActions({
@@ -25,10 +26,12 @@ export default function SignalActions({
   onEdit,
   onCancel,
   onExecute,
+  onDelete,
 }: SignalActionsProps) {
   const canEdit = signal.status === "pending";
   const canCancel = signal.status === "pending" || signal.status === "parsed";
   const canExecute = signal.status === "parsed";
+  const canDelete = signal.status === "executing" || signal.status === "completed";
 
   return (
     <DropdownMenu>
@@ -70,6 +73,19 @@ export default function SignalActions({
             >
               <XCircle className="mr-2 h-4 w-4" />
               <span>Cancel Signal</span>
+            </DropdownMenuItem>
+          </>
+        )}
+
+        {canDelete && onDelete && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => onDelete(signal)}
+              className="text-red-600 focus:text-red-600"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              <span>Delete Signal</span>
             </DropdownMenuItem>
           </>
         )}
