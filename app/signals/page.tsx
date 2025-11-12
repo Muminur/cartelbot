@@ -118,6 +118,15 @@ export default function SignalsPage() {
         return;
       }
 
+      // For image signals, capture the OCR text returned from parser
+      if (imageFile && data.data.extractedText) {
+        setRawSignal(data.data.extractedText);
+        console.log("[SIGNALS] OCR text captured:", {
+          length: data.data.extractedText.length,
+          preview: data.data.extractedText.substring(0, 100),
+        });
+      }
+
       setParsedSignal(data.data);
       setShowConfirmDialog(true);
     } catch (err) {
@@ -140,13 +149,21 @@ export default function SignalsPage() {
     setSuccess(null);
 
     try {
+      const payload = {
+        rawSignal,
+        isImageSignal: !!imageFile,
+      };
+
+      console.log("[SIGNALS] Submitting signal:", {
+        isImageSignal: payload.isImageSignal,
+        rawSignalLength: payload.rawSignal.length,
+        rawSignalPreview: payload.rawSignal.substring(0, 100),
+      });
+
       const response = await fetch(API_ROUTES.SIGNALS.LIST, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rawSignal,
-          isImageSignal: !!imageFile,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
