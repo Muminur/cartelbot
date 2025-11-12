@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +44,7 @@ const getStatusBadgeVariant = (status: string) => {
 
 export default function SignalHistoryPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [signals, setSignals] = useState<ISignal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,6 +89,26 @@ export default function SignalHistoryPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, page, filters]);
+
+  // Handle highlight parameter from URL
+  useEffect(() => {
+    if (signals.length > 0 && searchParams) {
+      const highlightId = searchParams.get("highlight");
+      if (highlightId) {
+        const highlightedSignal = signals.find(
+          (signal) => String(signal._id) === highlightId
+        );
+        if (highlightedSignal) {
+          setSelectedSignal(highlightedSignal);
+          setDetailModalOpen(true);
+
+          // Remove highlight parameter from URL after opening modal
+          const newUrl = window.location.pathname;
+          window.history.replaceState({}, "", newUrl);
+        }
+      }
+    }
+  }, [signals, searchParams]);
 
   const fetchSignals = async () => {
     if (page === 1) {

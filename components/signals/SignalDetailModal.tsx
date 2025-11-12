@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ISignal } from "@/types";
+import { ISignal, ITrade, IOrder } from "@/types";
 import { formatDate, formatPrice } from "@/lib/utils/format";
 import {
   Clock,
@@ -26,6 +26,7 @@ import {
   XCircle,
   Edit,
   Play,
+  ListOrdered,
 } from "lucide-react";
 
 interface SignalDetailModalProps {
@@ -85,6 +86,34 @@ export default function SignalDetailModal({
 }: SignalDetailModalProps) {
   const router = useRouter();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [trade, setTrade] = useState<ITrade | null>(null);
+  const [loadingTrade, setLoadingTrade] = useState(false);
+
+  // Fetch trade data when signal is executing or completed
+  useEffect(() => {
+    const fetchTradeData = async () => {
+      if (!signal || !isOpen) return;
+      if (signal.status !== "executing" && signal.status !== "completed") return;
+
+      setLoadingTrade(true);
+      try {
+        // Fetch trades associated with this signal
+        const response = await fetch(`/api/trades?signalId=${signal._id}`);
+        const data = await response.json();
+
+        if (data.success && data.data && data.data.length > 0) {
+          // Get the most recent trade for this signal
+          setTrade(data.data[0]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch trade data:", error);
+      } finally {
+        setLoadingTrade(false);
+      }
+    };
+
+    fetchTradeData();
+  }, [signal, isOpen]);
 
   if (!signal) return null;
 
@@ -244,6 +273,155 @@ export default function SignalDetailModal({
                     </li>
                   ))}
                 </ul>
+              </div>
+            </>
+          )}
+
+          {/* OCO Order Details - Show when signal is executing or completed */}
+          {(signal.status === "executing" || signal.status === "completed") && (
+            <>
+              <Separator />
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <ListOrdered className="h-4 w-4" />
+                  Trade Execution Details
+                </div>
+
+                {loadingTrade ? (
+                  <div className="text-sm text-gray-500">Loading trade details...</div>
+                ) : trade ? (
+                  <div className="space-y-4">
+                    {/* Buy Order */}
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <div className="text-xs font-semibold text-blue-900 mb-2">BUY ORDER</div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-gray-600">Order ID:</span>
+                          <span className="ml-2 font-mono text-blue-700">{trade.buyOrder.orderId}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Status:</span>
+                          <Badge className="ml-2" variant={trade.buyOrder.status === "FILLED" ? "default" : "secondary"}>
+                            {trade.buyOrder.status}
+                          </Badge>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Quantity:</span>
+                          <span className="ml-2 font-medium">{trade.buyOrder.quantity.toFixed(6)}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Invested:</span>
+                          <span className="ml-2 font-medium">${trade.investedAmount.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* OCO Sell Orders */}
+                    {trade.sellOrders && trade.sellOrders.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-xs font-semibold text-gray-700">OCO SELL ORDERS (Take Profit & Stop Loss)</div>
+                        {trade.sellOrders.map((order: IOrder, index: number) => (
+                          <div key={order.orderId} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-semibold text-gray-700">
+                                {order.stopPrice ? `Stop Loss Order` : `Take Profit #${index + 1}`}
+                              </span>
+                              <Badge
+                                variant={
+                                  order.status === "FILLED" ? "default" :
+                                  order.status === "CANCELED" ? "outline" :
+                                  "secondary"
+                                }
+                                className={
+                                  order.status === "FILLED" ? "bg-green-500" :
+                                  order.status === "CANCELED" ? "bg-gray-400" :
+                                  "bg-yellow-500"
+                                }
+                              >
+                                {order.status}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-gray-600">Order ID:</span>
+                                <span className="ml-2 font-mono">{order.orderId}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Quantity:</span>
+                                <span className="ml-2">{order.quantity.toFixed(6)}</span>
+                              </div>
+                              {order.price && (
+                                <div>
+                                  <span className="text-gray-600">Target Price:</span>
+                                  <span className="ml-2 font-medium text-green-700">${formatPrice(order.price)}</span>
+                                </div>
+                              )}
+                              {order.stopPrice && (
+                                <div>
+                                  <span className="text-gray-600">Stop Price:</span>
+                                  <span className="ml-2 font-medium text-red-700">${formatPrice(order.stopPrice)}</span>
+                                </div>
+                              )}
+                              {order.executedQty > 0 && (
+                                <div>
+                                  <span className="text-gray-600">Executed:</span>
+                                  <span className="ml-2">{order.executedQty.toFixed(6)}</span>
+                                </div>
+                              )}
+                              {order.cummulativeQuoteQty > 0 && (
+                                <div>
+                                  <span className="text-gray-600">Filled Value:</span>
+                                  <span className="ml-2 font-medium">${order.cummulativeQuoteQty.toFixed(2)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Trade Summary */}
+                    <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-3 rounded-lg border border-purple-200">
+                      <div className="text-xs font-semibold text-purple-900 mb-2">TRADE SUMMARY</div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-gray-600">Trade Status:</span>
+                          <Badge className="ml-2" variant="default">
+                            {trade.status.toUpperCase()}
+                          </Badge>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Entry Price:</span>
+                          <span className="ml-2 font-medium">${formatPrice(trade.entryPrice)}</span>
+                        </div>
+                        {trade.exitPrice && (
+                          <div>
+                            <span className="text-gray-600">Exit Price:</span>
+                            <span className="ml-2 font-medium">${formatPrice(trade.exitPrice)}</span>
+                          </div>
+                        )}
+                        {trade.realizedPnL !== undefined && trade.realizedPnL !== null && (
+                          <div>
+                            <span className="text-gray-600">Realized P&L:</span>
+                            <span className={`ml-2 font-bold ${trade.realizedPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
+                              ${trade.realizedPnL.toFixed(2)} ({((trade.realizedPnL / trade.investedAmount) * 100).toFixed(2)}%)
+                            </span>
+                          </div>
+                        )}
+                        {trade.closeReason && (
+                          <div>
+                            <span className="text-gray-600">Close Reason:</span>
+                            <Badge className="ml-2" variant={trade.closeReason === "stop_loss" ? "destructive" : "default"}>
+                              {trade.closeReason.replace("_", " ").toUpperCase()}
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500">No trade data available for this signal.</div>
+                )}
               </div>
             </>
           )}
