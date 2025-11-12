@@ -1634,3 +1634,5 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: OCO Order Details in Signal Detail Modal (Nov 12, 2025)
 
 **Added comprehensive trade execution details to signal modal**: Signal detail modal now displays buy order info (ID/status/quantity/amount), OCO sell orders (TP/SL with prices and execution status), and trade summary (P&L percentage, close reason). Added signalId filter to /api/trades endpoint. Auto-fetches trade data when signal is executing/completed. Color-coded badges for order status (FILLED=green, CANCELED=gray, NEW=yellow). TypeScript clean, commit b4cd2b8.
+
+**Fixed OCO display race condition (2bbac9c)**: Implemented smart polling (3s intervals, max 30s) to handle async OCO creation. Fixed 3 critical bugs: setTimeout memory leak on unmount, race condition from concurrent fetches (added AbortController), infinite loop from signal object dependency. Added pollingFailed state with retry button, progress indicator "Attempt X/10". Code quality 9.2/10.
