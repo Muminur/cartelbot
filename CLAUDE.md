@@ -1650,3 +1650,5 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: OCO Order Creation Fix - Extended Timeout & Enhanced Logging (Nov 12, 2025)
 
 **Fixed OCO -2010 timeout issue (eb5581f)**: Extended max timeout 10s→20s to allow full retry cycle (3s settlement + 2s/4s/8s backoff = 17s). Enhanced logging with symbol tracking, elapsed time, balance breakdown. Code review: 8.5/10, TypeScript clean, production-ready.
+
+**Fixed signal creation & trade diagnostics (af600ba)**: Resolved currentMarketPrice undefined by fetching from mainnet (5s timeout), added buy order execution logging with zero quantity validation, OCO mismatch detection. Used TRADE_EXECUTION.BALANCE_TOLERANCE constant, baseAsset fallback. Quality 8.5/10.
