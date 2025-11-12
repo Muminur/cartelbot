@@ -31,6 +31,96 @@ interface ErrorResponse {
   binanceCode?: number;
 }
 
+/**
+ * Fetches asset price in USDT by trying multiple quote currencies
+ * Priority: USDT > BUSD > BTC > ETH
+ * Returns valueUSDT and priceChangePercent
+ */
+async function getAssetValueInUSDT(
+  asset: string,
+  balance: number
+): Promise<{ valueUSDT: number; priceChangePercent: string }> {
+  // Try USDT pair first
+  try {
+    const usdtResponse = await fetch(`/api/binance/ticker?symbol=${asset}USDT`);
+    const usdtData = await usdtResponse.json();
+
+    if (usdtData.success && usdtData.data) {
+      const price = parseFloat(usdtData.data.lastPrice);
+      return {
+        valueUSDT: balance * price,
+        priceChangePercent: usdtData.data.priceChangePercent || "0",
+      };
+    }
+  } catch (err) {
+    console.warn(`USDT pair not found for ${asset}, trying alternatives`);
+  }
+
+  // Try BUSD pair (BUSD ≈ 1 USD)
+  try {
+    const busdResponse = await fetch(`/api/binance/ticker?symbol=${asset}BUSD`);
+    const busdData = await busdResponse.json();
+
+    if (busdData.success && busdData.data) {
+      const price = parseFloat(busdData.data.lastPrice);
+      return {
+        valueUSDT: balance * price, // BUSD ≈ 1 USD
+        priceChangePercent: busdData.data.priceChangePercent || "0",
+      };
+    }
+  } catch (err) {
+    console.warn(`BUSD pair not found for ${asset}, trying BTC`);
+  }
+
+  // Try BTC pair (need to convert BTC to USDT)
+  try {
+    const [btcPairResponse, btcUsdtResponse] = await Promise.all([
+      fetch(`/api/binance/ticker?symbol=${asset}BTC`),
+      fetch(`/api/binance/ticker?symbol=BTCUSDT`),
+    ]);
+
+    const btcPairData = await btcPairResponse.json();
+    const btcUsdtData = await btcUsdtResponse.json();
+
+    if (btcPairData.success && btcPairData.data && btcUsdtData.success && btcUsdtData.data) {
+      const btcPrice = parseFloat(btcPairData.data.lastPrice);
+      const btcUsdtPrice = parseFloat(btcUsdtData.data.lastPrice);
+      return {
+        valueUSDT: balance * btcPrice * btcUsdtPrice,
+        priceChangePercent: btcPairData.data.priceChangePercent || "0",
+      };
+    }
+  } catch (err) {
+    console.warn(`BTC pair not found for ${asset}, trying ETH`);
+  }
+
+  // Try ETH pair (need to convert ETH to USDT)
+  try {
+    const [ethPairResponse, ethUsdtResponse] = await Promise.all([
+      fetch(`/api/binance/ticker?symbol=${asset}ETH`),
+      fetch(`/api/binance/ticker?symbol=ETHUSDT`),
+    ]);
+
+    const ethPairData = await ethPairResponse.json();
+    const ethUsdtData = await ethUsdtResponse.json();
+
+    if (ethPairData.success && ethPairData.data && ethUsdtData.success && ethUsdtData.data) {
+      const ethPrice = parseFloat(ethPairData.data.lastPrice);
+      const ethUsdtPrice = parseFloat(ethUsdtData.data.lastPrice);
+      return {
+        valueUSDT: balance * ethPrice * ethUsdtPrice,
+        priceChangePercent: ethPairData.data.priceChangePercent || "0",
+      };
+    }
+  } catch (err) {
+    console.warn(`ETH pair not found for ${asset}`);
+  }
+
+  // All quote currencies failed - return 0
+  console.warn(`No trading pair found for ${asset}, excluding from portfolio`);
+  return { valueUSDT: 0, priceChangePercent: "0" };
+}
+
 export function PortfolioWidget() {
   const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,22 +171,10 @@ export function PortfolioWidget() {
             valueUSDT = balance.total;
             priceChangePercent = "0";
           } else {
-            // Fetch ticker for non-stablecoin assets
-            try {
-              const tickerResponse = await fetch(`/api/binance/ticker?symbol=${balance.asset}USDT`);
-              const tickerData = await tickerResponse.json();
-
-              if (tickerData.success && tickerData.data) {
-                const price = parseFloat(tickerData.data.lastPrice);
-                valueUSDT = balance.total * price;
-                priceChangePercent = tickerData.data.priceChangePercent || "0";
-              }
-            } catch (tickerError) {
-              console.error(`Failed to fetch ticker for ${balance.asset}:`, tickerError);
-              // If ticker fetch fails, leave valueUSDT as 0
-              valueUSDT = 0;
-              priceChangePercent = "0";
-            }
+            // Fetch ticker for non-stablecoin assets with fallback to alternative quote currencies
+            const result = await getAssetValueInUSDT(balance.asset, balance.total);
+            valueUSDT = result.valueUSDT;
+            priceChangePercent = result.priceChangePercent;
           }
 
           return {
@@ -111,10 +189,28 @@ export function PortfolioWidget() {
         })
       );
 
-      // Filter out dust (assets worth less than 0.01 USDT)
+      // Filter out dust (assets worth less than 0.01 USDT) and assets with no value
       const significantAssets = assetsWithValues.filter(
         (asset) => asset.valueUSDT >= 0.01
       );
+
+      // If all assets filtered out but we had balances, show helpful error
+      if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
+        // Check if it's because no prices were found vs all are dust
+        const assetsWithoutPrice = assetsWithValues.filter(
+          (asset) => asset.valueUSDT === 0 && !isStablecoin(asset.asset)
+        );
+
+        if (assetsWithoutPrice.length > 0) {
+          setError({
+            message: `Unable to fetch prices for ${assetsWithoutPrice.length} asset(s). Your portfolio may contain assets without USDT trading pairs.`,
+            code: "NO_PRICES_FOUND",
+          });
+        }
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
 
       // Calculate total portfolio value
       const totalValue = significantAssets.reduce(
