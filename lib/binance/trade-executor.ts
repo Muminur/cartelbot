@@ -248,6 +248,7 @@ interface OCOOrderResult {
  */
 async function retryOCOCreation<T>(
   fn: () => Promise<T>,
+  symbol: string,
   maxRetries: number = TRADE_EXECUTION.OCO_RETRY_MAX_ATTEMPTS,
   baseDelay: number = TRADE_EXECUTION.OCO_RETRY_BASE_DELAY_MS
 ): Promise<T> {
@@ -255,25 +256,46 @@ async function retryOCOCreation<T>(
   const MAX_TOTAL_DURATION = TRADE_EXECUTION.OCO_RETRY_MAX_TOTAL_DURATION_MS;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const elapsed = Date.now() - startTime;
+
     // Check if total time exceeded
-    if (Date.now() - startTime > MAX_TOTAL_DURATION) {
-      throw new Error(`OCO creation timeout - exceeded maximum duration of ${MAX_TOTAL_DURATION}ms`);
+    if (elapsed > MAX_TOTAL_DURATION) {
+      console.error(`[OCO] ${symbol} - Timeout after ${elapsed}ms (max: ${MAX_TOTAL_DURATION}ms)`);
+      throw new Error(
+        `OCO creation timeout for ${symbol} - exceeded maximum duration of ${MAX_TOTAL_DURATION}ms. ` +
+        `This may indicate persistent settlement delays on testnet.`
+      );
     }
 
     try {
-      return await fn();
+      console.log(`[OCO] ${symbol} - Attempt ${attempt}/${maxRetries} (elapsed: ${elapsed}ms)`);
+      const result = await fn();
+      console.log(`[OCO] ${symbol} - Success on attempt ${attempt} (total time: ${Date.now() - startTime}ms)`);
+      return result;
     } catch (error: unknown) {
       const isInsufficientBalance =
         error instanceof BinanceAPIError && error.binanceCode === -2010;
       const isLastAttempt = attempt === maxRetries;
 
       if (isInsufficientBalance && !isLastAttempt) {
-        const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
-        console.log(`[OCO] Retry ${attempt}/${maxRetries} after ${delay}ms (insufficient balance)`);
+        const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff: 2s, 4s, 8s
+        console.warn(
+          `[OCO] ${symbol} - Insufficient balance on attempt ${attempt}/${maxRetries}. ` +
+          `Retrying in ${delay}ms... (elapsed: ${elapsed}ms)`
+        );
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
 
+      // Log final error with full context
+      console.error(
+        `[OCO] ${symbol} - Failed on attempt ${attempt}/${maxRetries}:`,
+        error instanceof BinanceAPIError
+          ? `Binance error ${error.binanceCode}: ${error.message}`
+          : error instanceof Error
+          ? error.message
+          : 'Unknown error'
+      );
       throw error;
     }
   }
@@ -317,6 +339,7 @@ export async function createOCOOrders(
     const orders: OCOOrderResult[] = [];
 
     // Verify balance before creating OCO orders
+    console.log(`[OCO] ${trade.symbol} - Fetching account balance for verification...`);
     const accountInfo = await client.getAccount();
 
     // Use baseAsset from symbol info instead of string replace
@@ -327,17 +350,30 @@ export async function createOCOOrders(
 
     const assetBalance = accountInfo.balances.find(b => b.asset === baseAsset);
     const availableBalance = parseFloat(assetBalance?.free || '0');
+    const lockedBalance = parseFloat(assetBalance?.locked || '0');
 
-    console.log(`[OCO] Balance check for ${baseAsset}: Available=${availableBalance}, Required=${trade.quantity}`);
+    console.log(
+      `[OCO] ${trade.symbol} - Balance check for ${baseAsset}:`,
+      `Available=${availableBalance.toFixed(8)},`,
+      `Locked=${lockedBalance.toFixed(8)},`,
+      `Required=${trade.quantity.toFixed(8)},`,
+      `Shortfall=${Math.max(0, trade.quantity - availableBalance).toFixed(8)}`
+    );
 
     // Add floating point tolerance for balance comparison
     if (availableBalance < trade.quantity - TRADE_EXECUTION.BALANCE_TOLERANCE) {
+      const shortfall = trade.quantity - availableBalance;
       throw new ValidationError(
         `Insufficient ${baseAsset} balance for OCO orders. ` +
-        `Required: ${trade.quantity}, Available: ${availableBalance}. ` +
-        `This may indicate a settlement delay on testnet.`
+        `Required: ${trade.quantity.toFixed(8)}, Available: ${availableBalance.toFixed(8)}, ` +
+        `Shortfall: ${shortfall.toFixed(8)}. ` +
+        `This may indicate a settlement delay on testnet. ` +
+        `The balance will be retried with exponential backoff.`
       );
     }
+
+    console.log(`[OCO] ${trade.symbol} - Balance verification passed, proceeding with OCO creation`);
+
 
     // Log warning if signal has more targets than distribution
     if (trade.targets.length > maxOCOOrders) {
@@ -396,7 +432,8 @@ export async function createOCOOrders(
             adjustedPrice,
             adjustedStopPrice,
             adjustedStopLimitPrice
-          )
+          ),
+          trade.symbol // Pass symbol for logging
         );
 
         orders.push({

@@ -50,7 +50,7 @@ export const TRADE_EXECUTION = {
   TESTNET_SETTLEMENT_DELAY_MS: 3000, // 3 seconds for testnet balance settlement
   OCO_RETRY_MAX_ATTEMPTS: 3,
   OCO_RETRY_BASE_DELAY_MS: 2000,
-  OCO_RETRY_MAX_TOTAL_DURATION_MS: 10000, // 10 seconds max total wait
+  OCO_RETRY_MAX_TOTAL_DURATION_MS: 20000, // 20 seconds max total wait (3s initial + 2s + 4s + 8s retries)
   BALANCE_TOLERANCE: 0.00000001, // 1e-8 for Binance precision (floating point tolerance)
 } as const;
 
