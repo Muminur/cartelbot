@@ -5,6 +5,7 @@ import { Trade } from "@/lib/db/models";
 import { getUserApiKeys } from "@/lib/db/helpers";
 import { decrypt } from "@/lib/encryption";
 import { BinanceClient } from "@/lib/binance/client";
+import { resolveTestnetPreference } from "@/lib/binance/helpers";
 import { formatErrorResponse } from "@/lib/utils/errors";
 import { Types } from "mongoose";
 
@@ -76,8 +77,8 @@ export async function POST(
       );
     }
 
-    // Use user's testnet preference
-    const useTestnet = ("useTestnet" in apiKeys ? apiKeys.useTestnet : false) || false;
+    // Use helper function for consistent testnet preference resolution
+    const useTestnet = resolveTestnetPreference(apiKeys);
 
     const apiKey = decrypt(apiKeys.encryptedApiKey as string);
     const apiSecret = decrypt(apiKeys.encryptedApiSecret as string);

@@ -256,3 +256,15 @@ export interface TradeExecutionRequest {
   investmentAmount: number;
   targetDistribution?: number[];
 }
+
+/**
+ * User object with decrypted API keys selected from database
+ * Used when we need to access encrypted fields with select: false
+ */
+export interface UserWithEncryptedKeys {
+  _id: string;
+  email: string;
+  encryptedApiKey: string;
+  encryptedApiSecret: string;
+  useTestnet?: boolean;
+}

@@ -1,5 +1,6 @@
 import { User, Signal, Trade, Subscription, WebSocketSession } from "./models";
 import { Types } from "mongoose";
+import { UserWithEncryptedKeys } from "@/types";
 
 export async function findUserByEmail(email: string) {
   return await User.findOne({ email: email.toLowerCase() }).lean();
@@ -12,12 +13,22 @@ export async function findUserById(userId: string) {
   return await User.findById(userId).lean();
 }
 
-export async function getUserApiKeys(userId: string | Types.ObjectId | unknown) {
+/**
+ * Retrieves user with encrypted API keys from database
+ * @param userId - User ID (string, ObjectId, or unknown)
+ * @returns User object with encrypted keys or null if not found
+ * @throws Error if user ID is invalid
+ */
+export async function getUserApiKeys(
+  userId: string | Types.ObjectId | unknown
+): Promise<UserWithEncryptedKeys | null> {
   const id = userId instanceof Types.ObjectId ? userId.toString() : String(userId);
   if (!Types.ObjectId.isValid(id)) {
     throw new Error("Invalid user ID format");
   }
-  return await User.findById(id).select("+encryptedApiKey +encryptedApiSecret useTestnet").lean();
+  return await User.findById(id)
+    .select("+encryptedApiKey +encryptedApiSecret useTestnet")
+    .lean<UserWithEncryptedKeys>();
 }
 
 export async function updateUserSubscription(

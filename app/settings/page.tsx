@@ -149,22 +149,16 @@ export default function SettingsPage() {
     setConnectionResult(null);
 
     try {
+      // Save API keys and testnet preference atomically in single request
       const response = await fetch("/api/user/api-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey, apiSecret }),
+        body: JSON.stringify({ apiKey, apiSecret, useTestnet }),
       });
 
       const data = await response.json();
 
       if (data.success) {
-        // Also save testnet preference
-        await fetch("/api/user/settings", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ useTestnet }),
-        });
-
         toast.success("API keys saved successfully");
         setHasApiKeys(true);
         setApiKey("");

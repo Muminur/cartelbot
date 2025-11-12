@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Wallet, Settings, AlertCircle, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
+import { isStablecoin } from "@/lib/binance/helpers";
 import Link from "next/link";
 
 interface PortfolioAsset {
@@ -36,7 +37,8 @@ export function PortfolioWidget() {
   const [error, setError] = useState<ErrorResponse | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchPortfolio = async () => {
+  // Wrap fetchPortfolio in useCallback to prevent memory leaks
+  const fetchPortfolio = useCallback(async () => {
     try {
       setRefreshing(true);
       setError(null);
@@ -68,17 +70,18 @@ export function PortfolioWidget() {
         }))
         .filter((balance: { total: number }) => balance.total > 0);
 
-      // Fetch ticker data for each asset and calculate values
+      // Fetch ticker data for each asset and calculate values (in parallel)
       const assetsWithValues = await Promise.all(
         nonZeroBalances.map(async (balance: { asset: string; free: string; locked: string; total: number }) => {
           let valueUSDT = 0;
           let priceChangePercent = "0";
 
-          // Special case for USDT - no need to fetch ticker
-          if (balance.asset === "USDT") {
+          // Handle stablecoins - no need to fetch ticker data
+          if (isStablecoin(balance.asset)) {
             valueUSDT = balance.total;
             priceChangePercent = "0";
           } else {
+            // Fetch ticker for non-stablecoin assets
             try {
               const tickerResponse = await fetch(`/api/binance/ticker?symbol=${balance.asset}USDT`);
               const tickerData = await tickerResponse.json();
@@ -90,7 +93,7 @@ export function PortfolioWidget() {
               }
             } catch (tickerError) {
               console.error(`Failed to fetch ticker for ${balance.asset}:`, tickerError);
-              // If ticker fetch fails, try to estimate with 0 change
+              // If ticker fetch fails, leave valueUSDT as 0
               valueUSDT = 0;
               priceChangePercent = "0";
             }
@@ -147,7 +150,7 @@ export function PortfolioWidget() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []); // Empty dependencies - function is stable
 
   useEffect(() => {
     fetchPortfolio();
@@ -156,7 +159,7 @@ export function PortfolioWidget() {
     const interval = setInterval(fetchPortfolio, 30000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchPortfolio]); // Add fetchPortfolio as dependency
 
   const handleRefresh = () => {
     if (!refreshing) {

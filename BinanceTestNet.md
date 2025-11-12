@@ -4392,4 +4392,12 @@ To apply an event to your local order book, follow this update procedure:
 
 
 	
-	
+
+HMAC-SHA-256 Key registered
+
+Save these values right now. They won't be shown ever again!
+
+API Key: gy7BWAiu6fNUqh914ZO80KGb0oWBAovwSDh5u0JNyVdW5P6w5vmRCBknG1zPWRns
+
+Secret Key: tQvL4w2jMVSCc6fi4cDR1rltFqdwvTSpuzsGMLEnXQp4BsrEXZoyRecrCHp3zCS8
+

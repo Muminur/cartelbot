@@ -5,6 +5,7 @@ import { Trade } from "@/lib/db/models";
 import { getUserApiKeys } from "@/lib/db/helpers";
 import { decrypt } from "@/lib/encryption";
 import { BinanceClient } from "@/lib/binance";
+import { resolveTestnetPreference } from "@/lib/binance/helpers";
 import { formatErrorResponse } from "@/lib/utils/errors";
 import { Types } from "mongoose";
 
@@ -111,12 +112,10 @@ export async function DELETE(
       );
     }
 
-    // Use user's testnet preference with fallback chain
+    // Use helper function for consistent testnet preference resolution
     const { searchParams } = new URL(request.url);
     const testnetParam = searchParams.get("testnet");
-    const useTestnet = testnetParam !== null
-      ? testnetParam === "true"
-      : ("useTestnet" in apiKeys ? apiKeys.useTestnet : false);
+    const useTestnet = resolveTestnetPreference(apiKeys, testnetParam);
 
     const apiKey = decrypt(apiKeys.encryptedApiKey as string);
     const apiSecret = decrypt(apiKeys.encryptedApiSecret as string);

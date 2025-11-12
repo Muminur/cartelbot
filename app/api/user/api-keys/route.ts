@@ -8,7 +8,7 @@ import { z } from "zod";
 const apiKeysSchema = z.object({
   apiKey: z.string().min(64, "API key must be at least 64 characters"),
   apiSecret: z.string().min(64, "API secret must be at least 64 characters"),
-  isTestnet: z.boolean().optional().default(false),
+  useTestnet: z.boolean().optional().default(false),
 });
 
 /**
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { apiKey, apiSecret } = validation.data;
+    const { apiKey, apiSecret, useTestnet } = validation.data;
 
     // Encrypt the API keys before storing
     const encryptedApiKey = encrypt(apiKey);
@@ -94,12 +94,14 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
 
+    // Save API keys and testnet preference atomically in one transaction
     const updatedUser = await User.findOneAndUpdate(
       { email: user.email },
       {
         $set: {
           encryptedApiKey,
           encryptedApiSecret,
+          useTestnet,
         },
       },
       { new: true }
@@ -116,6 +118,7 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
       hasApiKey: !!encryptedApiKey,
       hasApiSecret: !!encryptedApiSecret,
+      useTestnet,
     });
 
     return NextResponse.json({

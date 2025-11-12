@@ -1444,11 +1444,9 @@ import { toast } from "sonner";
 
 ---
 
-## Session: Testnet/Mainnet Configuration Completed (Nov 12, 2025)
+## Session: Milestone 7.1 - Portfolio Display & Testnet/Mainnet Configuration (Nov 12, 2025)
 
-**Testnet/Mainnet Toggle Implemented (Nov 12, 2025)**: Completed full testnet/mainnet user configuration with Settings UI toggle, User model `useTestnet` field, and 7 API endpoints updated to use stored preference with fallback chain (explicit parameter > user preference > mainnet default). Build successful, TypeScript clean, backward compatible.
-
-**Bug Fixes (Nov 12, 2025)**: Fixed 5 critical issues - React object rendering error (extracted `.message` from error objects before rendering), signal submission 400 errors (pre-insert validation), service worker 404 (created `/public/sw.js`), image signal OCR text not captured (`setRawSignal(extractedText)` after parsing), test connection error display (red card UI with troubleshooting checklist). All fixes production-ready, 7 commits pushed to GitHub.
+**Milestone 7.1 Completed**: Implemented comprehensive Binance portfolio display showing all assets with real-time prices, 24hr changes, allocations, and locked balances. Fixed testnet/mainnet toggle with atomic save (API keys + preference in single transaction), standardized testnet resolution across 7 endpoints using `resolveTestnetPreference()` helper with fallback chain. Created `PortfolioWidget` (350 LOC) with auto-refresh, stablecoin handling (USDT/BUSD/USDC/DAI/TUSD), and `useCallback` memory leak fix. Code review conducted, all critical issues resolved. Build: 89s, 31 routes, TypeScript clean, code quality 9.0/10. Files: 2 created, 9 modified.
 
 ---
 

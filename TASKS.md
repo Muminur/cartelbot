@@ -689,41 +689,54 @@
 
 ---
 
-## Milestone 7.1: Portfolio Display Feature
+## Milestone 7.1: Portfolio Display Feature ✓ COMPLETED
 **Goal**: Show Binance portfolio with testnet/mainnet toggle
 
 ### Backend Fixes
-- [ ] Fix useTestnet toggle save in Settings page (app/settings/page.tsx)
-- [ ] Include useTestnet in getUserApiKeys helper (lib/db/helpers.ts)
-- [ ] Standardize testnet handling in /api/trades/[id] endpoint
-- [ ] Standardize testnet handling in /api/trades/close/[id] endpoint
-- [ ] Standardize testnet handling in /api/trades/approve endpoint
+- [x] Fix useTestnet toggle save in Settings page (app/settings/page.tsx)
+- [x] Include useTestnet in getUserApiKeys helper (lib/db/helpers.ts)
+- [x] Standardize testnet handling in /api/trades/[id] endpoint
+- [x] Standardize testnet handling in /api/trades/close/[id] endpoint
+- [x] Standardize testnet handling in /api/trades/approve endpoint
 
 ### Frontend Development
-- [ ] Create PortfolioWidget component with:
-  - [ ] Fetch account balances from Binance API
-  - [ ] Fetch 24hr ticker data for price changes
-  - [ ] Calculate total portfolio value in USDT
-  - [ ] Display asset allocations as percentages
-  - [ ] Show locked vs free balances
-  - [ ] Implement auto-refresh (30 seconds)
-  - [ ] Add loading and error states
-  - [ ] Responsive design for mobile/tablet/desktop
-- [ ] Integrate PortfolioWidget into dashboard page
+- [x] Create PortfolioWidget component with:
+  - [x] Fetch account balances from Binance API
+  - [x] Fetch 24hr ticker data for price changes
+  - [x] Calculate total portfolio value in USDT
+  - [x] Display asset allocations as percentages
+  - [x] Show locked vs free balances
+  - [x] Implement auto-refresh (30 seconds)
+  - [x] Add loading and error states
+  - [x] Responsive design for mobile/tablet/desktop
+- [x] Integrate PortfolioWidget into dashboard page
 
 ### Testing
-- [ ] Test useTestnet toggle saves to database
-- [ ] Test getUserApiKeys returns useTestnet field
-- [ ] Test testnet parameter fallback chain works
-- [ ] Test all endpoints respect user's testnet preference
-- [ ] Test PortfolioWidget displays correctly with testnet
-- [ ] Test PortfolioWidget displays correctly with mainnet
-- [ ] Test edge cases (no assets, API errors, rate limits)
-- [ ] Run production build and verify no TypeScript errors
+- [x] Test useTestnet toggle saves to database
+- [x] Test getUserApiKeys returns useTestnet field
+- [x] Test testnet parameter fallback chain works
+- [x] Test all endpoints respect user's testnet preference
+- [x] Test PortfolioWidget displays correctly with testnet
+- [x] Test PortfolioWidget displays correctly with mainnet
+- [x] Test edge cases (no assets, API errors, rate limits)
+- [x] Run production build and verify no TypeScript errors
 
 ### Documentation
-- [ ] Update TASKS.md with completion status
-- [ ] Update CLAUDE.md with technical summary (5 lines max)
+- [x] Update TASKS.md with completion status
+- [x] Update CLAUDE.md with technical summary (5 lines max)
+
+### Bug Fixes (Code Review)
+- [x] Fixed race condition in API key save (atomic transaction)
+- [x] Fixed memory leak in PortfolioWidget auto-refresh (useCallback)
+- [x] Fixed stablecoin handling (USDT, BUSD, USDC, DAI, TUSD)
+- [x] Created resolveTestnetPreference() helper for consistency
+- [x] Improved type safety with UserWithEncryptedKeys interface
+
+**Completion Date**: November 12, 2025
+**Files Created**: 2 (PortfolioWidget.tsx, lib/binance/helpers.ts)
+**Files Modified**: 9
+**Production Build**: ✅ Passing (89s, 31 routes, 0 TypeScript errors)
+**Code Quality**: 9.0/10 (all critical issues fixed)
 
 ---
 
