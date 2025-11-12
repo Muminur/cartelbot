@@ -170,7 +170,10 @@ export async function POST(request: NextRequest) {
 
     await trade.save();
 
-    await Signal.findByIdAndUpdate(trade.signalId, { status: "completed" });
+    // NOTE: Signal status is NOT updated to "completed" here.
+    // The signal should remain in "executing" status until the OCO orders are filled.
+    // Signal completion is handled by WebSocket event handlers when targets/stop-loss hit,
+    // or by the manual close endpoint if user manually exits the position.
 
     return NextResponse.json(
       {

@@ -8,6 +8,7 @@ import { BinanceClient } from "@/lib/binance/client";
 import { resolveTestnetPreference } from "@/lib/binance/helpers";
 import { formatErrorResponse } from "@/lib/utils/errors";
 import { Types } from "mongoose";
+import { markSignalCompleted } from "@/lib/binance/signal-status-manager";
 
 export async function POST(
   request: NextRequest,
@@ -140,6 +141,11 @@ export async function POST(
     trade.realizedPnL = realizedPnL;
     trade.status = "closed";
     trade.closeReason = "manual";
+
+    // Update signal status when trade is manually closed
+    if (trade.signalId) {
+      await markSignalCompleted(trade.signalId, trade._id, "manual_close");
+    }
 
     if (marketSellOrder) {
       const sellOrderExecutedQty = parseFloat(marketSellOrder.executedQty || "0");

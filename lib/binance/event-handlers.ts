@@ -1,5 +1,6 @@
-import { Trade } from "@/lib/db/models";
+import { Trade, Signal } from "@/lib/db/models";
 import { BinanceWebSocketEvent } from "./websocket-manager";
+import { markSignalCompleted } from "./signal-status-manager";
 
 interface ExecutionReportEvent {
   e: "executionReport";
@@ -121,6 +122,11 @@ export async function handleExecutionReport(event: BinanceWebSocketEvent): Promi
             );
             trade.realizedPnL = totalSellValue - trade.investedAmount;
             trade.exitPrice = totalSellValue / totalExecutedQty;
+
+            // Update signal status when trade closes
+            if (trade.signalId) {
+              await markSignalCompleted(trade.signalId, trade._id, "target");
+            }
           } else {
             trade.status = "partial";
           }
@@ -201,6 +207,12 @@ export async function handleListStatus(event: BinanceWebSocketEvent): Promise<vo
               }
 
               await trade.save();
+
+              // Update signal status when trade closes (via OCO list status)
+              if (trade.signalId) {
+                const reason = data.r === "STOP_LOSS_LIMIT" ? "stop_loss" : "target";
+                await markSignalCompleted(trade.signalId, trade._id, reason);
+              }
             }
           }
         }

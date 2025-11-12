@@ -210,7 +210,8 @@ export async function executeSignalTrade(
       stopLoss: signal.stopLoss,
     });
 
-    signal.status = "completed";
+    // Don't mark signal as completed yet - wait for OCO orders to fill
+    signal.status = "executing";
     await signal.save();
 
     return {
