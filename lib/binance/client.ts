@@ -80,6 +80,12 @@ export class BinanceClient {
         return "Timestamp synchronization failed. Please try again.";
       case -2010:
         return "Insufficient balance to execute this order.";
+      case -2015:
+        return "Invalid API-key, IP, or permissions for action.";
+      case -2014:
+        return "Invalid API key format.";
+      case -1022:
+        return "Invalid signature.";
       case 429:
         return "Rate limit exceeded. Please wait before retrying.";
       default:
