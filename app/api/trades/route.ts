@@ -16,8 +16,26 @@ export async function GET(request: NextRequest) {
     const symbol = searchParams.get("symbol");
 
     const query: Record<string, unknown> = { userId: user._id };
-    if (status) query.status = status;
-    if (symbol) query.symbol = symbol;
+
+    // Handle comma-separated status values (e.g., "open,partial" or "closed,cancelled")
+    if (status) {
+      const statusValues = status.split(",").map((s) => s.trim());
+      if (statusValues.length === 1) {
+        query.status = statusValues[0]; // Single status
+      } else {
+        query.status = { $in: statusValues }; // Multiple statuses - use MongoDB $in operator
+      }
+    }
+
+    // Handle comma-separated symbol values (e.g., "BTCUSDT,ETHUSDT")
+    if (symbol) {
+      const symbolValues = symbol.split(",").map((s) => s.trim().toUpperCase());
+      if (symbolValues.length === 1) {
+        query.symbol = symbolValues[0]; // Single symbol
+      } else {
+        query.symbol = { $in: symbolValues }; // Multiple symbols - use MongoDB $in operator
+      }
+    }
 
     const skip = (page - 1) * limit;
 

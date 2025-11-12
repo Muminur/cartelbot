@@ -270,15 +270,25 @@ export async function createOCOOrders(
     }
 
     const filters = symbolInfo.filters;
-    const distribution = TRADE_DEFAULTS.TARGET_DISTRIBUTION;
-    const targets = trade.targets.slice(0, TRADE_DEFAULTS.MAX_TARGETS);
+    const distribution = TRADE_DEFAULTS.TARGET_DISTRIBUTION; // [75, 15, 10]
+    const maxOCOOrders = distribution.length; // Limit to 3 OCO orders
+    const targets = trade.targets.slice(0, maxOCOOrders); // Take only first 3 targets
     const orders: OCOOrderResult[] = [];
+
+    // Log warning if signal has more targets than distribution
+    if (trade.targets.length > maxOCOOrders) {
+      console.warn(
+        `Signal has ${trade.targets.length} targets, but only ${maxOCOOrders} will be used ` +
+        `for OCO orders (distribution: ${distribution.join(", ")}%). ` +
+        `Skipping targets: ${trade.targets.slice(maxOCOOrders).join(", ")}`
+      );
+    }
 
     let totalAllocatedQty = 0;
 
     for (let i = 0; i < targets.length; i++) {
       const targetPrice = targets[i];
-      const percentage = distribution[i] || distribution[distribution.length - 1];
+      const percentage = distribution[i]; // Safe - always within bounds (no fallback needed)
       const qtyForTarget = (trade.quantity * percentage) / 100;
 
       // Validate and adjust target price and quantity
@@ -300,6 +310,7 @@ export async function createOCOOrders(
       const stopLimitValidation = validateAllFilters(rawStopLimitPrice, adjustedQty, filters);
       const adjustedStopLimitPrice = stopLimitValidation.adjustedPrice || rawStopLimitPrice;
 
+      // eslint-disable-next-line no-console
       console.log(`Creating OCO for target ${i}:`, {
         symbol: trade.symbol,
         targetPrice: targetPrice,
@@ -346,19 +357,31 @@ export async function createOCOOrders(
       }
     }
 
-    const quantityDifference = Math.abs(totalAllocatedQty - trade.quantity);
-    const tolerance = trade.quantity * 0.01;
+    // Validate that allocated quantity matches buy quantity
+    const unallocatedQty = trade.quantity - totalAllocatedQty;
+    const allocationPercentage = (totalAllocatedQty / trade.quantity) * 100;
 
-    if (quantityDifference > tolerance) {
+    if (Math.abs(unallocatedQty) > 0.00000001) { // Floating point tolerance
       console.warn(
-        `OCO quantity mismatch: allocated ${totalAllocatedQty.toFixed(8)}, ` +
-        `buy quantity ${trade.quantity.toFixed(8)}, ` +
-        `difference: ${quantityDifference.toFixed(8)} (${((quantityDifference / trade.quantity) * 100).toFixed(2)}%)`
+        `OCO allocation mismatch for ${trade.symbol}:`,
+        {
+          buyQuantity: trade.quantity.toFixed(8),
+          allocatedQuantity: totalAllocatedQty.toFixed(8),
+          unallocatedQuantity: unallocatedQty.toFixed(8),
+          allocationPercentage: allocationPercentage.toFixed(2) + '%',
+          successfulOrders: orders.length,
+          totalTargets: trade.targets.length,
+        }
       );
     }
 
+    // Ensure at least one OCO order was created
     if (orders.length === 0) {
-      throw new ValidationError("Failed to create any OCO orders. All targets failed validation.");
+      throw new ValidationError(
+        `Failed to create any OCO orders for ${trade.symbol}. ` +
+        `All ${trade.targets.length} target(s) failed filter validation. ` +
+        `Check signal prices against Binance exchange filters.`
+      );
     }
 
     await trade.save();
