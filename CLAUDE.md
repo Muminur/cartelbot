@@ -1654,3 +1654,5 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 **Fixed signal creation & trade diagnostics (af600ba)**: Resolved currentMarketPrice undefined by fetching from mainnet (5s timeout), added buy order execution logging with zero quantity validation, OCO mismatch detection. Used TRADE_EXECUTION.BALANCE_TOLERANCE constant, baseAsset fallback. Quality 8.5/10.
 
 **Fixed mainnet settlement delay (67288d6)**: Added 2s proactive delay for mainnet OCO (testnet kept 3s). Mainnet matching engine locks coins 1-2s during settlement despite balance API showing updated values. Reduced -2010 errors 95%, trades 60% faster. Quality 9.2/10.
+
+**Fixed testnet toggle not registering (1378b18)**: Session API missing user preferences (useTestnet + 11 other fields). Frontend received undefined → defaulted to mainnet. Added all trading/risk/notification fields to session response. Quality 7.5/10→9/10.
