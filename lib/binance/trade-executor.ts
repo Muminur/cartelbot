@@ -460,48 +460,82 @@ export async function createOCOOrders(
     // Use actual executed quantity (may differ from trade.quantity due to partial fills)
     const actualQuantity = trade.buyOrder?.executedQty || trade.quantity;
 
-    if (initialAvailableBalance < actualQuantity - TRADE_EXECUTION.BALANCE_TOLERANCE) {
-      const shortfall = actualQuantity - initialAvailableBalance;
-      console.warn(
-        `[OCO] ${trade.symbol} - Settlement incomplete after initial delay. ` +
-        `Required: ${actualQuantity.toFixed(8)}, Available: ${initialAvailableBalance.toFixed(8)}, ` +
-        `Shortfall: ${shortfall.toFixed(8)}. Applying additional delay...`
+    // Store initial balance for settlement verification
+    const beforeSettlementBalance = initialAvailableBalance;
+    console.log(
+      `[OCO] ${trade.symbol} - Pre-settlement balance: ${beforeSettlementBalance.toFixed(8)}, ` +
+      `Expecting increase of: ${actualQuantity.toFixed(8)}`
+    );
+
+    // Poll balance until it increases by the buy quantity (settlement complete)
+    const maxPolls = testnet ? 20 : 10; // Testnet needs more time (up to 20 seconds)
+    const pollInterval = 1000; // 1 second between polls
+    let settlementVerified = false;
+    let currentSettledBalance = beforeSettlementBalance;
+
+    const pollStartTime = Date.now();
+    for (let poll = 1; poll <= maxPolls; poll++) {
+      const currentAccount = await client.getAccount();
+      const currentBalance = parseFloat(
+        currentAccount.balances.find(b => b.asset === baseAsset)?.free || '0'
       );
 
-      // Apply additional delay (environment-aware: testnet vs mainnet)
-      const additionalDelay = testnet
-        ? TRADE_EXECUTION.TESTNET_SETTLEMENT_DELAY_MS
-        : TRADE_EXECUTION.MAINNET_SETTLEMENT_DELAY_MS;
-      await new Promise(resolve => setTimeout(resolve, additionalDelay));
-
-      // Refetch balance
-      const recheckAccount = await client.getAccount();
-      const recheckBalance = parseFloat(
-        recheckAccount.balances.find(b => b.asset === baseAsset)?.free || '0'
-      );
+      const balanceIncrease = currentBalance - beforeSettlementBalance;
+      const expectedIncrease = actualQuantity;
+      const settlementComplete = balanceIncrease >= (expectedIncrease - TRADE_EXECUTION.BALANCE_TOLERANCE);
 
       console.log(
-        `[OCO] ${trade.symbol} - Balance after additional delay:`,
-        `Available=${recheckBalance.toFixed(8)}, Required=${actualQuantity.toFixed(8)}`
+        `[OCO] ${trade.symbol} - Settlement poll ${poll}/${maxPolls}:`,
+        `Current=${currentBalance.toFixed(8)},`,
+        `Increase=${balanceIncrease.toFixed(8)},`,
+        `Expected=${expectedIncrease.toFixed(8)},`,
+        `Complete=${settlementComplete ? 'YES' : 'NO'}`
       );
 
-      if (recheckBalance < actualQuantity - TRADE_EXECUTION.BALANCE_TOLERANCE) {
-        throw new ValidationError(
-          `Insufficient ${baseAsset} balance after settlement delay. ` +
-          `Required: ${actualQuantity.toFixed(8)}, Available: ${recheckBalance.toFixed(8)}. ` +
-          `This indicates either: ` +
-          `1) Settlement delay insufficient (try increasing TESTNET_SETTLEMENT_DELAY_MS), ` +
-          `2) Buy order quantity mismatch, or ` +
-          `3) Binance testnet balance sync issue.`
+      if (settlementComplete) {
+        settlementVerified = true;
+        currentSettledBalance = currentBalance;
+        const elapsedTime = Date.now() - pollStartTime;
+        const savedTime = (maxPolls - poll) * pollInterval;
+        console.log(
+          `[OCO] ${trade.symbol} - Settlement verified after ${poll}/${maxPolls} polls ` +
+          `(${elapsedTime}ms elapsed, ${savedTime}ms saved)`
         );
+        break;
       }
 
-      // CRITICAL: Update balance variable for OCO loop to use settled balance
-      initialAvailableBalance = recheckBalance;
-      console.log(`[OCO] ${trade.symbol} - Balance verification passed after additional delay`);
-    } else {
-      console.log(`[OCO] ${trade.symbol} - Balance verification passed on initial check`);
+      if (poll < maxPolls) {
+        console.log(`[OCO] ${trade.symbol} - Waiting ${pollInterval}ms before next poll...`);
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      }
     }
+
+    if (!settlementVerified) {
+      // Final check: Re-fetch balance and verify increase one last time
+      const finalAccount = await client.getAccount();
+      const finalBalance = parseFloat(
+        finalAccount.balances.find(b => b.asset === baseAsset)?.free || '0'
+      );
+      const finalIncrease = finalBalance - beforeSettlementBalance;
+
+      if (finalIncrease >= (actualQuantity - TRADE_EXECUTION.BALANCE_TOLERANCE)) {
+        console.warn(
+          `[OCO] ${trade.symbol} - Final check passed: balance increased by ${finalIncrease.toFixed(8)} ` +
+          `(expected ${actualQuantity.toFixed(8)}). Proceeding...`
+        );
+        currentSettledBalance = finalBalance;
+      } else {
+        throw new ValidationError(
+          `Balance settlement verification failed after ${maxPolls} polls. ` +
+          `Final balance increase: ${finalIncrease.toFixed(8)}, Required: ${actualQuantity.toFixed(8)}. ` +
+          `Before: ${beforeSettlementBalance.toFixed(8)}, After: ${finalBalance.toFixed(8)}. ` +
+          `This indicates persistent testnet settlement delays or balance sync issues.`
+        );
+      }
+    }
+
+    // Update balance for OCO loop to use settled balance
+    initialAvailableBalance = currentSettledBalance;
 
 
     // Log warning if signal has more targets than distribution
