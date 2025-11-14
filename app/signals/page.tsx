@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ConfirmationDialog from "@/components/signals/ConfirmationDialog";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { API_ROUTES } from "@/lib/constants";
 import { UserProfile, ParsedSignal } from "@/types";
 import { toast } from "sonner";
@@ -255,34 +256,19 @@ export default function SignalsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <nav className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center">
-                <span className="text-lg font-bold text-white">CB</span>
-              </div>
-              <span className="text-xl font-bold">CartelBot</span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button variant="outline" size="sm" onClick={() => router.push("/signals/history")}>
-                <History className="mr-2 h-4 w-4" />
-                History
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
-                Dashboard
-              </Button>
-              <span className="text-sm text-gray-600">{user.email}</span>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <DashboardLayout userEmail={user.email}>
+      <div className="max-w-4xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Submit Trading Signal</h1>
-          <p className="text-gray-600 mt-2">Parse and submit signals from text or images</p>
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Submit Trading Signal</h1>
+              <p className="text-gray-600 mt-2">Parse and submit signals from text or images</p>
+            </div>
+            <Button variant="outline" onClick={() => router.push("/signals/history")}>
+              <History className="mr-2 h-4 w-4" />
+              History
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-6">
@@ -443,17 +429,17 @@ export default function SignalsPage() {
             </Card>
           )}
         </div>
-      </main>
 
-      {parsedSignal && (
-        <ConfirmationDialog
-          isOpen={showConfirmDialog}
-          onClose={() => setShowConfirmDialog(false)}
-          onConfirm={handleConfirmSubmit}
-          parsedSignal={parsedSignal}
-          isSubmitting={submitting}
-        />
-      )}
-    </div>
+        {parsedSignal && (
+          <ConfirmationDialog
+            isOpen={showConfirmDialog}
+            onClose={() => setShowConfirmDialog(false)}
+            onConfirm={handleConfirmSubmit}
+            parsedSignal={parsedSignal}
+            isSubmitting={submitting}
+          />
+        )}
+      </div>
+    </DashboardLayout>
   );
 }

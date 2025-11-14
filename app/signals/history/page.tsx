@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import SignalFilters, { SignalFilterValues } from "@/components/signals/SignalFilters";
 import SignalDetailModal from "@/components/signals/SignalDetailModal";
 import EditSignalModal from "@/components/signals/EditSignalModal";
@@ -266,30 +267,8 @@ export default function SignalHistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <nav className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center">
-                <span className="text-lg font-bold text-white">CB</span>
-              </div>
-              <span className="text-xl font-bold">CartelBot</span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button variant="outline" size="sm" onClick={() => router.push("/signals")}>
-                Submit Signal
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => router.push("/dashboard")}>
-                Dashboard
-              </Button>
-              {user && <span className="text-sm text-gray-600">{user.email}</span>}
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <DashboardLayout userEmail={user?.email}>
+      <div className="max-w-7xl mx-auto">
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <Button variant="ghost" size="sm" onClick={() => router.push("/signals")}>
@@ -445,39 +424,39 @@ export default function SignalHistoryPage() {
             </CardContent>
           </Card>
         </div>
-      </main>
 
-      <SignalDetailModal
-        signal={selectedSignal}
-        isOpen={detailModalOpen}
-        onClose={() => {
-          setDetailModalOpen(false);
-          setSelectedSignal(null);
-        }}
-        onEdit={handleEdit}
-        onCancel={handleCancel}
-        onExecute={handleExecute}
-      />
+        <SignalDetailModal
+          signal={selectedSignal}
+          isOpen={detailModalOpen}
+          onClose={() => {
+            setDetailModalOpen(false);
+            setSelectedSignal(null);
+          }}
+          onEdit={handleEdit}
+          onCancel={handleCancel}
+          onExecute={handleExecute}
+        />
 
-      <EditSignalModal
-        signal={selectedSignal}
-        isOpen={editModalOpen}
-        onClose={() => {
-          setEditModalOpen(false);
-          setSelectedSignal(null);
-        }}
-        onSave={handleSaveEdit}
-      />
+        <EditSignalModal
+          signal={selectedSignal}
+          isOpen={editModalOpen}
+          onClose={() => {
+            setEditModalOpen(false);
+            setSelectedSignal(null);
+          }}
+          onSave={handleSaveEdit}
+        />
 
-      <DeleteSignalDialog
-        signal={selectedSignal}
-        isOpen={deleteModalOpen}
-        onClose={() => {
-          setDeleteModalOpen(false);
-          setSelectedSignal(null);
-        }}
-        onConfirm={handleConfirmDelete}
-      />
-    </div>
+        <DeleteSignalDialog
+          signal={selectedSignal}
+          isOpen={deleteModalOpen}
+          onClose={() => {
+            setDeleteModalOpen(false);
+            setSelectedSignal(null);
+          }}
+          onConfirm={handleConfirmDelete}
+        />
+      </div>
+    </DashboardLayout>
   );
 }

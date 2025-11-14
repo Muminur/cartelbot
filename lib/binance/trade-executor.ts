@@ -310,6 +310,7 @@ interface OCOOrderResult {
 async function retryOCOCreation<T>(
   fn: () => Promise<T>,
   symbol: string,
+  balanceCheckFn?: () => Promise<{ available: number; required: number }>,
   maxRetries: number = TRADE_EXECUTION.OCO_RETRY_MAX_ATTEMPTS,
   baseDelay: number = TRADE_EXECUTION.OCO_RETRY_BASE_DELAY_MS
 ): Promise<T> {
@@ -330,6 +331,19 @@ async function retryOCOCreation<T>(
 
     try {
       console.log(`[OCO] ${symbol} - Attempt ${attempt}/${maxRetries} (elapsed: ${elapsed}ms)`);
+
+      // Optional balance check on retry attempts (diagnostic)
+      // Note: Balance already verified before OCO loop starts, this is for diagnostics during retries
+      if (balanceCheckFn && attempt > 1) {
+        const balanceCheck = await balanceCheckFn();
+        console.log(
+          `[OCO] ${symbol} - Balance diagnostic on retry ${attempt - 1}:`,
+          `Available=${balanceCheck.available.toFixed(8)},`,
+          `Required=${balanceCheck.required.toFixed(8)},`,
+          `Shortfall=${Math.max(0, balanceCheck.required - balanceCheck.available).toFixed(8)}`
+        );
+      }
+
       const result = await fn();
       console.log(`[OCO] ${symbol} - Success on attempt ${attempt} (total time: ${Date.now() - startTime}ms)`);
       return result;
@@ -409,28 +423,27 @@ export async function createOCOOrders(
     const targets = trade.targets.slice(0, maxOCOOrders); // Take only first 3 targets
     const orders: OCOOrderResult[] = [];
 
-    // Verify balance before creating OCO orders
-    console.log(`[OCO] ${trade.symbol} - Fetching account balance for verification...`);
-    const accountInfo = await client.getAccount();
-
     // Use baseAsset from symbol info with fallback to string parsing
     const baseAsset = symbolInfo.baseAsset || trade.symbol.replace(/USDT$/, '');
     if (!baseAsset) {
       throw new ValidationError(`Unable to determine base asset for ${trade.symbol}`);
     }
 
-    const assetBalance = accountInfo.balances.find(b => b.asset === baseAsset);
-    const availableBalance = parseFloat(assetBalance?.free || '0');
-    const lockedBalance = parseFloat(assetBalance?.locked || '0');
+    // Initial balance check (will be updated if additional settlement delay needed)
+    console.log(`[OCO] ${trade.symbol} - Initial balance check for ${baseAsset}...`);
+    const initialAccountInfo = await client.getAccount();
+    const initialAssetBalance = initialAccountInfo.balances.find(b => b.asset === baseAsset);
+    let initialAvailableBalance = parseFloat(initialAssetBalance?.free || '0'); // Use 'let' - may be updated after recheck
+    const initialLockedBalance = parseFloat(initialAssetBalance?.locked || '0');
 
     console.log(
-      `[OCO] ${trade.symbol} - Balance check for ${baseAsset}:`,
-      `Available=${availableBalance.toFixed(8)},`,
-      `Locked=${lockedBalance.toFixed(8)},`,
+      `[OCO] ${trade.symbol} - Initial balance:`,
+      `Available=${initialAvailableBalance.toFixed(8)},`,
+      `Locked=${initialLockedBalance.toFixed(8)},`,
       `Required (from buy order)=${trade.quantity.toFixed(8)},`,
       `Buy Order ID=${trade.buyOrder?.orderId || 'N/A'},`,
       `Buy Order Executed Qty=${trade.buyOrder?.executedQty?.toFixed(8) || 'N/A'},`,
-      `Shortfall=${Math.max(0, trade.quantity - availableBalance).toFixed(8)}`
+      `Shortfall=${Math.max(0, trade.quantity - initialAvailableBalance).toFixed(8)}`
     );
 
     // Critical diagnostic: Verify trade.quantity matches buyOrder.executedQty
@@ -442,19 +455,53 @@ export async function createOCOOrders(
       );
     }
 
-    // Add floating point tolerance for balance comparison
-    if (availableBalance < trade.quantity - TRADE_EXECUTION.BALANCE_TOLERANCE) {
-      const shortfall = trade.quantity - availableBalance;
-      throw new ValidationError(
-        `Insufficient ${baseAsset} balance for OCO orders. ` +
-        `Required: ${trade.quantity.toFixed(8)}, Available: ${availableBalance.toFixed(8)}, ` +
-        `Shortfall: ${shortfall.toFixed(8)}. ` +
-        `This may indicate a settlement delay on testnet. ` +
-        `The balance will be retried with exponential backoff.`
-      );
-    }
+    // CRITICAL: Verify balance has fully settled before creating OCO orders
+    // This ensures all purchased coins are available before we start locking them
+    // Use actual executed quantity (may differ from trade.quantity due to partial fills)
+    const actualQuantity = trade.buyOrder?.executedQty || trade.quantity;
 
-    console.log(`[OCO] ${trade.symbol} - Balance verification passed, proceeding with OCO creation`);
+    if (initialAvailableBalance < actualQuantity - TRADE_EXECUTION.BALANCE_TOLERANCE) {
+      const shortfall = actualQuantity - initialAvailableBalance;
+      console.warn(
+        `[OCO] ${trade.symbol} - Settlement incomplete after initial delay. ` +
+        `Required: ${actualQuantity.toFixed(8)}, Available: ${initialAvailableBalance.toFixed(8)}, ` +
+        `Shortfall: ${shortfall.toFixed(8)}. Applying additional delay...`
+      );
+
+      // Apply additional delay (environment-aware: testnet vs mainnet)
+      const additionalDelay = testnet
+        ? TRADE_EXECUTION.TESTNET_SETTLEMENT_DELAY_MS
+        : TRADE_EXECUTION.MAINNET_SETTLEMENT_DELAY_MS;
+      await new Promise(resolve => setTimeout(resolve, additionalDelay));
+
+      // Refetch balance
+      const recheckAccount = await client.getAccount();
+      const recheckBalance = parseFloat(
+        recheckAccount.balances.find(b => b.asset === baseAsset)?.free || '0'
+      );
+
+      console.log(
+        `[OCO] ${trade.symbol} - Balance after additional delay:`,
+        `Available=${recheckBalance.toFixed(8)}, Required=${actualQuantity.toFixed(8)}`
+      );
+
+      if (recheckBalance < actualQuantity - TRADE_EXECUTION.BALANCE_TOLERANCE) {
+        throw new ValidationError(
+          `Insufficient ${baseAsset} balance after settlement delay. ` +
+          `Required: ${actualQuantity.toFixed(8)}, Available: ${recheckBalance.toFixed(8)}. ` +
+          `This indicates either: ` +
+          `1) Settlement delay insufficient (try increasing TESTNET_SETTLEMENT_DELAY_MS), ` +
+          `2) Buy order quantity mismatch, or ` +
+          `3) Binance testnet balance sync issue.`
+        );
+      }
+
+      // CRITICAL: Update balance variable for OCO loop to use settled balance
+      initialAvailableBalance = recheckBalance;
+      console.log(`[OCO] ${trade.symbol} - Balance verification passed after additional delay`);
+    } else {
+      console.log(`[OCO] ${trade.symbol} - Balance verification passed on initial check`);
+    }
 
 
     // Log warning if signal has more targets than distribution
@@ -467,6 +514,8 @@ export async function createOCOOrders(
     }
 
     let totalAllocatedQty = 0;
+    let remainingFreeBalance = initialAvailableBalance; // Track balance as orders lock coins
+    const ALLOCATION_CAP = trade.quantity; // Maximum we can allocate (100%)
 
     for (let i = 0; i < targets.length; i++) {
       const targetPrice = targets[i];
@@ -480,8 +529,53 @@ export async function createOCOOrders(
         continue;
       }
 
-      const adjustedQty = validation.adjustedQuantity || qtyForTarget;
+      let adjustedQty = validation.adjustedQuantity || qtyForTarget;
       const adjustedPrice = validation.adjustedPrice || targetPrice;
+
+      // **CRITICAL FIX**: Cap adjusted quantity to remaining allocation to prevent over-allocation
+      const remainingAllocation = ALLOCATION_CAP - totalAllocatedQty;
+      if (adjustedQty > remainingAllocation + TRADE_EXECUTION.BALANCE_TOLERANCE) {
+        console.warn(
+          `[OCO] ${trade.symbol} - Adjusted quantity ${adjustedQty.toFixed(8)} ` +
+          `exceeds remaining allocation ${remainingAllocation.toFixed(8)} ` +
+          `(${(remainingAllocation / ALLOCATION_CAP * 100).toFixed(2)}% of buy order). ` +
+          `Capping to prevent over-allocation.`
+        );
+        adjustedQty = remainingAllocation;
+
+        // Re-validate capped quantity against filters
+        const revalidation = validateAllFilters(targetPrice, adjustedQty, filters);
+        if (!revalidation.isValid) {
+          console.warn(
+            `[OCO] ${trade.symbol} - Skipping target ${i} after capping: ${revalidation.errors.join(", ")}`
+          );
+          continue;
+        }
+        adjustedQty = revalidation.adjustedQuantity || adjustedQty;
+      }
+
+      // Check if we have enough free balance remaining for this OCO
+      // (previous OCO orders may have locked coins)
+      if (adjustedQty > remainingFreeBalance - TRADE_EXECUTION.BALANCE_TOLERANCE) {
+        const originalQty = adjustedQty;
+        adjustedQty = remainingFreeBalance;
+
+        console.warn(
+          `[OCO] ${trade.symbol} - Insufficient free balance for target ${i}. ` +
+          `Requested: ${originalQty.toFixed(8)}, Available: ${remainingFreeBalance.toFixed(8)}. ` +
+          `Adjusting quantity to use all remaining balance.`
+        );
+
+        // Re-validate adjusted quantity against filters
+        const revalidation = validateAllFilters(adjustedPrice, adjustedQty, filters);
+        if (!revalidation.isValid) {
+          console.warn(
+            `[OCO] ${trade.symbol} - Skipping target ${i} after balance adjustment: ${revalidation.errors.join(", ")}`
+          );
+          continue;
+        }
+        adjustedQty = revalidation.adjustedQuantity || adjustedQty;
+      }
 
       // Validate and adjust stop loss price
       const stopPriceValidation = validateAllFilters(trade.stopLoss, adjustedQty, filters);
@@ -499,6 +593,7 @@ export async function createOCOOrders(
         adjustedPrice: adjustedPrice,
         quantity: qtyForTarget.toFixed(8),
         adjustedQty: adjustedQty.toFixed(8),
+        remainingFreeBalance: remainingFreeBalance.toFixed(8),
         stopLoss: trade.stopLoss,
         adjustedStopPrice: adjustedStopPrice,
         rawStopLimitPrice: rawStopLimitPrice,
@@ -506,6 +601,17 @@ export async function createOCOOrders(
       });
 
       try {
+        // Balance check function to verify settlement during retries
+        const balanceCheckFn = async () => {
+          const accountInfo = await client.getAccount();
+          const assetBalance = accountInfo.balances.find(b => b.asset === baseAsset);
+          const available = parseFloat(assetBalance?.free || '0');
+          return {
+            available,
+            required: adjustedQty,
+          };
+        };
+
         // Use retry logic for OCO creation (handles testnet settlement delays)
         const ocoOrder = await retryOCOCreation(
           () => client.createOCOOrder(
@@ -515,7 +621,8 @@ export async function createOCOOrders(
             adjustedStopPrice,
             adjustedStopLimitPrice
           ),
-          trade.symbol // Pass symbol for logging
+          trade.symbol, // Pass symbol for logging
+          balanceCheckFn // Pass balance check function for retry diagnostics
         );
 
         orders.push({
@@ -524,6 +631,13 @@ export async function createOCOOrders(
           transactTime: ocoOrder.transactTime,
         });
         totalAllocatedQty += adjustedQty;
+
+        // Decrement remaining free balance as this order locks coins
+        remainingFreeBalance -= adjustedQty;
+        console.log(
+          `[OCO] ${trade.symbol} - OCO ${i} locked ${adjustedQty.toFixed(8)} ${baseAsset}. ` +
+          `Remaining free balance: ${remainingFreeBalance.toFixed(8)} ${baseAsset}`
+        );
 
         trade.sellOrders.push({
           orderId: ocoOrder.orderId,
