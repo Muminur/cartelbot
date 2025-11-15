@@ -1683,4 +1683,4 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 ## Session: OCO Order Price Validation Fix (Nov 15, 2025)
 
-**Fixed OCO -2010 error root cause (actual issue not balance!)**: Targets below executed price violate Binance OCO rule (SELL: price > market > stopPrice). Signal valid at creation (targets 2.37 > entry 2.27) but market moved (buy executed at 2.422). Added post-execution validation in trade-executor.ts:225-243 rejecting signals where targets ≤ executedPrice with clear error message.
+**Fixed OCO -2010 root cause - NOT balance, but invalid target prices (a6e31c0)**: Market moved (entry 2.27→execution 2.422), target 2.37 violated Binance OCO rule (SELL: price>market>stopPrice). Added trade-executor.ts:225-243 validation rejecting targets≤executedPrice. MongoDB timeout (676d8aa): port 5999 blocked, created diagnostic.
