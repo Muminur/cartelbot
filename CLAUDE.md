@@ -1700,3 +1700,7 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: Delete Signal Result Dialog (Nov 15, 2025)
 
 **Added beautiful confirmation dialogs after signal deletion**: Created DeleteResultDialog component showing deletion results - green gradient with CheckCircle2 for "sell remaining" (displays sold quantity, order ID, OCO count), blue gradient with Package icon for "keep coins" (displays saved quantity, orphaned coin ID, OCO count, nav button). Parses API response, 300ms animation, fully responsive, TypeScript clean.
+
+## Session: Delete Signal Dialog Sequencing Fix (Nov 15, 2025)
+
+**Fixed critical dialog sequencing bug (0fb73b6)**: Result dialog was showing BEFORE choice dialog due to state persistence. Added useEffect to reset deleteResult/showResultDialog state on dialog open/close, preventing stale data from previous deletions. Code review 9.2/10, TypeScript clean, production-ready.
