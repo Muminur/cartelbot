@@ -1678,3 +1678,9 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: MongoDB Connection Timeout (Nov 15, 2025)
 
 **MongoDB unreachable (ETIMEDOUT 66.179.240.208:5999)**: Port 5999 blocked by firewall (same issue as Nov 10). Created diagnostic script (test-mongodb-connection.js) confirming TCP timeout. Resolution: Re-enable port 5999 in IONOS firewall or use MongoDB Atlas. Created MONGODB-CONNECTION-ISSUE.md with step-by-step fix.
+
+---
+
+## Session: OCO Order Price Validation Fix (Nov 15, 2025)
+
+**Fixed OCO -2010 error root cause (actual issue not balance!)**: Targets below executed price violate Binance OCO rule (SELL: price > market > stopPrice). Signal valid at creation (targets 2.37 > entry 2.27) but market moved (buy executed at 2.422). Added post-execution validation in trade-executor.ts:225-243 rejecting signals where targets ≤ executedPrice with clear error message.

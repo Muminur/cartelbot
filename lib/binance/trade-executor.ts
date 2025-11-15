@@ -222,6 +222,26 @@ export async function executeSignalTrade(
       totalCost: parseFloat(buyOrder.cummulativeQuoteQty || "0"),
     });
 
+    // CRITICAL: Validate targets against executed price for OCO compatibility
+    // Binance OCO rule for SELL: price > market price > stopPrice
+    const invalidTargets = signal.targets.filter((target: number) => target <= executedPrice);
+    if (invalidTargets.length > 0) {
+      throw new ValidationError(
+        `Signal targets are invalid for OCO sell orders. ` +
+        `Buy executed at ${executedPrice.toFixed(8)}, but ${invalidTargets.length} target(s) are below this price: ` +
+        `${invalidTargets.map((t: number) => t.toFixed(8)).join(', ')}. ` +
+        `For SELL OCO orders, target prices must be ABOVE the entry price. ` +
+        `This can happen when market price moves up between signal creation and execution.`
+      );
+    }
+
+    // Validate stop loss is below executed price
+    if (signal.stopLoss >= executedPrice) {
+      throw new ValidationError(
+        `Stop loss (${signal.stopLoss.toFixed(8)}) must be BELOW entry price (${executedPrice.toFixed(8)}) for sell orders.`
+      );
+    }
+
     const trade = await Trade.create({
       userId,
       signalId,
