@@ -22,7 +22,7 @@ const orderSchema = new Schema<IOrder>(
     },
     type: {
       type: String,
-      enum: ["MARKET", "LIMIT", "OCO"],
+      enum: ["MARKET", "LIMIT", "OCO", "LIMIT_MAKER", "STOP_LOSS_LIMIT"],
       required: true,
     },
     quantity: {
