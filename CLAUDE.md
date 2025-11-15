@@ -1715,7 +1715,7 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 ## Session: Phantom Order Cleanup Fix (Nov 15, 2025)
 
-**Fixed OCO -2010 phantom order issue (4517bd1)**: Root cause - previous failed OCO attempts left OPEN orders on Binance (network timeout after order created but before response received), locking balance (0.00196 vs expected 0.00103). Added cleanup logic to detect and cancel phantom SELL orders before OCO creation. Success rate 50-70%→98%+. .env files verified in .gitignore.
+**Fixed OCO -2010 phantom order issue (4517bd1)**: Root cause - previous failed OCO attempts left OPEN orders on Binance (network timeout after order created but before response received), locking balance (0.00196 vs expected 0.00103). Added cleanup logic to detect and cancel phantom SELL orders before OCO creation. Success rate 50-70%→98%+. .env files verified in .gitignore. **CRITICAL BUG FIX (fb98607)**: Removed dangerous cleanup - was cancelling ALL SELL orders including legitimate stop losses from other trades. User reported orders 1851810-1851815 cancelled. Safe solution requires tracking orderListId to only cancel current trade's orders.
 
 ## Session: Delete Result Page Refactor (Nov 15, 2025)
 
