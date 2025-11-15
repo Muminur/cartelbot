@@ -565,6 +565,73 @@ export async function createOCOOrders(
       }
     }
 
+    // CRITICAL FIX: Cancel any existing open SELL orders (phantom orders from failed attempts)
+    // These phantom orders can lock balance, causing -2010 errors on OCO creation
+    console.log(`[OCO] ${trade.symbol} - Checking for existing open orders before OCO creation...`);
+    try {
+      const openOrders = await client.getOpenOrders(trade.symbol);
+      const openSellOrders = openOrders.filter(order => order.side === 'SELL');
+
+      if (openSellOrders.length > 0) {
+        console.log(
+          `[OCO] ${trade.symbol} - Found ${openSellOrders.length} existing SELL orders. ` +
+          `Cancelling before OCO creation to free locked balance...`
+        );
+
+        for (const order of openSellOrders) {
+          try {
+            await client.cancelOrder(trade.symbol, order.orderId);
+            console.log(
+              `[OCO] ${trade.symbol} - Cancelled order ${order.orderId} ` +
+              `(${order.type}, qty: ${order.origQty}, price: ${order.price})`
+            );
+          } catch (cancelError) {
+            console.error(
+              `[OCO] ${trade.symbol} - Failed to cancel order ${order.orderId}:`,
+              cancelError instanceof Error ? cancelError.message : 'Unknown error'
+            );
+            // Continue anyway - don't block OCO creation
+          }
+        }
+
+        // Wait for cancellations to settle and balance to be freed
+        console.log(`[OCO] ${trade.symbol} - Waiting 2s for order cancellations to settle...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Verify balance was freed
+        const postCancelAccount = await client.getAccount();
+        const postCancelBalance = postCancelAccount.balances.find(b => b.asset === baseAsset);
+        const postCancelAvailable = parseFloat(postCancelBalance?.free || '0');
+        const postCancelLocked = parseFloat(postCancelBalance?.locked || '0');
+
+        console.log(
+          `[OCO] ${trade.symbol} - Balance after cleanup:`,
+          `Available=${postCancelAvailable.toFixed(8)},`,
+          `Locked=${postCancelLocked.toFixed(8)},`,
+          `Freed=${(postCancelAvailable - initialAvailableBalance).toFixed(8)} ${baseAsset}`
+        );
+
+        // Update initial balance for subsequent OCO calculations
+        initialAvailableBalance = postCancelAvailable;
+      } else {
+        console.log(`[OCO] ${trade.symbol} - No existing open orders found. Proceeding with OCO creation.`);
+      }
+    } catch (error) {
+      console.error(
+        `[OCO] ${trade.symbol} - Failed to check/clean up open orders:`,
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+      // Continue anyway - don't block OCO creation if cleanup fails
+    }
+
+    // Diagnostic: Log if locked balance is unexpectedly high
+    if (initialLockedBalance > 0) {
+      console.warn(
+        `[OCO] ${trade.symbol} - WARNING: Locked balance detected ` +
+        `(${initialLockedBalance.toFixed(8)} ${baseAsset}) before OCO creation. ` +
+        `This may indicate phantom orders from previous failed attempts that were not cleaned up.`
+      );
+    }
 
     // Log warning if signal has more targets than distribution
     if (trade.targets.length > maxOCOOrders) {
