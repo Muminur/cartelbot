@@ -677,7 +677,7 @@ export async function createOCOOrders(
         };
 
         // Use retry logic for OCO creation (handles testnet settlement delays)
-        const ocoOrder = await retryOCOCreation(
+        const ocoResponse = await retryOCOCreation(
           () => client.createOCOOrder(
             trade.symbol,
             adjustedQty,
@@ -689,11 +689,59 @@ export async function createOCOOrders(
           balanceCheckFn // Pass balance check function for retry diagnostics
         );
 
-        orders.push({
-          orderId: ocoOrder.orderId,
-          status: ocoOrder.status,
-          transactTime: ocoOrder.transactTime,
-        });
+        // OCO response has orderReports array with 2 orders (LIMIT_MAKER and STOP_LOSS_LIMIT)
+        // Validate response structure
+        if (!ocoResponse.orderReports || !Array.isArray(ocoResponse.orderReports)) {
+          throw new ValidationError(
+            `Invalid OCO response structure: orderReports is ${typeof ocoResponse.orderReports}`
+          );
+        }
+
+        if (ocoResponse.orderReports.length !== 2) {
+          console.error(`[OCO] ${trade.symbol} - Unexpected orderReports length:`, {
+            orderListId: ocoResponse.orderListId,
+            orderCount: ocoResponse.orderReports.length,
+            orders: ocoResponse.orderReports,
+          });
+          throw new ValidationError(
+            `OCO response should have 2 orders, got ${ocoResponse.orderReports.length}`
+          );
+        }
+
+        // Extract both orders from the OCO pair
+        const limitMakerOrder = ocoResponse.orderReports.find(o => o.type === 'LIMIT_MAKER');
+        const stopLossOrder = ocoResponse.orderReports.find(o => o.type === 'STOP_LOSS_LIMIT');
+
+        if (!limitMakerOrder) {
+          const actualTypes = ocoResponse.orderReports.map(o => o.type).join(', ');
+          throw new ValidationError(
+            `OCO LIMIT_MAKER order not found. Order types: ${actualTypes}. OrderListId: ${ocoResponse.orderListId}`
+          );
+        }
+
+        if (!stopLossOrder) {
+          const actualTypes = ocoResponse.orderReports.map(o => o.type).join(', ');
+          throw new ValidationError(
+            `OCO STOP_LOSS_LIMIT order not found. Order types: ${actualTypes}. OrderListId: ${ocoResponse.orderListId}`
+          );
+        }
+
+        // Push both order IDs for tracking
+        if (limitMakerOrder) {
+          orders.push({
+            orderId: limitMakerOrder.orderId,
+            status: limitMakerOrder.status,
+            transactTime: limitMakerOrder.transactTime,
+          });
+        }
+        if (stopLossOrder) {
+          orders.push({
+            orderId: stopLossOrder.orderId,
+            status: stopLossOrder.status,
+            transactTime: stopLossOrder.transactTime,
+          });
+        }
+
         totalAllocatedQty += adjustedQty;
 
         // Decrement remaining free balance as this order locks coins
@@ -703,20 +751,40 @@ export async function createOCOOrders(
           `Remaining free balance: ${remainingFreeBalance.toFixed(8)} ${baseAsset}`
         );
 
-        trade.sellOrders.push({
-          orderId: ocoOrder.orderId,
-          orderListId: ocoOrder.orderListId, // Store orderListId for easy cancellation
-          symbol: trade.symbol,
-          side: "SELL" as const,
-          type: "OCO" as const,
-          quantity: adjustedQty,
-          price: adjustedPrice,
-          stopPrice: trade.stopLoss,
-          executedQty: 0,
-          cummulativeQuoteQty: 0,
-          status: ocoOrder.status,
-          timestamp: new Date(ocoOrder.transactTime || Date.now()),
-        });
+        // Store both OCO orders (take profit LIMIT_MAKER and stop loss STOP_LOSS_LIMIT)
+        if (limitMakerOrder) {
+          trade.sellOrders.push({
+            orderId: limitMakerOrder.orderId,
+            orderListId: ocoResponse.orderListId,
+            symbol: trade.symbol,
+            side: "SELL" as const,
+            type: "OCO" as const,
+            quantity: parseFloat(limitMakerOrder.origQty),
+            price: parseFloat(limitMakerOrder.price),
+            stopPrice: trade.stopLoss,
+            executedQty: parseFloat(limitMakerOrder.executedQty),
+            cummulativeQuoteQty: parseFloat(limitMakerOrder.cummulativeQuoteQty),
+            status: limitMakerOrder.status,
+            timestamp: new Date(limitMakerOrder.transactTime),
+          });
+        }
+
+        if (stopLossOrder) {
+          trade.sellOrders.push({
+            orderId: stopLossOrder.orderId,
+            orderListId: ocoResponse.orderListId,
+            symbol: trade.symbol,
+            side: "SELL" as const,
+            type: "OCO" as const,
+            quantity: parseFloat(stopLossOrder.origQty),
+            price: parseFloat(stopLossOrder.price),
+            stopPrice: parseFloat(stopLossOrder.stopPrice || String(trade.stopLoss)),
+            executedQty: parseFloat(stopLossOrder.executedQty),
+            cummulativeQuoteQty: parseFloat(stopLossOrder.cummulativeQuoteQty),
+            status: stopLossOrder.status,
+            timestamp: new Date(stopLossOrder.transactTime),
+          });
+        }
       } catch (error) {
         console.error(`Failed to create OCO for target ${i}:`, error);
       }

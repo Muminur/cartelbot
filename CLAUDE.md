@@ -1688,3 +1688,7 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: OCO Balance Settlement Logic Fix (Nov 15, 2025)
 
 **Fixed settlement verification bug**: Changed from "wait for balance to increase" to "verify balance is sufficient". Proactive 3s delay already settled balance, polling logic was checking for increase that already happened. Fixed partial fill over-allocation risk (H1) by using actualQuantity instead of trade.quantity for OCO calculations. Code review 8.5/10, TypeScript clean.
+
+## Session: OCO Response Structure Fix (Nov 15, 2025)
+
+**Fixed Trade validation error**: Binance OCO response has orderReports[] array (not orderId/status at top level). Added BinanceOCOResponse type, updated createOCOOrder return type, extract both orders (LIMIT_MAKER+STOP_LOSS_LIMIT) from orderReports. Added validation for array existence/length, proper error messages. Code review 8.5/10, all critical fixes applied.

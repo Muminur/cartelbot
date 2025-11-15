@@ -5,6 +5,7 @@ import { BinanceAPIError } from "@/lib/utils/errors";
 import {
   BinanceAccountInfo,
   BinanceOrderResponse,
+  BinanceOCOResponse,
   BinanceExchangeInfo,
   BinanceTicker24hr,
   BinanceSymbolFilter,
@@ -324,7 +325,7 @@ export class BinanceClient {
     price: number,
     stopPrice: number,
     stopLimitPrice: number
-  ): Promise<BinanceOrderResponse> {
+  ): Promise<BinanceOCOResponse> {
     await this.checkOrderRateLimit();
 
     // Get exchange info to validate filters
@@ -376,7 +377,7 @@ export class BinanceClient {
       quantityPrecision,
     });
 
-    const result = await this.signedRequest<BinanceOrderResponse>("POST", "/api/v3/order/oco", {
+    const result = await this.signedRequest<BinanceOCOResponse>("POST", "/api/v3/order/oco", {
       symbol,
       side: "SELL",
       quantity: formattedQuantity,
