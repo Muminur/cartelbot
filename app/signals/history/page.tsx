@@ -232,7 +232,42 @@ export default function SignalHistoryPage() {
     router.push(`/trades/execute?signalId=${signal._id}`);
   };
 
-  const handleDelete = (signal: ISignal) => {
+  const handleDelete = async (signal: ISignal) => {
+    // Verify ownership on frontend (defense-in-depth)
+    if (user && signal.userId !== String(user._id)) {
+      toast.error("You can only delete your own signals");
+      return;
+    }
+
+    // Signals without trades (no positions/OCO orders to handle)
+    // pending: Not executed yet
+    // parsed: Validated but not executed
+    // failed: Execution failed (no successful trade)
+    const signalsWithoutTrades = ["pending", "parsed", "failed"];
+    if (signalsWithoutTrades.includes(signal.status)) {
+      try {
+        const response = await fetch(`/api/signals/${signal._id}/delete`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sellRemaining: false }), // No positions to sell
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error?.message || "Failed to delete signal");
+        }
+
+        toast.success("Signal deleted successfully");
+        fetchSignals();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to delete signal";
+        toast.error(message);
+      }
+      return;
+    }
+
+    // For executing/completed signals, show the dialog
     setSelectedSignal(signal);
     setDeleteModalOpen(true);
   };
