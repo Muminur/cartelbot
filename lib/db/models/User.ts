@@ -119,4 +119,11 @@ userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ subscriptionTier: 1, subscriptionExpiry: 1 });
 userSchema.index({ isActive: 1, subscriptionExpiry: 1 });
 
+// CRITICAL FIX: In development, delete cached model to force recompilation when schema changes
+// This prevents validation errors when enum values are updated during development
+if (process.env.NODE_ENV === "development" && mongoose.models.User) {
+  delete mongoose.models.User;
+  delete mongoose.connection.models.User;
+}
+
 export const User = mongoose.models.User || mongoose.model<IUser>("User", userSchema);

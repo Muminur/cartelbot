@@ -81,6 +81,13 @@ orphanedCoinSchema.index(
   }
 );
 
+// CRITICAL FIX: In development, delete cached model to force recompilation when schema changes
+// This prevents validation errors when enum values are updated during development
+if (process.env.NODE_ENV === "development" && mongoose.models.OrphanedCoin) {
+  delete mongoose.models.OrphanedCoin;
+  delete mongoose.connection.models.OrphanedCoin;
+}
+
 export const OrphanedCoin =
   mongoose.models.OrphanedCoin ||
   mongoose.model<IOrphanedCoin>("OrphanedCoin", orphanedCoinSchema);

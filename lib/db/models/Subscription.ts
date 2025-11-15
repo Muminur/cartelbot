@@ -80,5 +80,12 @@ subscriptionSchema.index({ endDate: 1, status: 1 });
 subscriptionSchema.index({ txHash: 1 }, { sparse: true });
 subscriptionSchema.index({ userId: 1, endDate: -1 });
 
+// CRITICAL FIX: In development, delete cached model to force recompilation when schema changes
+// This prevents validation errors when enum values are updated during development
+if (process.env.NODE_ENV === "development" && mongoose.models.Subscription) {
+  delete mongoose.models.Subscription;
+  delete mongoose.connection.models.Subscription;
+}
+
 export const Subscription =
   mongoose.models.Subscription || mongoose.model<ISubscription>("Subscription", subscriptionSchema);

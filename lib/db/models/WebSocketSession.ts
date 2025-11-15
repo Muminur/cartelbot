@@ -48,6 +48,13 @@ webSocketSessionSchema.index({ listenKey: 1 }, { unique: true });
 webSocketSessionSchema.index({ lastKeepAlive: 1 });
 webSocketSessionSchema.index({ userId: 1, connectionState: 1 });
 
+// CRITICAL FIX: In development, delete cached model to force recompilation when schema changes
+// This prevents validation errors when enum values are updated during development
+if (process.env.NODE_ENV === "development" && mongoose.models.WebSocketSession) {
+  delete mongoose.models.WebSocketSession;
+  delete mongoose.connection.models.WebSocketSession;
+}
+
 export const WebSocketSession =
   mongoose.models.WebSocketSession ||
   mongoose.model<IWebSocketSession>("WebSocketSession", webSocketSessionSchema);
