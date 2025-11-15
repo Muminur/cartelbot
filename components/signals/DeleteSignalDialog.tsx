@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +13,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, TrendingDown, Package } from "lucide-react";
 import { ISignal } from "@/types";
-import DeleteResultDialog from "./DeleteResultDialog";
 
 interface DeleteSignalDialogProps {
   signal: ISignal | null;
@@ -35,53 +35,74 @@ export default function DeleteSignalDialog({
   onClose,
   onConfirm,
 }: DeleteSignalDialogProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [choice, setChoice] = useState<"sell" | "keep" | null>(null);
-  const [deleteResult, setDeleteResult] = useState<DeleteResult | null>(null);
-  const [showResultDialog, setShowResultDialog] = useState(false);
 
-  // Reset all state when dialog opens or closes
+  // Reset state when dialog opens or closes
   useEffect(() => {
     if (!isOpen) {
-      // When dialog closes, reset everything
       setLoading(false);
       setChoice(null);
-      setDeleteResult(null);
-      setShowResultDialog(false);
-    } else {
-      // When dialog opens, ensure result state is cleared
-      setDeleteResult(null);
-      setShowResultDialog(false);
     }
   }, [isOpen]);
 
   if (!signal) return null;
 
   const handleConfirm = async () => {
-    if (!choice) return;
+    // Guard against double-clicks and missing choice
+    if (!choice || loading) return;
 
     setLoading(true);
     try {
       // Call the parent's onConfirm (which will handle the API call)
-      // The parent should return the result data
       const result = await onConfirm(String(signal._id), choice === "sell");
 
-      // If parent returned result data, use it
-      if (result) {
-        // Store the result
-        setDeleteResult(result);
+      // If parent returned result data, redirect to result page
+      if (result && result.success) {
+        // Parse quantity and symbol from message with fallback
+        // Messages look like:
+        // "Signal deleted and 233.6 RAD sold at market price"
+        // "Signal deleted. 233.6 RAD saved as orphaned coin."
+        let quantity = "0";
+        let symbol = signal.symbol; // Fallback to signal's symbol
 
-        // Close the delete dialog
+        const match = result.message.match(/([\d.]+)\s+([A-Z]+)/);
+        if (match) {
+          quantity = match[1];
+          symbol = match[2];
+        } else {
+          // Fallback: log warning if parsing fails
+          console.warn("Failed to parse quantity/symbol from message:", result.message);
+        }
+
+        // Build URL parameters
+        const params = new URLSearchParams({
+          success: "true",
+          choice: choice,
+          quantity: quantity,
+          symbol: symbol,
+          message: result.message,
+          ocoCount: String(result.cancelledOCOs?.length || 0),
+        });
+
+        if (result.sellOrderId) {
+          params.append("sellOrderId", String(result.sellOrderId));
+        }
+
+        if (result.orphanedCoinId) {
+          params.append("orphanedCoinId", result.orphanedCoinId);
+        }
+
+        // Close dialog
         setChoice(null);
         onClose();
 
-        // Show the result dialog after a brief delay for smooth transition
-        setTimeout(() => {
-          setShowResultDialog(true);
-        }, 300);
+        // Redirect to result page
+        router.push(`/signals/delete-result?${params.toString()}`);
       } else {
         // If parent didn't return result (backward compatibility),
-        // close normally without showing result dialog
+        // close normally
         setChoice(null);
         onClose();
       }
@@ -99,14 +120,8 @@ export default function DeleteSignalDialog({
     onClose();
   };
 
-  const handleResultDialogClose = () => {
-    setShowResultDialog(false);
-    setDeleteResult(null);
-  };
-
   return (
-    <>
-      <Dialog open={isOpen} onOpenChange={handleClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -193,13 +208,5 @@ export default function DeleteSignalDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-
-    {/* Result Dialog */}
-    <DeleteResultDialog
-      isOpen={showResultDialog}
-      onClose={handleResultDialogClose}
-      result={deleteResult}
-    />
-    </>
   );
 }
