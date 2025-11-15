@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +39,21 @@ export default function DeleteSignalDialog({
   const [choice, setChoice] = useState<"sell" | "keep" | null>(null);
   const [deleteResult, setDeleteResult] = useState<DeleteResult | null>(null);
   const [showResultDialog, setShowResultDialog] = useState(false);
+
+  // Reset all state when dialog opens or closes
+  useEffect(() => {
+    if (!isOpen) {
+      // When dialog closes, reset everything
+      setLoading(false);
+      setChoice(null);
+      setDeleteResult(null);
+      setShowResultDialog(false);
+    } else {
+      // When dialog opens, ensure result state is cleared
+      setDeleteResult(null);
+      setShowResultDialog(false);
+    }
+  }, [isOpen]);
 
   if (!signal) return null;
 
