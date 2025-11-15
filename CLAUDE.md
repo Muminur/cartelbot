@@ -1704,3 +1704,7 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: Delete Signal Dialog Sequencing Fix (Nov 15, 2025)
 
 **Fixed critical dialog sequencing bug (0fb73b6)**: Result dialog was showing BEFORE choice dialog due to state persistence. Added useEffect to reset deleteResult/showResultDialog state on dialog open/close, preventing stale data from previous deletions. Code review 9.2/10, TypeScript clean, production-ready.
+
+## Session: Trade Model Order Type Validation Fix (Nov 15, 2025)
+
+**Fixed OCO order validation error (a1e4a99)**: Added LIMIT_MAKER and STOP_LOSS_LIMIT to Trade model orderSchema enum. Binance OCO orders use these types (already in IOrder interface), but Mongoose schema was missing them causing validation errors. TypeScript clean, code review 9.5/10, production-ready.
