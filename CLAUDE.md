@@ -1684,3 +1684,7 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: OCO Order Price Validation Fix (Nov 15, 2025)
 
 **Fixed OCO -2010 root cause - NOT balance, but invalid target prices (a6e31c0)**: Market moved (entry 2.27→execution 2.422), target 2.37 violated Binance OCO rule (SELL: price>market>stopPrice). Added trade-executor.ts:225-243 validation rejecting targets≤executedPrice. MongoDB timeout (676d8aa): port 5999 blocked, created diagnostic. UI fix: Signal status→'failed' when OCO fails, clear error in SignalDetailModal.
+
+## Session: OCO Balance Settlement Logic Fix (Nov 15, 2025)
+
+**Fixed settlement verification bug**: Changed from "wait for balance to increase" to "verify balance is sufficient". Proactive 3s delay already settled balance, polling logic was checking for increase that already happened. Fixed partial fill over-allocation risk (H1) by using actualQuantity instead of trade.quantity for OCO calculations. Code review 8.5/10, TypeScript clean.

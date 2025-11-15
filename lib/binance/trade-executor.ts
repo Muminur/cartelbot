@@ -480,82 +480,90 @@ export async function createOCOOrders(
     // Use actual executed quantity (may differ from trade.quantity due to partial fills)
     const actualQuantity = trade.buyOrder?.executedQty || trade.quantity;
 
-    // Store initial balance for settlement verification
-    const beforeSettlementBalance = initialAvailableBalance;
+    // IMPORTANT: After the proactive settlement delay (2-3 seconds), the balance should already
+    // contain the purchased coins. We check if balance >= required quantity, NOT if it increased.
+    // The "beforeSettlementBalance" is the balance BEFORE the buy order (captured in initial balance check).
     console.log(
-      `[OCO] ${trade.symbol} - Pre-settlement balance: ${beforeSettlementBalance.toFixed(8)}, ` +
-      `Expecting increase of: ${actualQuantity.toFixed(8)}`
+      `[OCO] ${trade.symbol} - Verifying settlement: ` +
+      `Current balance=${initialAvailableBalance.toFixed(8)}, ` +
+      `Required quantity=${actualQuantity.toFixed(8)}, ` +
+      `Sufficient=${initialAvailableBalance >= actualQuantity ? 'YES' : 'NO'}`
     );
 
-    // Poll balance until it increases by the buy quantity (settlement complete)
-    const maxPolls = testnet ? 20 : 10; // Testnet needs more time (up to 20 seconds)
-    const pollInterval = 1000; // 1 second between polls
-    let settlementVerified = false;
-    let currentSettledBalance = beforeSettlementBalance;
-
-    const pollStartTime = Date.now();
-    for (let poll = 1; poll <= maxPolls; poll++) {
-      const currentAccount = await client.getAccount();
-      const currentBalance = parseFloat(
-        currentAccount.balances.find(b => b.asset === baseAsset)?.free || '0'
-      );
-
-      const balanceIncrease = currentBalance - beforeSettlementBalance;
-      const expectedIncrease = actualQuantity;
-      const settlementComplete = balanceIncrease >= (expectedIncrease - TRADE_EXECUTION.BALANCE_TOLERANCE);
-
+    // Check if balance is already sufficient (settlement likely already complete due to proactive delay)
+    if (initialAvailableBalance >= (actualQuantity - TRADE_EXECUTION.BALANCE_TOLERANCE)) {
       console.log(
-        `[OCO] ${trade.symbol} - Settlement poll ${poll}/${maxPolls}:`,
-        `Current=${currentBalance.toFixed(8)},`,
-        `Increase=${balanceIncrease.toFixed(8)},`,
-        `Expected=${expectedIncrease.toFixed(8)},`,
-        `Complete=${settlementComplete ? 'YES' : 'NO'}`
+        `[OCO] ${trade.symbol} - Balance already sufficient for OCO orders ` +
+        `(${initialAvailableBalance.toFixed(8)} >= ${actualQuantity.toFixed(8)}). Proceeding immediately.`
+      );
+    } else {
+      // Balance not yet sufficient - poll until it reaches required amount
+      console.log(
+        `[OCO] ${trade.symbol} - Balance insufficient (${initialAvailableBalance.toFixed(8)} < ${actualQuantity.toFixed(8)}). ` +
+        `Polling for settlement...`
       );
 
-      if (settlementComplete) {
-        settlementVerified = true;
-        currentSettledBalance = currentBalance;
-        const elapsedTime = Date.now() - pollStartTime;
-        const savedTime = (maxPolls - poll) * pollInterval;
+      const maxPolls = testnet ? 20 : 10; // Testnet needs more time (up to 20 seconds)
+      const pollInterval = 1000; // 1 second between polls
+      let settlementVerified = false;
+
+      const pollStartTime = Date.now();
+      for (let poll = 1; poll <= maxPolls; poll++) {
+        const currentAccount = await client.getAccount();
+        const currentBalance = parseFloat(
+          currentAccount.balances.find(b => b.asset === baseAsset)?.free || '0'
+        );
+
+        const settlementComplete = currentBalance >= (actualQuantity - TRADE_EXECUTION.BALANCE_TOLERANCE);
+
         console.log(
-          `[OCO] ${trade.symbol} - Settlement verified after ${poll}/${maxPolls} polls ` +
-          `(${elapsedTime}ms elapsed, ${savedTime}ms saved)`
+          `[OCO] ${trade.symbol} - Settlement poll ${poll}/${maxPolls}:`,
+          `Current=${currentBalance.toFixed(8)},`,
+          `Required=${actualQuantity.toFixed(8)},`,
+          `Sufficient=${settlementComplete ? 'YES' : 'NO'}`
         );
-        break;
+
+        if (settlementComplete) {
+          settlementVerified = true;
+          initialAvailableBalance = currentBalance;
+          const elapsedTime = Date.now() - pollStartTime;
+          const savedTime = (maxPolls - poll) * pollInterval;
+          console.log(
+            `[OCO] ${trade.symbol} - Settlement verified after ${poll}/${maxPolls} polls ` +
+            `(${elapsedTime}ms elapsed, ${savedTime}ms saved)`
+          );
+          break;
+        }
+
+        if (poll < maxPolls) {
+          console.log(`[OCO] ${trade.symbol} - Waiting ${pollInterval}ms before next poll...`);
+          await new Promise(resolve => setTimeout(resolve, pollInterval));
+        }
       }
 
-      if (poll < maxPolls) {
-        console.log(`[OCO] ${trade.symbol} - Waiting ${pollInterval}ms before next poll...`);
-        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      if (!settlementVerified) {
+        // Final check: Re-fetch balance and verify one last time
+        const finalAccount = await client.getAccount();
+        const finalBalance = parseFloat(
+          finalAccount.balances.find(b => b.asset === baseAsset)?.free || '0'
+        );
+
+        if (finalBalance >= (actualQuantity - TRADE_EXECUTION.BALANCE_TOLERANCE)) {
+          console.warn(
+            `[OCO] ${trade.symbol} - Final check passed: balance is sufficient ` +
+            `(${finalBalance.toFixed(8)} >= ${actualQuantity.toFixed(8)}). Proceeding...`
+          );
+          initialAvailableBalance = finalBalance;
+        } else {
+          throw new ValidationError(
+            `Balance settlement verification failed after ${maxPolls} polls. ` +
+            `Final balance: ${finalBalance.toFixed(8)}, Required: ${actualQuantity.toFixed(8)}, ` +
+            `Shortfall: ${(actualQuantity - finalBalance).toFixed(8)}. ` +
+            `This indicates persistent testnet settlement delays or balance sync issues.`
+          );
+        }
       }
     }
-
-    if (!settlementVerified) {
-      // Final check: Re-fetch balance and verify increase one last time
-      const finalAccount = await client.getAccount();
-      const finalBalance = parseFloat(
-        finalAccount.balances.find(b => b.asset === baseAsset)?.free || '0'
-      );
-      const finalIncrease = finalBalance - beforeSettlementBalance;
-
-      if (finalIncrease >= (actualQuantity - TRADE_EXECUTION.BALANCE_TOLERANCE)) {
-        console.warn(
-          `[OCO] ${trade.symbol} - Final check passed: balance increased by ${finalIncrease.toFixed(8)} ` +
-          `(expected ${actualQuantity.toFixed(8)}). Proceeding...`
-        );
-        currentSettledBalance = finalBalance;
-      } else {
-        throw new ValidationError(
-          `Balance settlement verification failed after ${maxPolls} polls. ` +
-          `Final balance increase: ${finalIncrease.toFixed(8)}, Required: ${actualQuantity.toFixed(8)}. ` +
-          `Before: ${beforeSettlementBalance.toFixed(8)}, After: ${finalBalance.toFixed(8)}. ` +
-          `This indicates persistent testnet settlement delays or balance sync issues.`
-        );
-      }
-    }
-
-    // Update balance for OCO loop to use settled balance
-    initialAvailableBalance = currentSettledBalance;
 
 
     // Log warning if signal has more targets than distribution
@@ -569,12 +577,14 @@ export async function createOCOOrders(
 
     let totalAllocatedQty = 0;
     let remainingFreeBalance = initialAvailableBalance; // Track balance as orders lock coins
-    const ALLOCATION_CAP = trade.quantity; // Maximum we can allocate (100%)
+    // CRITICAL: Use actualQuantity (executed qty) not trade.quantity to prevent over-allocation on partial fills
+    const ALLOCATION_CAP = actualQuantity; // Maximum we can allocate (100%)
 
     for (let i = 0; i < targets.length; i++) {
       const targetPrice = targets[i];
       const percentage = distribution[i]; // Safe - always within bounds (no fallback needed)
-      const qtyForTarget = (trade.quantity * percentage) / 100;
+      // CRITICAL: Calculate OCO quantity based on ACTUAL executed quantity, not planned quantity
+      const qtyForTarget = (actualQuantity * percentage) / 100;
 
       // Validate and adjust target price and quantity
       const validation = validateAllFilters(targetPrice, qtyForTarget, filters);
