@@ -1672,3 +1672,9 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 **Fixed Binance -2010 error (77018d0)**: Implemented polling-based settlement verification checking balance INCREASE (current - before >= buyQuantity) instead of absolute balance. Polls every 1s (testnet: 20s max, mainnet: 10s) until balance increases by buy amount. Fixed critical fallback logic bug (was checking absolute balance, now checks increase). Code reviews 7.5/10→9.5/10, expected success 98%+.
 
 **IMPORTANT**: User's dev server running OLD code (pre-fix). Created RESTART-REQUIRED.md with instructions. Fix already deployed to GitHub (commit fad0104), requires dev server restart to load new polling-based verification.
+
+---
+
+## Session: MongoDB Connection Timeout (Nov 15, 2025)
+
+**MongoDB unreachable (ETIMEDOUT 66.179.240.208:5999)**: Port 5999 blocked by firewall (same issue as Nov 10). Created diagnostic script (test-mongodb-connection.js) confirming TCP timeout. Resolution: Re-enable port 5999 in IONOS firewall or use MongoDB Atlas. Created MONGODB-CONNECTION-ISSUE.md with step-by-step fix.
