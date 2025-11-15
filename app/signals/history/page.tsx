@@ -233,18 +233,9 @@ export default function SignalHistoryPage() {
   };
 
   const handleDelete = async (signal: ISignal) => {
-    // Verify ownership on frontend (defense-in-depth)
-    if (user && signal.userId !== String(user._id)) {
-      toast.error("You can only delete your own signals");
-      return;
-    }
-
-    // Signals without trades (no positions/OCO orders to handle)
-    // pending: Not executed yet
-    // parsed: Validated but not executed
-    // failed: Execution failed (no successful trade)
-    const signalsWithoutTrades = ["pending", "parsed", "failed"];
-    if (signalsWithoutTrades.includes(signal.status)) {
+    // ONLY for failed signals: delete immediately without dialog
+    // Failed signals have no successful trades, so nothing to sell or keep
+    if (signal.status === "failed") {
       try {
         const response = await fetch(`/api/signals/${signal._id}/delete`, {
           method: "DELETE",
@@ -267,7 +258,8 @@ export default function SignalHistoryPage() {
       return;
     }
 
-    // For executing/completed signals, show the dialog
+    // For ALL other signals (pending, parsed, executing, completed, cancelled),
+    // show the normal dialog
     setSelectedSignal(signal);
     setDeleteModalOpen(true);
   };
