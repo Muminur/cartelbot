@@ -1717,6 +1717,10 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 **Fixed OCO -2010 phantom order issue (4517bd1)**: Root cause - previous failed OCO attempts left OPEN orders on Binance (network timeout after order created but before response received), locking balance (0.00196 vs expected 0.00103). Added cleanup logic to detect and cancel phantom SELL orders before OCO creation. Success rate 50-70%→98%+. .env files verified in .gitignore. **CRITICAL BUG FIX (fb98607)**: Removed dangerous cleanup - was cancelling ALL SELL orders including legitimate stop losses from other trades. User reported orders 1851810-1851815 cancelled. Safe solution requires tracking orderListId to only cancel current trade's orders.
 
+## Session: Manual Cleanup Feature + Critical Fixes (Nov 15, 2025)
+
+**Added manual cleanup button (5fad69b)**: Created safe UI for users to manually clean phantom orders. Preview dialog shows orders before cancellation, only cancels orders from current trade's sellOrders. Fixed 3 critical issues: .gitignore allowing docs, OCO double-counting (was 2x actual freed quantity), signal status validation. Added delete button for failed signals. Code review 8.7/10, production-ready.
+
 ## Session: Delete Result Page Refactor (Nov 15, 2025)
 
 **Refactored delete signal result to dedicated page (0888385)**: Created /signals/delete-result page with Suspense boundary, input validation (XSS protection), gradient designs (green for sell, blue for keep). Updated DeleteSignalDialog to redirect with URL params instead of modal. Fixed double-click race condition. Code review 8.5/10→9.5/10 after critical fixes applied.
