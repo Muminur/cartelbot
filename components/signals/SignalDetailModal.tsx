@@ -359,8 +359,8 @@ export default function SignalDetailModal({
             </>
           )}
 
-          {/* OCO Order Details - Show when signal is executing or completed */}
-          {(signal.status === "executing" || signal.status === "completed") && (
+          {/* OCO Order Details - Show when signal is executing, completed, or failed */}
+          {(signal.status === "executing" || signal.status === "completed" || signal.status === "failed") && (
             <>
               <Separator />
               <div className="space-y-3">
@@ -401,8 +401,26 @@ export default function SignalDetailModal({
                       </div>
                     </div>
 
-                    {/* OCO Sell Orders - or loading state */}
-                    {trade.sellOrders && trade.sellOrders.length > 0 ? (
+                    {/* OCO Sell Orders - or loading state - or failure */}
+                    {signal.status === "failed" ? (
+                      <div className="bg-red-50 p-3 rounded-lg border border-red-200">
+                        <div className="flex items-center gap-2 text-sm text-red-800 font-semibold">
+                          <AlertTriangle className="h-4 w-4" />
+                          <span>OCO Order Creation Failed</span>
+                        </div>
+                        <p className="text-xs text-red-700 mt-2">
+                          The buy order was executed successfully, but the sell orders (OCO - Take Profit & Stop Loss) could not be created. This is usually because:
+                        </p>
+                        <ul className="text-xs text-red-700 mt-2 ml-4 space-y-1 list-disc">
+                          <li><strong>Target prices are below the executed buy price</strong> (market moved up before execution)</li>
+                          <li>Insufficient balance after buy order settlement</li>
+                          <li>Binance API connectivity issues</li>
+                        </ul>
+                        <p className="text-xs text-red-700 mt-2 font-medium">
+                          ⚠️ Your position is OPEN but has NO STOP LOSS protection. You should manually close this trade or set stop loss orders via Binance directly.
+                        </p>
+                      </div>
+                    ) : trade.sellOrders && trade.sellOrders.length > 0 ? (
                       <div className="space-y-2">
                         <div className="text-xs font-semibold text-gray-700">OCO SELL ORDERS (Take Profit & Stop Loss)</div>
                         {trade.sellOrders.map((order: IOrder, index: number) => (

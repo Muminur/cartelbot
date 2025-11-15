@@ -84,6 +84,15 @@ export async function POST(request: NextRequest) {
         console.log(`[Trade Execute] OCO orders created successfully in ${ocoTotalTime}ms`);
       } else {
         console.error(`[Trade Execute] OCO creation failed after ${ocoTotalTime}ms:`, ocoResult.error);
+
+        // CRITICAL: Update signal status to 'failed' when OCO creation fails
+        // This ensures the UI can show the failure clearly
+        const { Signal } = await import('@/lib/db/models');
+        await Signal.findByIdAndUpdate(signalId, {
+          status: 'failed',
+        });
+
+        console.log(`[Trade Execute] Signal ${signalId} marked as 'failed' due to OCO creation error`);
       }
     }
 
@@ -94,6 +103,7 @@ export async function POST(request: NextRequest) {
           tradeId: result.tradeId,
           buyOrder: result.buyOrder,
           ocoOrders: ocoResult?.orders,
+          ocoError: ocoResult?.success === false ? ocoResult.error : undefined,
           requiresApproval: result.requiresApproval,
         },
       },
