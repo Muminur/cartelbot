@@ -32,8 +32,8 @@ const subscriptionSchema = new Schema<ISubscription>(
     txHash: {
       type: String,
       validate: {
-        validator: (hash: string) => !hash || /^(0x)?[0-9a-fA-F]{64}$/.test(hash),
-        message: "Invalid transaction hash format",
+        validator: (hash: string) => !hash || /^[0-9a-fA-F]{64}$/.test(hash),
+        message: "Invalid TRC20 transaction hash (must be 64 hex characters without 0x prefix)",
       },
     },
     fromAddress: {
@@ -80,11 +80,15 @@ subscriptionSchema.index({ endDate: 1, status: 1 });
 subscriptionSchema.index({ txHash: 1 }, { sparse: true });
 subscriptionSchema.index({ userId: 1, endDate: -1 });
 
-// CRITICAL FIX: In development, delete cached model to force recompilation when schema changes
-// This prevents validation errors when enum values are updated during development
-if (process.env.NODE_ENV === "development" && mongoose.models.Subscription) {
-  delete mongoose.models.Subscription;
-  delete mongoose.connection.models.Subscription;
+if (process.env.NODE_ENV === "development") {
+  const models = mongoose.models as { [key: string]: any };
+  if (models.Subscription) {
+    delete models.Subscription;
+  }
+  const connectionModels = mongoose.connection.models as { [key: string]: any };
+  if (connectionModels.Subscription) {
+    delete connectionModels.Subscription;
+  }
 }
 
 export const Subscription =

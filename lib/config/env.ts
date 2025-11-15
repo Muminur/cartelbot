@@ -68,6 +68,20 @@ const envSchema = z.object({
     .string()
     .email("ADMIN_EMAILS must be a valid email")
     .default("admin@cartelbot.coinspree.cc"),
+
+  PAYMENT_WALLET_ADDRESS: z
+    .string()
+    .regex(/^T[a-zA-Z0-9]{33}$/, "PAYMENT_WALLET_ADDRESS must be a valid TRC20 wallet address (T followed by 33 characters)")
+    .refine(
+      (val) => val !== "TYourWalletAddressHere123456789ABCDEF",
+      "Production wallet address not configured - replace placeholder"
+    ),
+
+  TRON_MIN_CONFIRMATIONS: z
+    .string()
+    .regex(/^\d+$/, "TRON_MIN_CONFIRMATIONS must be a number")
+    .transform((val) => parseInt(val, 10))
+    .default("19"),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -108,6 +122,8 @@ function getEnv(): Env {
       NEXTAUTH_URL: process.env.NEXTAUTH_URL,
       RESEND_API_KEY: process.env.RESEND_API_KEY,
       ADMIN_EMAILS: process.env.ADMIN_EMAILS,
+      PAYMENT_WALLET_ADDRESS: process.env.PAYMENT_WALLET_ADDRESS,
+      TRON_MIN_CONFIRMATIONS: process.env.TRON_MIN_CONFIRMATIONS,
     };
 
     const parsed = envSchema.safeParse(env);

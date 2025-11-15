@@ -5,6 +5,7 @@ import { Signal } from "@/lib/db/models";
 import { parseSignal } from "@/lib/parser";
 import { formatErrorResponse } from "@/lib/utils/errors";
 import { BinanceClient } from "@/lib/binance";
+import { checkSignalLimit } from "@/lib/middleware/usage-limiter";
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,6 +19,12 @@ export async function POST(request: NextRequest) {
       isImageSignal,
       rawSignalLength: rawSignal?.length,
     });
+
+    // Check subscription usage limits
+    const limitError = await checkSignalLimit(String(user._id));
+    if (limitError) {
+      return limitError; // Return 403 error if limit exceeded
+    }
 
     if (!rawSignal || typeof rawSignal !== "string") {
       return NextResponse.json(

@@ -162,11 +162,15 @@ tradeSchema.index({ symbol: 1, createdAt: -1 });
 tradeSchema.index({ userId: 1, status: 1 });
 tradeSchema.index({ signalId: 1 });
 
-// CRITICAL FIX: In development, delete cached model to force recompilation when schema changes
-// This prevents validation errors when enum values are updated during development
-if (process.env.NODE_ENV === "development" && mongoose.models.Trade) {
-  delete mongoose.models.Trade;
-  delete mongoose.connection.models.Trade;
+if (process.env.NODE_ENV === "development") {
+  const models = mongoose.models as { [key: string]: any };
+  if (models.Trade) {
+    delete models.Trade;
+  }
+  const connectionModels = mongoose.connection.models as { [key: string]: any };
+  if (connectionModels.Trade) {
+    delete connectionModels.Trade;
+  }
 }
 
 export const Trade = mongoose.models.Trade || mongoose.model<ITrade>("Trade", tradeSchema);

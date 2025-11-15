@@ -76,16 +76,20 @@ const signalSchema = new Schema<ISignal>(
   }
 );
 
-signalSchema.index({ userId: 1, createdAt: -1 });
+signalSchema.index({ userId: 1, createdAt: 1 });
 signalSchema.index({ status: 1, createdAt: -1 });
 signalSchema.index({ symbol: 1, createdAt: -1 });
 signalSchema.index({ userId: 1, status: 1 });
 
-// CRITICAL FIX: In development, delete cached model to force recompilation when schema changes
-// This prevents validation errors when enum values are updated during development
-if (process.env.NODE_ENV === "development" && mongoose.models.Signal) {
-  delete mongoose.models.Signal;
-  delete mongoose.connection.models.Signal;
+if (process.env.NODE_ENV === "development") {
+  const models = mongoose.models as { [key: string]: any };
+  if (models.Signal) {
+    delete models.Signal;
+  }
+  const connectionModels = mongoose.connection.models as { [key: string]: any };
+  if (connectionModels.Signal) {
+    delete connectionModels.Signal;
+  }
 }
 
 export const Signal = mongoose.models.Signal || mongoose.model<ISignal>("Signal", signalSchema);

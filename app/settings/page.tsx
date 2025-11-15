@@ -17,6 +17,7 @@ import { API_ROUTES } from "@/lib/constants";
 import { UserProfile } from "@/types";
 import { toast } from "sonner";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { SubscriptionSection } from "@/components/settings/SubscriptionSection";
 import { Loader2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 
 interface TestConnectionResult {
@@ -639,6 +640,9 @@ export default function SettingsPage() {
               </Button>
             </CardContent>
           </Card>
+
+          {/* Subscription Management */}
+          <SubscriptionSection />
 
           {/* Notification Preferences */}
           <Card>
