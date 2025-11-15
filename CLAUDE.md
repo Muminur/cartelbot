@@ -1719,7 +1719,7 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 ## Session: Manual Cleanup Feature + Critical Fixes (Nov 15, 2025)
 
-**Added manual cleanup button (5fad69b)**: Created safe UI for users to manually clean phantom orders. Preview dialog shows orders before cancellation, only cancels orders from current trade's sellOrders. Fixed 3 critical issues: .gitignore allowing docs, OCO double-counting (was 2x actual freed quantity), signal status validation. Added delete button for failed signals. Code review 8.7/10, production-ready. **Fixed delete dialog for signals without trades (9bcbbdc)**: Pending/parsed/failed signals now delete immediately without showing sell/keep dialog (no positions to handle). Added frontend ownership validation.
+**Added manual cleanup button (5fad69b)**: Created safe UI for users to manually clean phantom orders. Preview dialog shows orders before cancellation, only cancels orders from current trade's sellOrders. Fixed 3 critical issues: .gitignore allowing docs, OCO double-counting (was 2x actual freed quantity), signal status validation. Added delete button for failed signals. Code review 8.7/10, production-ready. **Fixed delete for failed signals only (0590679)**: Failed signals skip sell/keep dialog, delete immediately with toast. Other signals (pending/parsed/executing/completed) still show normal dialog.
 
 ## Session: Delete Result Page Refactor (Nov 15, 2025)
 
