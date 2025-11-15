@@ -51,7 +51,7 @@ export interface IOrder {
   orderListId?: number; // For OCO orders - used to cancel the entire OCO group
   symbol: string;
   side: "BUY" | "SELL";
-  type: "MARKET" | "LIMIT" | "OCO";
+  type: "MARKET" | "LIMIT" | "OCO" | "LIMIT_MAKER" | "STOP_LOSS_LIMIT";
   quantity: number;
   price?: number;
   stopPrice?: number;

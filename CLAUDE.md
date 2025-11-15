@@ -1692,3 +1692,7 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: OCO Response Structure Fix (Nov 15, 2025)
 
 **Fixed Trade validation error**: Binance OCO response has orderReports[] array (not orderId/status at top level). Added BinanceOCOResponse type, updated createOCOOrder return type, extract both orders (LIMIT_MAKER+STOP_LOSS_LIMIT) from orderReports. Added validation for array existence/length, proper error messages. Code review 8.5/10, all critical fixes applied.
+
+## Session: OCO Order Display Label Fix (Nov 15, 2025)
+
+**Fixed UI mislabeling all OCO orders as "Stop Loss"**: Updated IOrder type to include LIMIT_MAKER/STOP_LOSS_LIMIT, changed trade-executor to store actual Binance types (not generic "OCO"), fixed SignalDetailModal to check order.type instead of stopPrice presence. Now correctly displays "Take Profit #N" for LIMIT_MAKER and "Stop Loss" for STOP_LOSS_LIMIT orders.

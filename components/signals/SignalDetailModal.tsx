@@ -427,7 +427,7 @@ export default function SignalDetailModal({
                           <div key={order.orderId} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-xs font-semibold text-gray-700">
-                                {order.stopPrice ? `Stop Loss Order` : `Take Profit #${index + 1}`}
+                                {order.type === 'STOP_LOSS_LIMIT' ? 'Stop Loss' : `Take Profit #${Math.floor(index / 2) + 1}`}
                               </span>
                               <Badge
                                 variant={

@@ -752,13 +752,14 @@ export async function createOCOOrders(
         );
 
         // Store both OCO orders (take profit LIMIT_MAKER and stop loss STOP_LOSS_LIMIT)
+        // CRITICAL: Store actual Binance order types for proper UI display
         if (limitMakerOrder) {
           trade.sellOrders.push({
             orderId: limitMakerOrder.orderId,
             orderListId: ocoResponse.orderListId,
             symbol: trade.symbol,
             side: "SELL" as const,
-            type: "OCO" as const,
+            type: "LIMIT_MAKER" as const, // Store actual Binance type (not "OCO")
             quantity: parseFloat(limitMakerOrder.origQty),
             price: parseFloat(limitMakerOrder.price),
             stopPrice: trade.stopLoss,
@@ -775,7 +776,7 @@ export async function createOCOOrders(
             orderListId: ocoResponse.orderListId,
             symbol: trade.symbol,
             side: "SELL" as const,
-            type: "OCO" as const,
+            type: "STOP_LOSS_LIMIT" as const, // Store actual Binance type (not "OCO")
             quantity: parseFloat(stopLossOrder.origQty),
             price: parseFloat(stopLossOrder.price),
             stopPrice: parseFloat(stopLossOrder.stopPrice || String(trade.stopLoss)),
