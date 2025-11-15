@@ -249,8 +249,11 @@ export default function SignalHistoryPage() {
         throw new Error(data.error?.message || "Failed to delete signal");
       }
 
-      toast.success(data.data.message || "Signal deleted successfully");
+      // Don't show toast here - the result dialog will handle success message
       fetchSignals();
+
+      // Return the result data for the DeleteResultDialog
+      return data.data;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to delete signal";
       toast.error(message);

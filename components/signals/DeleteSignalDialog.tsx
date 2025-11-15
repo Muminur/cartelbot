@@ -12,12 +12,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, TrendingDown, Package } from "lucide-react";
 import { ISignal } from "@/types";
+import DeleteResultDialog from "./DeleteResultDialog";
 
 interface DeleteSignalDialogProps {
   signal: ISignal | null;
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (signalId: string, sellRemaining: boolean) => Promise<void>;
+  onConfirm: (signalId: string, sellRemaining: boolean) => Promise<DeleteResult | void>;
+}
+
+interface DeleteResult {
+  success: boolean;
+  message: string;
+  sellOrderId?: number;
+  orphanedCoinId?: string;
+  cancelledOCOs?: number[];
 }
 
 export default function DeleteSignalDialog({
@@ -28,6 +37,8 @@ export default function DeleteSignalDialog({
 }: DeleteSignalDialogProps) {
   const [loading, setLoading] = useState(false);
   const [choice, setChoice] = useState<"sell" | "keep" | null>(null);
+  const [deleteResult, setDeleteResult] = useState<DeleteResult | null>(null);
+  const [showResultDialog, setShowResultDialog] = useState(false);
 
   if (!signal) return null;
 
@@ -36,11 +47,32 @@ export default function DeleteSignalDialog({
 
     setLoading(true);
     try {
-      await onConfirm(String(signal._id), choice === "sell");
-      setChoice(null);
-      onClose();
+      // Call the parent's onConfirm (which will handle the API call)
+      // The parent should return the result data
+      const result = await onConfirm(String(signal._id), choice === "sell");
+
+      // If parent returned result data, use it
+      if (result) {
+        // Store the result
+        setDeleteResult(result);
+
+        // Close the delete dialog
+        setChoice(null);
+        onClose();
+
+        // Show the result dialog after a brief delay for smooth transition
+        setTimeout(() => {
+          setShowResultDialog(true);
+        }, 300);
+      } else {
+        // If parent didn't return result (backward compatibility),
+        // close normally without showing result dialog
+        setChoice(null);
+        onClose();
+      }
     } catch (error) {
       console.error("Error deleting signal:", error);
+      // Keep the dialog open on error so user can see what happened
     } finally {
       setLoading(false);
     }
@@ -52,8 +84,14 @@ export default function DeleteSignalDialog({
     onClose();
   };
 
+  const handleResultDialogClose = () => {
+    setShowResultDialog(false);
+    setDeleteResult(null);
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <>
+      <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -140,5 +178,13 @@ export default function DeleteSignalDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Result Dialog */}
+    <DeleteResultDialog
+      isOpen={showResultDialog}
+      onClose={handleResultDialogClose}
+      result={deleteResult}
+    />
+    </>
   );
 }

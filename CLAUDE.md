@@ -1696,3 +1696,7 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: OCO Order Display Label Fix (Nov 15, 2025)
 
 **Fixed UI mislabeling all OCO orders as "Stop Loss"**: Updated IOrder type to include LIMIT_MAKER/STOP_LOSS_LIMIT, changed trade-executor to store actual Binance types (not generic "OCO"), fixed SignalDetailModal to check order.type instead of stopPrice presence. Now correctly displays "Take Profit #N" for LIMIT_MAKER and "Stop Loss" for STOP_LOSS_LIMIT orders. Removed invalid turbo config from next.config.mjs.
+
+## Session: Delete Signal Result Dialog (Nov 15, 2025)
+
+**Added beautiful confirmation dialogs after signal deletion**: Created DeleteResultDialog component showing deletion results - green gradient with CheckCircle2 for "sell remaining" (displays sold quantity, order ID, OCO count), blue gradient with Package icon for "keep coins" (displays saved quantity, orphaned coin ID, OCO count, nav button). Parses API response, 300ms animation, fully responsive, TypeScript clean.
