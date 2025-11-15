@@ -18,6 +18,7 @@ import SignalFilters, { SignalFilterValues } from "@/components/signals/SignalFi
 import SignalDetailModal from "@/components/signals/SignalDetailModal";
 import EditSignalModal from "@/components/signals/EditSignalModal";
 import DeleteSignalDialog from "@/components/signals/DeleteSignalDialog";
+import CleanupPhantomOrdersDialog from "@/components/signals/CleanupPhantomOrdersDialog";
 import SignalActions from "@/components/signals/SignalActions";
 import { ISignal, UserProfile } from "@/types";
 import { API_ROUTES } from "@/lib/constants";
@@ -65,6 +66,7 @@ export default function SignalHistoryPage() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [cleanupModalOpen, setCleanupModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -235,6 +237,16 @@ export default function SignalHistoryPage() {
     setDeleteModalOpen(true);
   };
 
+  const handleCleanupPhantomOrders = (signal: ISignal) => {
+    setSelectedSignal(signal);
+    setCleanupModalOpen(true);
+  };
+
+  const handleCleanupSuccess = () => {
+    // Refresh the signals list after successful cleanup
+    fetchSignals();
+  };
+
   const handleConfirmDelete = async (signalId: string, sellRemaining: boolean) => {
     try {
       const response = await fetch(`/api/signals/${signalId}/delete`, {
@@ -389,6 +401,7 @@ export default function SignalHistoryPage() {
                                 onCancel={(s) => handleCancel(String(s._id))}
                                 onExecute={handleExecute}
                                 onDelete={handleDelete}
+                                onCleanupPhantomOrders={handleCleanupPhantomOrders}
                               />
                             </TableCell>
                           </TableRow>
@@ -458,6 +471,16 @@ export default function SignalHistoryPage() {
             setSelectedSignal(null);
           }}
           onConfirm={handleConfirmDelete}
+        />
+
+        <CleanupPhantomOrdersDialog
+          signal={selectedSignal}
+          isOpen={cleanupModalOpen}
+          onClose={() => {
+            setCleanupModalOpen(false);
+            setSelectedSignal(null);
+          }}
+          onSuccess={handleCleanupSuccess}
         />
       </div>
     </DashboardLayout>

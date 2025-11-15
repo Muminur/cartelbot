@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { ISignal } from "@/types";
-import { MoreVertical, Eye, Edit, XCircle, Play, Trash2 } from "lucide-react";
+import { MoreVertical, Eye, Edit, XCircle, Play, Trash2, Eraser } from "lucide-react";
 
 interface SignalActionsProps {
   signal: ISignal;
@@ -18,6 +18,7 @@ interface SignalActionsProps {
   onCancel?: (signal: ISignal) => void;
   onExecute?: (signal: ISignal) => void;
   onDelete?: (signal: ISignal) => void;
+  onCleanupPhantomOrders?: (signal: ISignal) => void;
 }
 
 export default function SignalActions({
@@ -27,11 +28,13 @@ export default function SignalActions({
   onCancel,
   onExecute,
   onDelete,
+  onCleanupPhantomOrders,
 }: SignalActionsProps) {
   const canEdit = signal.status === "pending";
   const canCancel = signal.status === "pending" || signal.status === "parsed";
   const canExecute = signal.status === "parsed";
-  const canDelete = signal.status === "executing" || signal.status === "completed";
+  const canDelete = signal.status === "executing" || signal.status === "completed" || signal.status === "failed";
+  const canCleanup = signal.status === "failed" || signal.status === "executing";
 
   return (
     <DropdownMenu>
@@ -73,6 +76,19 @@ export default function SignalActions({
             >
               <XCircle className="mr-2 h-4 w-4" />
               <span>Cancel Signal</span>
+            </DropdownMenuItem>
+          </>
+        )}
+
+        {canCleanup && onCleanupPhantomOrders && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => onCleanupPhantomOrders(signal)}
+              className="text-yellow-600 focus:text-yellow-600"
+            >
+              <Eraser className="mr-2 h-4 w-4" />
+              <span>Cleanup Phantom Orders</span>
             </DropdownMenuItem>
           </>
         )}

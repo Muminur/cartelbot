@@ -150,6 +150,7 @@ export interface BinanceOrderResponse {
   timeInForce: string;
   type: string;
   side: string;
+  stopPrice?: string;
   fills?: Array<{
     price: string;
     qty: string;

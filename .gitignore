@@ -41,4 +41,8 @@ next-env.d.ts
 # logs
 logs
 *.log
-*.md
+
+# session notes (allow README.md and documentation)
+*-session-notes.md
+*-diagnostic*.md
+*RESTART-REQUIRED.md
