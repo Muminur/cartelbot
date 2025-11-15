@@ -1670,3 +1670,5 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: OCO Order Insufficient Balance Fix (Nov 14, 2025)
 
 **Fixed Binance -2010 error (77018d0)**: Implemented polling-based settlement verification checking balance INCREASE (current - before >= buyQuantity) instead of absolute balance. Polls every 1s (testnet: 20s max, mainnet: 10s) until balance increases by buy amount. Fixed critical fallback logic bug (was checking absolute balance, now checks increase). Code reviews 7.5/10→9.5/10, expected success 98%+.
+
+**IMPORTANT**: User's dev server running OLD code (pre-fix). Created RESTART-REQUIRED.md with instructions. Fix already deployed to GitHub (commit fad0104), requires dev server restart to load new polling-based verification.
