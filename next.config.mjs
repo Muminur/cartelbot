@@ -8,9 +8,6 @@ const nextConfig = {
     ignoreBuildErrors: false,
   },
   experimental: {
-    turbo: {
-      memoryLimit: 2048,
-    },
     optimizePackageImports: [
       "@radix-ui/react-checkbox",
       "@radix-ui/react-dialog",

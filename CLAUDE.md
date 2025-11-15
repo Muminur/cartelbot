@@ -1695,4 +1695,4 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 ## Session: OCO Order Display Label Fix (Nov 15, 2025)
 
-**Fixed UI mislabeling all OCO orders as "Stop Loss"**: Updated IOrder type to include LIMIT_MAKER/STOP_LOSS_LIMIT, changed trade-executor to store actual Binance types (not generic "OCO"), fixed SignalDetailModal to check order.type instead of stopPrice presence. Now correctly displays "Take Profit #N" for LIMIT_MAKER and "Stop Loss" for STOP_LOSS_LIMIT orders.
+**Fixed UI mislabeling all OCO orders as "Stop Loss"**: Updated IOrder type to include LIMIT_MAKER/STOP_LOSS_LIMIT, changed trade-executor to store actual Binance types (not generic "OCO"), fixed SignalDetailModal to check order.type instead of stopPrice presence. Now correctly displays "Take Profit #N" for LIMIT_MAKER and "Stop Loss" for STOP_LOSS_LIMIT orders. Removed invalid turbo config from next.config.mjs.
