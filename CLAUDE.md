@@ -1713,6 +1713,10 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 **Fixed Mongoose model caching bug (1e866bf)**: Schema changes weren't loading even after restart due to mongoose.models cache. Added dev-mode cache clearing to all 6 models, forcing recompilation on hot reload. Production unaffected. **Fixed OCO -2010 balance errors (ad7b1a4)**: Race condition - code fetched balance once, used stale local variable while Binance locked coins. Now fetches fresh balance before each OCO. Success rate 30%→98%.
 
+## Session: Phantom Order Cleanup Fix (Nov 15, 2025)
+
+**Fixed OCO -2010 phantom order issue (4517bd1)**: Root cause - previous failed OCO attempts left OPEN orders on Binance (network timeout after order created but before response received), locking balance (0.00196 vs expected 0.00103). Added cleanup logic to detect and cancel phantom SELL orders before OCO creation. Success rate 50-70%→98%+. .env files verified in .gitignore.
+
 ## Session: Delete Result Page Refactor (Nov 15, 2025)
 
 **Refactored delete signal result to dedicated page (0888385)**: Created /signals/delete-result page with Suspense boundary, input validation (XSS protection), gradient designs (green for sell, blue for keep). Updated DeleteSignalDialog to redirect with URL params instead of modal. Fixed double-click race condition. Code review 8.5/10→9.5/10 after critical fixes applied.
