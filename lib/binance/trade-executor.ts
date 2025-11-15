@@ -576,11 +576,25 @@ export async function createOCOOrders(
     }
 
     let totalAllocatedQty = 0;
-    let remainingFreeBalance = initialAvailableBalance; // Track balance as orders lock coins
     // CRITICAL: Use actualQuantity (executed qty) not trade.quantity to prevent over-allocation on partial fills
     const ALLOCATION_CAP = actualQuantity; // Maximum we can allocate (100%)
 
     for (let i = 0; i < targets.length; i++) {
+      // CRITICAL FIX: Fetch fresh balance BEFORE each OCO creation
+      // Previous OCO orders lock coins on Binance, reducing available balance
+      console.log(`[OCO] ${trade.symbol} - Fetching fresh balance before OCO ${i}...`);
+      const currentAccountInfo = await client.getAccount();
+      const currentAssetBalance = currentAccountInfo.balances.find(b => b.asset === baseAsset);
+      const currentAvailableBalance = parseFloat(currentAssetBalance?.free || '0');
+      const currentLockedBalance = parseFloat(currentAssetBalance?.locked || '0');
+
+      console.log(
+        `[OCO] ${trade.symbol} - Fresh balance before OCO ${i}:`,
+        `Available=${currentAvailableBalance.toFixed(8)},`,
+        `Locked=${currentLockedBalance.toFixed(8)},`,
+        `Locked by previous OCOs=${(currentLockedBalance - initialLockedBalance).toFixed(8)}`
+      );
+
       const targetPrice = targets[i];
       const percentage = distribution[i]; // Safe - always within bounds (no fallback needed)
       // CRITICAL: Calculate OCO quantity based on ACTUAL executed quantity, not planned quantity
@@ -619,14 +633,14 @@ export async function createOCOOrders(
       }
 
       // Check if we have enough free balance remaining for this OCO
-      // (previous OCO orders may have locked coins)
-      if (adjustedQty > remainingFreeBalance - TRADE_EXECUTION.BALANCE_TOLERANCE) {
+      // (previous OCO orders may have locked coins on Binance)
+      if (adjustedQty > currentAvailableBalance - TRADE_EXECUTION.BALANCE_TOLERANCE) {
         const originalQty = adjustedQty;
-        adjustedQty = remainingFreeBalance;
+        adjustedQty = currentAvailableBalance;
 
         console.warn(
           `[OCO] ${trade.symbol} - Insufficient free balance for target ${i}. ` +
-          `Requested: ${originalQty.toFixed(8)}, Available: ${remainingFreeBalance.toFixed(8)}. ` +
+          `Requested: ${originalQty.toFixed(8)}, Available: ${currentAvailableBalance.toFixed(8)}. ` +
           `Adjusting quantity to use all remaining balance.`
         );
 
@@ -657,7 +671,8 @@ export async function createOCOOrders(
         adjustedPrice: adjustedPrice,
         quantity: qtyForTarget.toFixed(8),
         adjustedQty: adjustedQty.toFixed(8),
-        remainingFreeBalance: remainingFreeBalance.toFixed(8),
+        currentFreeBalance: currentAvailableBalance.toFixed(8),
+        percentage: `${percentage}%`,
         stopLoss: trade.stopLoss,
         adjustedStopPrice: adjustedStopPrice,
         rawStopLimitPrice: rawStopLimitPrice,
@@ -744,11 +759,12 @@ export async function createOCOOrders(
 
         totalAllocatedQty += adjustedQty;
 
-        // Decrement remaining free balance as this order locks coins
-        remainingFreeBalance -= adjustedQty;
+        // Log successful OCO creation
         console.log(
-          `[OCO] ${trade.symbol} - OCO ${i} locked ${adjustedQty.toFixed(8)} ${baseAsset}. ` +
-          `Remaining free balance: ${remainingFreeBalance.toFixed(8)} ${baseAsset}`
+          `[OCO] ${trade.symbol} - OCO ${i} created successfully. ` +
+          `Locked ${adjustedQty.toFixed(8)} ${baseAsset} (${percentage}% of position). ` +
+          `Total allocated so far: ${totalAllocatedQty.toFixed(8)} / ${ALLOCATION_CAP.toFixed(8)} ${baseAsset} ` +
+          `(${(totalAllocatedQty / ALLOCATION_CAP * 100).toFixed(2)}%)`
         );
 
         // Store both OCO orders (take profit LIMIT_MAKER and stop loss STOP_LOSS_LIMIT)
