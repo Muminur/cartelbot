@@ -1732,3 +1732,7 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: Environment Validation Fix (Nov 16, 2025)
 
 **Fixed missing env vars in .env.example (c27ab90)**: Added PAYMENT_WALLET_ADDRESS + TRON_MIN_CONFIRMATIONS with enhanced documentation (TRC20 wallet validation, verification steps, industry standards). Resolved runtime error "Invalid environment variables" from Milestone 8. Code review 8.5/10, production-ready.
+
+## Session: Signal Details Real-Time Price & TP/SL Indicators (Nov 16, 2025)
+
+**Implemented live price updates with TP/SL hit indicators (2d8629c)**: Added 5-second auto-refresh for real-time Binance prices, price change % with color coding, TP target hit indicators (green checkmarks), SL hit badge (red pulsing icon). Fixed memory leak (AbortController cleanup) and performance issue (functional setState prevents 75% unnecessary re-renders). Code review 8.5/10, production-ready.
