@@ -1728,3 +1728,7 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: Delete Result Page Refactor (Nov 15, 2025)
 
 **Refactored delete signal result to dedicated page (0888385)**: Created /signals/delete-result page with Suspense boundary, input validation (XSS protection), gradient designs (green for sell, blue for keep). Updated DeleteSignalDialog to redirect with URL params instead of modal. Fixed double-click race condition. Code review 8.5/10→9.5/10 after critical fixes applied.
+
+## Session: Environment Validation Fix (Nov 16, 2025)
+
+**Fixed missing env vars in .env.example (c27ab90)**: Added PAYMENT_WALLET_ADDRESS + TRON_MIN_CONFIRMATIONS with enhanced documentation (TRC20 wallet validation, verification steps, industry standards). Resolved runtime error "Invalid environment variables" from Milestone 8. Code review 8.5/10, production-ready.
