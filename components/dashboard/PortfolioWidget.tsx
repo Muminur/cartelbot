@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Wallet, Settings, AlertCircle, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
-import { isStablecoin } from "@/lib/binance/helpers";
+import { isStablecoin } from "@/lib/utils/stablecoins";
 import Link from "next/link";
 
 interface PortfolioAsset {
