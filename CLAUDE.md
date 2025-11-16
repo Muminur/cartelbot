@@ -1740,3 +1740,7 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: OCO Distribution Fix - Missing Percentage Targets (Nov 16, 2025)
 
 **Fixed 5-target percentage signals only creating 3 OCO orders**: Modified trade-executor.ts to use ALL targets instead of limiting to first 3. Implemented smart distribution (equal 20% for 5 targets, default 75/15/10 for ≤3 targets). Code review 9.2/10, production-ready.
+
+## Session: Regex State Bug - First Percentage Target Missing (Nov 16, 2025)
+
+**Fixed JavaScript regex global flag state mutation bug**: First percentage (4%) was skipped due to PERCENTAGE_PATTERN.lastIndex not resetting between isPercentageTargets() and extractPercentages() calls. Added lastIndex=0 reset in both functions. All 5 targets now correctly extracted. Production-ready.
