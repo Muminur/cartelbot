@@ -3,16 +3,39 @@ import { env } from "@/lib/config";
 
 let resend: Resend | null = null;
 
+/**
+ * Fix 2: Resend Client Singleton Pattern
+ * Ensures only one Resend instance is created and reused across requests.
+ * Validates API key format before initialization to catch configuration errors early.
+ */
 function getResendClient(): Resend {
-  if (!env.RESEND_API_KEY) {
-    throw new Error("RESEND_API_KEY is not configured");
+  if (!env.RESEND_API_KEY || !env.RESEND_API_KEY.startsWith("re_")) {
+    console.error("RESEND_API_KEY is not configured or invalid in environment variables");
+    throw new Error(
+      "Email service is not properly configured. API key must start with 're_'."
+    );
   }
+
   if (!resend) {
-    resend = new Resend(env.RESEND_API_KEY);
+    try {
+      resend = new Resend(env.RESEND_API_KEY);
+      console.log("[Email] Resend client initialized successfully");
+    } catch (error) {
+      console.error("[Email] Failed to initialize Resend client:", error);
+      throw new Error(
+        "Email service is not properly configured. Please check RESEND_API_KEY is valid."
+      );
+    }
   }
+
   return resend;
 }
 
+/**
+ * Fix 1: Email Retry Logic Race Condition
+ * Captures lastError to ensure we always throw a meaningful error after exhausting retries.
+ * Uses exponential backoff (1s, 2s, 4s) to handle transient email service failures.
+ */
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   maxRetries: number = 3,
@@ -51,12 +74,16 @@ async function retryWithBackoff<T>(
 }
 
 export async function sendMagicLinkEmail(email: string, token: string): Promise<void> {
+  console.log(`Attempting to send magic link email to: ${email}`);
+
   const client = getResendClient();
 
   const magicLink = `${env.NEXT_PUBLIC_API_URL}/verify?token=${token}`;
 
   await retryWithBackoff(async () => {
-    const { error } = await client.emails.send({
+    console.log(`Sending email via Resend API to: ${email}`);
+
+    const { data, error } = await client.emails.send({
       from: "CartelBot <noreply@cartelbot.coinspree.cc>",
       to: email,
       subject: "Your CartelBot Login Link",
@@ -102,8 +129,17 @@ This is an automated email, please do not reply.
     });
 
     if (error) {
-      console.error("Failed to send magic link email:", error);
+      console.error("Resend API error:", {
+        error,
+        email,
+        timestamp: new Date().toISOString(),
+      });
       throw new Error(`Failed to send magic link email: ${error.message || "Unknown error"}`);
     }
+
+    console.log(`Magic link email sent successfully to: ${email}`, {
+      emailId: data?.id,
+      timestamp: new Date().toISOString(),
+    });
   }, 3, 1000);
 }

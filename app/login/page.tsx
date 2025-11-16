@@ -12,6 +12,11 @@ export default function LoginPage() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
 
+  /**
+   * Fix 4: Network Error Categorization
+   * Categorizes errors by type and provides specific guidance to help users resolve issues.
+   * Handles: network failures, JSON parse errors, server errors, and API errors.
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -24,6 +29,19 @@ export default function LoginPage() {
         body: JSON.stringify({ email }),
       });
 
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        console.error("Server returned non-JSON response:", {
+          status: response.status,
+          contentType,
+          url: response.url,
+        });
+        throw new Error(
+          "Server returned an unexpected response format. Please contact support if this persists."
+        );
+      }
+
       const data = await response.json();
 
       if (!response.ok || !data.success) {
@@ -31,8 +49,32 @@ export default function LoginPage() {
       }
 
       setSent(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+    } catch (error) {
+      // Categorize errors and provide specific user guidance
+      let errorMessage = "An unexpected error occurred";
+
+      // Network connectivity issues (DNS, connection refused, timeout)
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        errorMessage = "Unable to connect to server. Please check your internet connection and try again.";
+        console.error("Network error:", error);
+      }
+      // JSON parse errors (server sent invalid JSON)
+      else if (error instanceof SyntaxError) {
+        errorMessage = "Server returned an invalid response. Please refresh the page and try again.";
+        console.error("JSON parse error:", error);
+      }
+      // API errors with specific messages
+      else if (error instanceof Error) {
+        errorMessage = error.message;
+        console.error("API error:", error);
+      }
+      // Unknown error types
+      else {
+        errorMessage = "Something went wrong. Please try again or contact support.";
+        console.error("Unknown error:", error);
+      }
+
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
