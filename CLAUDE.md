@@ -1744,3 +1744,7 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: Regex State Bug - First Percentage Target Missing (Nov 16, 2025)
 
 **Fixed JavaScript regex global flag state mutation bug**: First percentage (4%) was skipped due to PERCENTAGE_PATTERN.lastIndex not resetting between isPercentageTargets() and extractPercentages() calls. Added lastIndex=0 reset in both functions. All 5 targets now correctly extracted. Production-ready.
+
+## Session: Environment Validation Fix - Settings Page (Nov 16, 2025)
+
+**Fixed client-side environment validation error (8cdbfae)**: Created /api/subscription/wallet endpoint to serve PAYMENT_WALLET_ADDRESS. Removed server-side env imports from lib/subscription/constants.ts. Updated SubscriptionSection to fetch wallet address from API. Fixed "Invalid environment variables" error on /settings page.
