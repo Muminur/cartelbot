@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { CheckCircle2, Clock, XCircle, Crown, Zap, Star, Copy, ExternalLink } from "lucide-react";
-import { TIER_CONFIGS, PAYMENT_WALLET_ADDRESS } from "@/lib/subscription";
+import { TIER_CONFIGS } from "@/lib/subscription";
 
 interface SubscriptionStatus {
   currentTier: {
@@ -61,10 +61,24 @@ export function SubscriptionSection() {
   const [txHash, setTxHash] = useState("");
   const [fromAddress, setFromAddress] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string>("");
 
   useEffect(() => {
     fetchSubscriptionData();
+    fetchWalletAddress();
   }, []);
+
+  const fetchWalletAddress = async () => {
+    try {
+      const response = await fetch("/api/subscription/wallet");
+      const data = await response.json();
+      if (data.success) {
+        setWalletAddress(data.data.walletAddress);
+      }
+    } catch (error) {
+      console.error("Error fetching wallet address:", error);
+    }
+  };
 
   const fetchSubscriptionData = async () => {
     try {
@@ -95,7 +109,11 @@ export function SubscriptionSection() {
   };
 
   const handleCopyAddress = () => {
-    navigator.clipboard.writeText(PAYMENT_WALLET_ADDRESS);
+    if (!walletAddress) {
+      toast.error("Wallet address not loaded yet");
+      return;
+    }
+    navigator.clipboard.writeText(walletAddress);
     toast.success("Wallet address copied to clipboard");
   };
 
@@ -329,8 +347,17 @@ export function SubscriptionSection() {
               <div>
                 <Label>Payment Wallet Address (TRC20)</Label>
                 <div className="flex gap-2 mt-1">
-                  <Input value={PAYMENT_WALLET_ADDRESS} readOnly className="font-mono text-sm" />
-                  <Button variant="outline" size="icon" onClick={handleCopyAddress}>
+                  <Input
+                    value={walletAddress || "Loading..."}
+                    readOnly
+                    className="font-mono text-sm"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleCopyAddress}
+                    disabled={!walletAddress}
+                  >
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>

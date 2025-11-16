@@ -1,4 +1,5 @@
-import { env } from "@/lib/config/env";
+// NOTE: Do NOT import env config here - this file is used in client-side components
+// Wallet address and confirmations should be fetched from API endpoints instead
 
 export const SUBSCRIPTION_TIERS = {
   FREE: "free",
@@ -63,10 +64,6 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierConfig> = {
     description: "For professional traders who need unlimited signals and advanced features",
   },
 };
-
-export const PAYMENT_WALLET_ADDRESS = env.PAYMENT_WALLET_ADDRESS;
-
-export const MIN_CONFIRMATIONS = env.TRON_MIN_CONFIRMATIONS;
 
 /**
  * Time to wait before considering a payment expired (in hours)

@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
 import { connectDB } from "@/lib/db/connection";
 import { Subscription } from "@/lib/db/models/Subscription";
-import { TIER_CONFIGS, PAYMENT_WALLET_ADDRESS, calculateSubscriptionEndDate } from "@/lib/subscription";
+import { TIER_CONFIGS, calculateSubscriptionEndDate } from "@/lib/subscription";
+import { env } from "@/lib/config/env";
 
 /**
  * GET /api/subscriptions
@@ -181,7 +182,7 @@ export async function POST(request: NextRequest) {
       data: {
         subscription,
         paymentInfo: {
-          walletAddress: PAYMENT_WALLET_ADDRESS,
+          walletAddress: env.PAYMENT_WALLET_ADDRESS,
           amount: tierConfig.price,
           currency: "USDT",
           network: "TRC20",
