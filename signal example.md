@@ -45,12 +45,32 @@ Targets:
 SL: 2.050
 
 $ROSE Buying Now
-Entry: 0.01670 - 0.01590
+Entry: 0.01977
 Targets:
-0.01725
-0.01794
-0.01832
-0.01902
+0.01988
+0.01994
+0.01995
+0.01996
 SL: 0.01509
 
+$BTC Buying Now
+Entry: 97000
+Targets:
+100005
+100006
+100007
+100008
+SL: 90000
 
+
+Buying $ETH
+First buying: 3212
+Second buying: 3213
+CMP: 3213
+Targets:
+4%
+8%
+12%
+20%
+30%
+Sl: 3200

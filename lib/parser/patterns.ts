@@ -30,6 +30,9 @@ export function extractNumbers(text: string): number[] {
 }
 
 export function extractPercentages(text: string): number[] {
+  // CRITICAL FIX: Reset lastIndex to prevent skipping matches after isPercentageTargets() call
+  // The global /g flag makes PERCENTAGE_PATTERN stateful - .test() modifies lastIndex
+  PERCENTAGE_PATTERN.lastIndex = 0;
   const matches = Array.from(text.matchAll(PERCENTAGE_PATTERN));
   if (!matches.length) return [];
   return matches
@@ -38,5 +41,8 @@ export function extractPercentages(text: string): number[] {
 }
 
 export function isPercentageTargets(text: string): boolean {
+  // CRITICAL FIX: Reset lastIndex before test to ensure consistent behavior
+  // Without this, consecutive calls would produce inconsistent results
+  PERCENTAGE_PATTERN.lastIndex = 0;
   return PERCENTAGE_PATTERN.test(text);
 }
