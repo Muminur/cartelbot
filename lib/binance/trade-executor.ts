@@ -438,10 +438,32 @@ export async function createOCOOrders(
     }
 
     const filters = symbolInfo.filters;
-    const distribution = TRADE_DEFAULTS.TARGET_DISTRIBUTION; // [75, 15, 10]
-    const maxOCOOrders = distribution.length; // Limit to 3 OCO orders
-    const targets = trade.targets.slice(0, maxOCOOrders); // Take only first 3 targets
+    const targets = trade.targets; // Use ALL targets from signal
     const orders: OCOOrderResult[] = [];
+
+    // Calculate distribution percentages for all targets
+    // If user provided percentage-based targets, distribute equally across all
+    // Otherwise use default distribution [75, 15, 10] for first 3 targets
+    const defaultDistribution = TRADE_DEFAULTS.TARGET_DISTRIBUTION; // [75, 15, 10]
+    let distribution: number[];
+
+    if (targets.length <= defaultDistribution.length) {
+      // Use default distribution, but normalize to 100% if fewer targets than distribution
+      const baseDist = defaultDistribution.slice(0, targets.length);
+      const sum = baseDist.reduce((a, b) => a + b, 0);
+
+      if (sum === 100) {
+        // Perfect - already sums to 100%
+        distribution = baseDist;
+      } else {
+        // Normalize to 100% (e.g., [75, 15] becomes [83.33, 16.67])
+        distribution = baseDist.map(pct => (pct / sum) * 100);
+      }
+    } else {
+      // More targets than default distribution - distribute equally
+      const percentagePerTarget = 100 / targets.length;
+      distribution = Array(targets.length).fill(percentagePerTarget);
+    }
 
     // Use baseAsset from symbol info with fallback to string parsing
     const baseAsset = symbolInfo.baseAsset || trade.symbol.replace(/USDT$/, '');
@@ -603,14 +625,11 @@ export async function createOCOOrders(
       );
     }
 
-    // Log warning if signal has more targets than distribution
-    if (trade.targets.length > maxOCOOrders) {
-      console.warn(
-        `Signal has ${trade.targets.length} targets, but only ${maxOCOOrders} will be used ` +
-        `for OCO orders (distribution: ${distribution.join(", ")}%). ` +
-        `Skipping targets: ${trade.targets.slice(maxOCOOrders).join(", ")}`
-      );
-    }
+    // Log distribution strategy being used
+    console.log(
+      `[OCO] ${trade.symbol} - Using ${targets.length} target(s) with distribution: ` +
+      `${distribution.map(d => d.toFixed(2)).join("%, ")}%`
+    );
 
     let totalAllocatedQty = 0;
     // CRITICAL: Use actualQuantity (executed qty) not trade.quantity to prevent over-allocation on partial fills
