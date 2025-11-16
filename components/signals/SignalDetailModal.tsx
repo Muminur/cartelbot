@@ -28,6 +28,7 @@ import {
   Play,
   ListOrdered,
   RefreshCw,
+  CheckCircle2,
 } from "lucide-react";
 
 // Constants for polling configuration
@@ -96,14 +97,108 @@ export default function SignalDetailModal({
   const [pollingAttempts, setPollingAttempts] = useState(0);
   const [pollingFailed, setPollingFailed] = useState(false);
 
+  // Live price state
+  const [livePrice, setLivePrice] = useState<number | null>(null);
+  const [priceLoading, setPriceLoading] = useState(false);
+  const [priceChange, setPriceChange] = useState<number>(0);
+  const [priceError, setPriceError] = useState<string | null>(null);
+
   // Reset polling attempts when modal is closed or signal changes
   useEffect(() => {
     if (!isOpen) {
       setPollingAttempts(0);
       setPollingFailed(false);
       setTrade(null);
+      setLivePrice(null);
+      setPriceChange(0);
+      setPriceError(null);
     }
   }, [isOpen, signal?._id]);
+
+  // Fetch live price on modal open and every 5 seconds
+  useEffect(() => {
+    if (!isOpen || !signal?.symbol) return;
+
+    let isMounted = true;
+    let intervalId: NodeJS.Timeout | null = null;
+    let abortController: AbortController | null = null;
+
+    const fetchLivePrice = async () => {
+      // Cancel previous fetch if still running
+      if (abortController) {
+        abortController.abort();
+      }
+
+      abortController = new AbortController();
+      setPriceLoading(true);
+
+      try {
+        const response = await fetch(
+          `/api/binance/ticker?symbol=${signal.symbol}`,
+          { signal: abortController.signal }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch price: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Only update state if still mounted
+        if (isMounted && data.success && data.data?.price) {
+          const newPrice = parseFloat(data.data.price);
+
+          // Only update if value changed (prevents unnecessary re-renders)
+          setLivePrice(prev => prev !== newPrice ? newPrice : prev);
+
+          // Reset error state on successful fetch
+          setPriceError(null);
+
+          // Calculate price change from creation
+          if (signal.currentMarketPrice) {
+            const newChange =
+              ((newPrice - signal.currentMarketPrice) /
+                signal.currentMarketPrice) *
+              100;
+
+            // Only update if value changed (prevents unnecessary re-renders)
+            setPriceChange(prev => {
+              const roundedNew = parseFloat(newChange.toFixed(2));
+              const roundedPrev = parseFloat(prev.toFixed(2));
+              return roundedNew !== roundedPrev ? newChange : prev;
+            });
+          }
+        }
+      } catch (error) {
+        // Ignore abort errors (expected when component unmounts)
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
+
+        if (isMounted) {
+          console.error("Failed to fetch live price:", error);
+          setPriceError("Unable to fetch live price");
+        }
+      } finally {
+        if (isMounted) {
+          setPriceLoading(false);
+        }
+      }
+    };
+
+    // Initial fetch
+    fetchLivePrice();
+
+    // Set up interval for auto-refresh (every 5 seconds)
+    intervalId = setInterval(fetchLivePrice, 5000);
+
+    // Cleanup
+    return () => {
+      isMounted = false;
+      if (intervalId) clearInterval(intervalId);
+      if (abortController) abortController.abort();
+    };
+  }, [signal?.symbol, signal?.currentMarketPrice, isOpen]);
 
   // Fetch trade data when signal is executing or completed
   useEffect(() => {
@@ -203,6 +298,35 @@ export default function SignalDetailModal({
   const canCancel = signal.status === "pending" || signal.status === "parsed";
   const canExecute = signal.status === "parsed";
 
+  // Helper function to check which targets were filled
+  const getFilledTargets = (): Set<number> => {
+    if (!trade || !trade.sellOrders) return new Set();
+
+    const filled = new Set<number>();
+    trade.sellOrders.forEach((order: IOrder) => {
+      if (order.status === "FILLED" && order.type === "LIMIT_MAKER" && order.price) {
+        // Find which target index this matches
+        signal.targets.forEach((target, index) => {
+          if (Math.abs(order.price! - target) < 0.0001) {
+            // Floating point comparison
+            filled.add(index);
+          }
+        });
+      }
+    });
+
+    return filled;
+  };
+
+  // Helper to check if stop loss was hit
+  const isStopLossHit = (): boolean => {
+    if (!trade || !trade.sellOrders) return false;
+    return trade.sellOrders.some(
+      (order: IOrder) =>
+        order.status === "FILLED" && order.type === "STOP_LOSS_LIMIT"
+    );
+  };
+
   const handleEdit = () => {
     if (onEdit) {
       onEdit(signal);
@@ -258,17 +382,46 @@ export default function SignalDetailModal({
               <p className="text-2xl font-bold">{signal.symbol}</p>
             </div>
 
-            {signal.currentMarketPrice && (
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <DollarSign className="h-4 w-4" />
-                  <span>Current Price</span>
+            {/* Live Price with change indicator */}
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <DollarSign className="h-4 w-4" />
+                <span>Current Price</span>
+                {priceLoading && <Clock className="h-3 w-3 animate-spin" />}
+              </div>
+              {priceError ? (
+                <p className="text-sm text-red-500 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  {priceError}
+                </p>
+              ) : livePrice ? (
+                <div className="space-y-1">
+                  <p className="text-2xl font-bold text-blue-600">
+                    {formatPrice(livePrice)}
+                  </p>
+                  {signal.currentMarketPrice && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-gray-500">
+                        Created at: {formatPrice(signal.currentMarketPrice)}
+                      </span>
+                      <Badge
+                        variant={priceChange >= 0 ? "default" : "destructive"}
+                        className={
+                          priceChange >= 0 ? "bg-green-500" : "bg-red-500"
+                        }
+                      >
+                        {priceChange >= 0 ? "+" : ""}
+                        {priceChange.toFixed(2)}%
+                      </Badge>
+                    </div>
+                  )}
                 </div>
-                <p className="text-2xl font-bold text-blue-600">
+              ) : signal.currentMarketPrice ? (
+                <p className="text-2xl font-bold text-gray-400">
                   {formatPrice(signal.currentMarketPrice)}
                 </p>
-              </div>
-            )}
+              ) : null}
+            </div>
           </div>
 
           <Separator />
@@ -288,16 +441,38 @@ export default function SignalDetailModal({
           </div>
 
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
-              <TrendingUp className="h-4 w-4" />
-              Target Prices
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <TrendingUp className="h-4 w-4" />
+                Target Prices
+              </div>
+              {trade && (
+                <Badge variant="outline" className="text-xs">
+                  {getFilledTargets().size}/{signal.targets.length} Hit
+                </Badge>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
-              {signal.targets.map((target, i) => (
-                <Badge key={i} variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                  Target {i + 1}: {formatPrice(target)}
-                </Badge>
-              ))}
+              {signal.targets.map((target, i) => {
+                const isFilled = getFilledTargets().has(i);
+                return (
+                  <div key={i} className="flex items-center gap-1">
+                    <Badge
+                      variant="outline"
+                      className={
+                        isFilled
+                          ? "bg-green-100 text-green-800 border-green-300"
+                          : "bg-green-50 text-green-700 border-green-200"
+                      }
+                    >
+                      Target {i + 1}: {formatPrice(target)}
+                    </Badge>
+                    {isFilled && (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -306,9 +481,19 @@ export default function SignalDetailModal({
               <AlertTriangle className="h-4 w-4" />
               Stop Loss
             </div>
-            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-              {formatPrice(signal.stopLoss)}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                {formatPrice(signal.stopLoss)}
+              </Badge>
+              {isStopLossHit() && (
+                <>
+                  <Badge variant="destructive" className="bg-red-600">
+                    HIT
+                  </Badge>
+                  <AlertTriangle className="h-5 w-5 text-red-600 animate-pulse" />
+                </>
+              )}
+            </div>
           </div>
 
           <Separator />
