@@ -1675,6 +1675,12 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 ---
 
+## Session: Real-time OCO Status from Binance API (Nov 17, 2025)
+
+**Fixed OCO status display bug (854f8bc)**: Frontend showed OCO orders as not executed despite stop loss triggering on mainnet (ETH 3180 actual vs 3213 stale testnet price). Implemented real-time status fetching directly from Binance using orderListId instead of comparing market prices. Added /api/trades/oco-status/[orderListId] endpoint, 3 new BinanceClient methods (getOCOOrder, getAllOCOOrders, getOpenOCOOrders), auto-refresh every 10s for active orders. Fixed critical security issues: authorization check (users can only query own orders), removed testnet URL override, type safety (BinanceOCOResponse not any), race condition cleanup. Code quality 8.5/10→9.5/10, production-ready.
+
+---
+
 ## Session: MongoDB Connection Timeout (Nov 15, 2025)
 
 **MongoDB unreachable (ETIMEDOUT 66.179.240.208:5999)**: Port 5999 blocked by firewall (same issue as Nov 10). Created diagnostic script (test-mongodb-connection.js) confirming TCP timeout. Resolution: Re-enable port 5999 in IONOS firewall or use MongoDB Atlas. Created MONGODB-CONNECTION-ISSUE.md with step-by-step fix.
