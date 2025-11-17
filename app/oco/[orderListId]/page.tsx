@@ -66,10 +66,21 @@ export default function OCODetailPage() {
           return;
         }
         const data = await res.json();
-        setUser(data.user);
+
+        // Validate session response structure
+        if (!data.success || !data.data?.user) {
+          router.push("/login");
+          return;
+        }
+
+        // FIX: Session API returns { success: true, data: { user: {...} } }
+        setUser(data.data.user);
       } catch (error) {
         console.error("Failed to fetch session:", error);
         router.push("/login");
+      } finally {
+        // Always stop loading, regardless of success or failure
+        setLoading(false);
       }
     };
     checkAuth();

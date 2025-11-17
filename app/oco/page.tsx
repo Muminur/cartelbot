@@ -81,10 +81,21 @@ export default function OCOOrdersPage() {
           return;
         }
         const data = await res.json();
-        setUser(data.user);
+
+        // Validate session response structure
+        if (!data.success || !data.data?.user) {
+          router.push("/login");
+          return;
+        }
+
+        // FIX: Session API returns { success: true, data: { user: {...} } }
+        setUser(data.data.user);
       } catch (error) {
         console.error("Failed to fetch session:", error);
         router.push("/login");
+      } finally {
+        // Always stop loading, regardless of success or failure
+        setLoadingOrders(false);
       }
     };
     checkAuth();
@@ -92,7 +103,11 @@ export default function OCOOrdersPage() {
 
   // Fetch OCO orders (non-blocking - shows orders immediately)
   const fetchOrders = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      // FIX: Ensure loading state is false even when user is not loaded yet
+      setLoadingOrders(false);
+      return;
+    }
 
     setLoadingOrders(true);
     try {
@@ -124,9 +139,10 @@ export default function OCOOrdersPage() {
     }
   }, [user, filters]);
 
-  // Initial fetch when user loads
+  // Initial fetch when user loads - automatically fetch orders
   useEffect(() => {
     if (!user) return;
+    // When user loads, immediately fetch orders (will set loadingOrders = true)
     fetchOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]); // Only run when user changes
@@ -136,7 +152,7 @@ export default function OCOOrdersPage() {
     if (!user) return;
     fetchOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.symbol, filters.status, filters.network, user]); // Run when filters change
+  }, [filters.symbol, filters.status, filters.network]); // Run when filters change (user already in dependency via fetchOrders)
 
   // OPTIMIZED: Refresh prices function using batch API
   // H3: FIX - Added AbortController for race condition prevention
