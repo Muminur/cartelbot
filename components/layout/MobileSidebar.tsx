@@ -4,29 +4,45 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import { NAVIGATION_ITEMS } from "@/lib/constants/navigation";
 
-interface SidebarProps {
-  className?: string;
+interface MobileSidebarProps {
+  onNavigate?: () => void;
 }
 
-export function Sidebar({ className }: SidebarProps) {
+export function MobileSidebar({ onNavigate }: MobileSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
 
+  const handleNavigate = (href: string) => {
+    router.push(href);
+    onNavigate?.(); // Close mobile menu after navigation
+  };
+
   return (
-    <div className={cn("w-64 bg-white border-r min-h-screen", className)}>
+    <div className="h-full bg-white">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center space-x-2">
+          <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center">
+            <span className="text-sm font-bold text-white">CB</span>
+          </div>
+          <span className="text-lg font-bold">Menu</span>
+        </div>
+      </div>
+
+      {/* Navigation items */}
       <nav className="p-4 space-y-1" role="navigation" aria-label="Main navigation">
         {NAVIGATION_ITEMS.map((item) => {
           const isActive = pathname === item.href;
           return (
             <button
               key={item.name}
-              onClick={() => router.push(item.href)}
+              onClick={() => handleNavigate(item.href)}
               aria-current={isActive ? "page" : undefined}
               className={cn(
                 "w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
                 isActive
                   ? "bg-purple-50 text-purple-700"
-                  : "text-gray-700 hover:bg-gray-50"
+                  : "text-gray-700 hover:bg-gray-50 active:bg-gray-100"
               )}
             >
               <item.icon className="w-5 h-5" />
