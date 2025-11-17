@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
 import { connectDB } from "@/lib/db/connection";
 import { User } from "@/lib/db/models/User";
+import { TIER_CONFIGS } from "@/lib/subscription/constants";
 import { z } from "zod";
 
 const updateSettingsSchema = z.object({
   maxPositionSize: z.number().min(10).max(100000).optional(),
   maxDailyLoss: z.number().min(0).max(50000).optional(),
-  maxOpenPositions: z.number().min(1).max(50).optional(),
+  maxOpenPositions: z.number().min(1).max(200).optional(),
   requireApproval: z.boolean().optional(),
   emergencyStop: z.boolean().optional(),
   useTestnet: z.boolean().optional(),
@@ -74,6 +75,30 @@ export async function POST(request: NextRequest) {
     }
 
     await connectDB();
+
+    // Fetch user document to check subscription tier
+    const userDoc = await User.findOne({ email: user.email });
+    if (!userDoc) {
+      return NextResponse.json(
+        { success: false, error: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    // Validate maxOpenPositions against subscription tier limit
+    if (validation.data.maxOpenPositions !== undefined) {
+      const subscriptionTier = userDoc.subscriptionTier as keyof typeof TIER_CONFIGS;
+      const tierConfig = TIER_CONFIGS[subscriptionTier];
+      if (validation.data.maxOpenPositions > tierConfig.features.maxOpenPositions) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Max open positions cannot exceed ${tierConfig.features.maxOpenPositions} for ${tierConfig.displayName} tier. Please upgrade to increase limits.`,
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     const updatedUser = await User.findOneAndUpdate(
       { email: user.email },

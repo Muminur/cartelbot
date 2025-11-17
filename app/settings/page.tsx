@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { SubscriptionSection } from "@/components/settings/SubscriptionSection";
 import { Loader2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { TIER_CONFIGS, type SubscriptionTier } from "@/lib/subscription/constants";
 
 interface TestConnectionResult {
   connected: boolean;
@@ -65,6 +66,12 @@ export default function SettingsPage() {
   const [dailySummary, setDailySummary] = useState(false);
   const [emailFrequency, setEmailFrequency] = useState<"instant" | "hourly" | "daily">("instant");
   const [savingNotifications, setSavingNotifications] = useState(false);
+
+  // Get tier configuration for current user (with fallback to free tier)
+  const tierConfig = user
+    ? TIER_CONFIGS[user.subscriptionTier as SubscriptionTier] || TIER_CONFIGS.free
+    : TIER_CONFIGS.free;
+  const maxOpenPositionsLimit = tierConfig.features.maxOpenPositions;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -217,6 +224,14 @@ export default function SettingsPage() {
   };
 
   const handleSaveTradeSettings = async () => {
+    // Client-side validation before API call
+    if (maxOpenPositions > maxOpenPositionsLimit) {
+      toast.error(
+        `Max open positions cannot exceed ${maxOpenPositionsLimit} for ${tierConfig.displayName} tier. Please upgrade to increase limits.`
+      );
+      return;
+    }
+
     setSavingTradeSettings(true);
 
     try {
@@ -238,7 +253,9 @@ export default function SettingsPage() {
       if (data.success) {
         toast.success("Trade settings saved successfully");
       } else {
-        toast.error(data.error?.message || "Failed to save trade settings");
+        // Display the specific error message from the API
+        const errorMsg = data.error || "Failed to save trade settings";
+        toast.error(errorMsg);
       }
     } catch (error) {
       console.error("Error saving trade settings:", error);
@@ -586,15 +603,24 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-base md:text-sm" htmlFor="maxOpenPositions">Max Open Positions</Label>
+                <Label className="text-base md:text-sm" htmlFor="maxOpenPositions">
+                  Max Open Positions
+                  <span className="text-xs text-gray-500 ml-2">
+                    (Limit: {maxOpenPositionsLimit} for {tierConfig.displayName} tier)
+                  </span>
+                </Label>
                 <Input
                   id="maxOpenPositions"
                   type="number"
                   value={maxOpenPositions}
                   onChange={(e) => setMaxOpenPositions(parseInt(e.target.value))}
                   min="1"
-                  max="50"
+                  max={maxOpenPositionsLimit}
                 />
+                <p className="text-xs text-gray-500">
+                  Your {tierConfig.displayName} tier allows up to {maxOpenPositionsLimit} open positions.
+                  {maxOpenPositionsLimit < 200 && " Upgrade to Pro for up to 200 positions."}
+                </p>
               </div>
 
               <div className="space-y-4">
