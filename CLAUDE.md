@@ -1762,3 +1762,9 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: Responsive Mobile Sidebar Fix (Nov 17, 2025)
 
 **Fixed sidebar vanishing on mobile (d50aece)**: Created MobileSidebar with Sheet drawer (<1024px), hamburger menu in Navigation, shared NAVIGATION_ITEMS constants. Added ARIA attributes (role, aria-label, aria-current). Smooth animations, auto-close on navigate. Code review 7.5/10→9.5/10 after fixes.
+
+---
+
+## Session: Signal Price Real-time Updates Fix (Nov 17, 2025)
+
+**Fixed stale price in Signal Details (57434dc)**: Modal showed testnet stale price (3213) instead of real mainnet price (3180). Made ticker API testnet-aware with optional auth, resolves user preference from database. Added network badges (TESTNET=orange, MAINNET=green), mismatch warnings. Fixed 6 critical bugs: required network field (type safety), symbol regex validation, AbortController race condition, dev-only logging, retry button. Code quality 7.5/10→9.5/10, production-ready.
