@@ -158,14 +158,14 @@ export function TradeHistoryTable({ trades, onTradeUpdated }: TradeHistoryTableP
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
+              <Button variant="ghost" className="h-12 w-12 md:h-8 md:w-8 p-0">
                 <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
+                <MoreHorizontal className="h-5 w-5 md:h-4 md:w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => handleViewDetails(String(row.original._id))}>
-                <Eye className="mr-2 h-4 w-4" />
+                <Eye className="mr-3 md:mr-2 h-5 w-5 md:h-4 md:w-4" />
                 View Details
               </DropdownMenuItem>
             </DropdownMenuContent>

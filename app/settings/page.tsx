@@ -288,16 +288,16 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
+                <Label className="text-base md:text-sm" htmlFor="email">Email Address</Label>
                 <Input id="email" type="email" value={user.email} disabled />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="subscription">Subscription Tier</Label>
+                <Label className="text-base md:text-sm" htmlFor="subscription">Subscription Tier</Label>
                 <Input id="subscription" value={user.subscriptionTier.toUpperCase()} disabled />
               </div>
               {user.subscriptionExpiry && (
                 <div className="space-y-2">
-                  <Label htmlFor="expiry">Subscription Expiry</Label>
+                  <Label className="text-base md:text-sm" htmlFor="expiry">Subscription Expiry</Label>
                   <Input
                     id="expiry"
                     value={new Date(user.subscriptionExpiry).toLocaleDateString()}
@@ -335,7 +335,7 @@ export default function SettingsPage() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="apiKey">API Key</Label>
+                <Label className="text-base md:text-sm" htmlFor="apiKey">API Key</Label>
                 <Input
                   id="apiKey"
                   type="password"
@@ -346,7 +346,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="apiSecret">API Secret</Label>
+                <Label className="text-base md:text-sm" htmlFor="apiSecret">API Secret</Label>
                 <Input
                   id="apiSecret"
                   type="password"
@@ -360,7 +360,7 @@ export default function SettingsPage() {
                 <Button
                   onClick={handleSaveApiKeys}
                   disabled={savingApiKeys || (!apiKey && !apiSecret)}
-                  className="flex-1"
+                  className="flex-1 h-12 md:h-10 text-base md:text-sm"
                 >
                   {savingApiKeys ? (
                     <>
@@ -446,7 +446,7 @@ export default function SettingsPage() {
                     variant="outline"
                     size="sm"
                     onClick={handleTestConnection}
-                    className="w-full"
+                    className="w-full h-12 md:h-10 text-base md:text-sm"
                   >
                     Retry Connection
                   </Button>
@@ -455,8 +455,8 @@ export default function SettingsPage() {
 
               {/* Testnet/Mainnet Toggle */}
               <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-md">
-                <div className="flex-1">
-                  <Label htmlFor="useTestnet" className="text-base font-medium text-blue-900">
+                <div >
+                  <Label htmlFor="useTestnet" className="text-base md:text-sm font-medium text-blue-900">
                     Use Binance Testnet
                   </Label>
                   <p className="text-sm text-blue-700 mt-1">
@@ -489,7 +489,7 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="investmentAmount">Default Investment Amount (USDT)</Label>
+                <Label className="text-base md:text-sm" htmlFor="investmentAmount">Default Investment Amount (USDT)</Label>
                 <Input
                   id="investmentAmount"
                   type="number"
@@ -504,7 +504,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Target Distribution (%)</Label>
+                <Label className="text-base md:text-sm">Target Distribution (%)</Label>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <Input
@@ -562,7 +562,7 @@ export default function SettingsPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="maxPositionSize">Max Position Size (USDT)</Label>
+                  <Label className="text-base md:text-sm" htmlFor="maxPositionSize">Max Position Size (USDT)</Label>
                   <Input
                     id="maxPositionSize"
                     type="number"
@@ -573,7 +573,7 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="maxDailyLoss">Max Daily Loss (USDT)</Label>
+                  <Label className="text-base md:text-sm" htmlFor="maxDailyLoss">Max Daily Loss (USDT)</Label>
                   <Input
                     id="maxDailyLoss"
                     type="number"
@@ -586,7 +586,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="maxOpenPositions">Max Open Positions</Label>
+                <Label className="text-base md:text-sm" htmlFor="maxOpenPositions">Max Open Positions</Label>
                 <Input
                   id="maxOpenPositions"
                   type="number"
@@ -600,7 +600,7 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>Require Manual Approval</Label>
+                    <Label className="text-base md:text-sm">Require Manual Approval</Label>
                     <p className="text-xs text-gray-500">
                       Review trades before execution
                     </p>
@@ -610,7 +610,7 @@ export default function SettingsPage() {
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>Emergency Stop</Label>
+                    <Label className="text-base md:text-sm">Emergency Stop</Label>
                     <p className="text-xs text-gray-500">
                       Disable all automated trading
                     </p>
@@ -628,7 +628,7 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              <Button onClick={handleSaveTradeSettings} disabled={savingTradeSettings} className="w-full">
+              <Button onClick={handleSaveTradeSettings} disabled={savingTradeSettings} className="w-full h-12 md:h-10 text-base md:text-sm">
                 {savingTradeSettings ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -654,7 +654,7 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>Trade Executed</Label>
+                    <Label className="text-base md:text-sm">Trade Executed</Label>
                     <p className="text-xs text-gray-500">
                       Notify when a new trade is executed
                     </p>
@@ -664,7 +664,7 @@ export default function SettingsPage() {
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>Target Hit</Label>
+                    <Label className="text-base md:text-sm">Target Hit</Label>
                     <p className="text-xs text-gray-500">
                       Notify when a take-profit target is reached
                     </p>
@@ -674,7 +674,7 @@ export default function SettingsPage() {
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>Stop Loss Hit</Label>
+                    <Label className="text-base md:text-sm">Stop Loss Hit</Label>
                     <p className="text-xs text-gray-500">
                       Notify when a stop loss is triggered
                     </p>
@@ -684,7 +684,7 @@ export default function SettingsPage() {
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label>Daily Summary</Label>
+                    <Label className="text-base md:text-sm">Daily Summary</Label>
                     <p className="text-xs text-gray-500">
                       Receive a daily summary of all trades
                     </p>

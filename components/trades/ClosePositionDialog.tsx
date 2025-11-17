@@ -188,7 +188,7 @@ export function ClosePositionDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleCancel} disabled={loading}>
+          <Button variant="outline" onClick={handleCancel} disabled={loading} className="h-12 md:h-10 text-base md:text-sm">
             Cancel
           </Button>
           <Button

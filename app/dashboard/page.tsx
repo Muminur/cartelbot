@@ -100,7 +100,7 @@ export default function DashboardPage() {
                 Live
               </div>
             )}
-            <Button onClick={() => router.push("/signals")}>
+            <Button onClick={() => router.push("/signals")} className="h-12 md:h-10 text-base md:text-sm">
               Submit Signal
             </Button>
           </div>

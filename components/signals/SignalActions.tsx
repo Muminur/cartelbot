@@ -39,20 +39,27 @@ export default function SignalActions({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+        {/* Touch-friendly button: 48x48px minimum on mobile */}
+        <Button variant="ghost" size="icon" className="h-12 w-12 md:h-8 md:w-8 p-0">
           <span className="sr-only">Open menu</span>
-          <MoreVertical className="h-4 w-4" />
+          <MoreVertical className="h-5 w-5 md:h-4 md:w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem onClick={() => onViewDetails(signal)}>
-          <Eye className="mr-2 h-4 w-4" />
+      <DropdownMenuContent align="end" className="w-56 md:w-48">
+        <DropdownMenuItem 
+          onClick={() => onViewDetails(signal)}
+          className="py-3 md:py-2 text-base md:text-sm"
+        >
+          <Eye className="mr-3 md:mr-2 h-5 w-5 md:h-4 md:w-4" />
           <span>View Details</span>
         </DropdownMenuItem>
 
         {canEdit && onEdit && (
-          <DropdownMenuItem onClick={() => onEdit(signal)}>
-            <Edit className="mr-2 h-4 w-4" />
+          <DropdownMenuItem 
+            onClick={() => onEdit(signal)}
+            className="py-3 md:py-2 text-base md:text-sm"
+          >
+            <Edit className="mr-3 md:mr-2 h-5 w-5 md:h-4 md:w-4" />
             <span>Edit Signal</span>
           </DropdownMenuItem>
         )}
@@ -60,8 +67,11 @@ export default function SignalActions({
         {canExecute && onExecute && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => onExecute(signal)}>
-              <Play className="mr-2 h-4 w-4" />
+            <DropdownMenuItem 
+              onClick={() => onExecute(signal)}
+              className="py-3 md:py-2 text-base md:text-sm"
+            >
+              <Play className="mr-3 md:mr-2 h-5 w-5 md:h-4 md:w-4" />
               <span>Execute Trade</span>
             </DropdownMenuItem>
           </>
@@ -72,9 +82,9 @@ export default function SignalActions({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => onCancel(signal)}
-              className="text-red-600 focus:text-red-600"
+              className="text-red-600 focus:text-red-600 py-3 md:py-2 text-base md:text-sm"
             >
-              <XCircle className="mr-2 h-4 w-4" />
+              <XCircle className="mr-3 md:mr-2 h-5 w-5 md:h-4 md:w-4" />
               <span>Cancel Signal</span>
             </DropdownMenuItem>
           </>
@@ -85,9 +95,9 @@ export default function SignalActions({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => onCleanupPhantomOrders(signal)}
-              className="text-yellow-600 focus:text-yellow-600"
+              className="text-yellow-600 focus:text-yellow-600 py-3 md:py-2 text-base md:text-sm"
             >
-              <Eraser className="mr-2 h-4 w-4" />
+              <Eraser className="mr-3 md:mr-2 h-5 w-5 md:h-4 md:w-4" />
               <span>Cleanup Phantom Orders</span>
             </DropdownMenuItem>
           </>
@@ -98,9 +108,9 @@ export default function SignalActions({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => onDelete(signal)}
-              className="text-red-600 focus:text-red-600"
+              className="text-red-600 focus:text-red-600 py-3 md:py-2 text-base md:text-sm"
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="mr-3 md:mr-2 h-5 w-5 md:h-4 md:w-4" />
               <span>Delete Signal</span>
             </DropdownMenuItem>
           </>

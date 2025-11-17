@@ -264,7 +264,7 @@ export default function SignalsPage() {
               <h1 className="text-3xl font-bold text-gray-900">Submit Trading Signal</h1>
               <p className="text-gray-600 mt-2">Parse and submit signals from text or images</p>
             </div>
-            <Button variant="outline" onClick={() => router.push("/signals/history")}>
+            <Button variant="outline" onClick={() => router.push("/signals/history")} className="h-12 md:h-10 text-base md:text-sm">
               <History className="mr-2 h-4 w-4" />
               History
             </Button>
@@ -341,7 +341,7 @@ export default function SignalsPage() {
                 >
                   {submitting ? "Parsing..." : "Parse & Review"}
                 </Button>
-                <Button onClick={handleClear} variant="outline">
+                <Button onClick={handleClear} variant="outline" className="h-12 md:h-10 text-base md:text-sm">
                   Clear
                 </Button>
               </div>
