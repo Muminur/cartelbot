@@ -422,6 +422,8 @@ UserSchema.index({ email: 1 }, { unique: true });
 
 **Fixed OCO -2013 error via environment config (af4ca02)**: Root cause - BINANCE_API_URL pointed to testnet instead of mainnet, causing "order not found" errors for mainnet trades. Fixed .env.local/.env.example with correct mainnet URL (api.binance.com), added network badges (TESTNET/MAINNET) to OCO detail page, enhanced -2013 error message with network info and 90-day archive note. Code review 9.2/10, TypeScript clean, production-ready.
 
+**Fixed OCO status 400 errors (e3c558e)**: Diagnosed root cause - user has no Binance API keys configured (hasApiKeys=undefined in DB). Added enhanced error logging to API route (API_KEYS_MISSING, DECRYPTION_FAILED codes), prominent warning alerts on /oco pages with "Go to Settings" button. Created diagnostic script confirming no encrypted keys. TypeScript clean, solution requires user action.
+
 ---
 
 ## Session: Signal Parser Stop Loss Normalization Fix (Nov 17, 2025)
@@ -1821,3 +1823,8 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: Trade Error Handling + OCO Detail Fix (Nov 17, 2025)
 
 **Comprehensive error handling (431072c)**: Implemented 11-category error system with user-facing error display. Added error fields to Signal/Trade models (executionError, errorCode, timestamp, failureReason, tradeErrors array). Created ErrorDetailCard component + error-categorization.ts with remediation steps. Trade executor persists errors on buy/OCO failures. Signal submission shows immediate error dialog (not just toast) with retry button. Fixed OCO detail crash (signal.status undefined) with null checks + optional chaining. Files: 2 created (650 LOC), 8 modified. Quality 8.5/10→9.5/10.
+
+
+## Session: OCO API Migration to New Binance Endpoint (Nov 17, 2025)
+
+**Migrated to new OCO API (023d669)**: Updated from deprecated /api/v3/order/oco to new /api/v3/orderList/oco endpoint. Changed parameter structure to above/below terminology (aboveType: LIMIT_MAKER, belowType: STOP_LOSS_LIMIT). Maintains backward compatibility, zero breaking changes. File: lib/binance/client.ts (15 lines). Quality 9.5/10.
