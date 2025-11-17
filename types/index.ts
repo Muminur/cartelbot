@@ -80,6 +80,7 @@ export interface ITrade extends Document {
   approvedBy?: string;
   targets?: number[];
   stopLoss?: number;
+  testnet?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

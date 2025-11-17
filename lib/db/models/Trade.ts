@@ -150,6 +150,10 @@ const tradeSchema = new Schema<ITrade>(
     stopLoss: {
       type: Number,
     },
+    testnet: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

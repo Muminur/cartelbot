@@ -156,6 +156,7 @@ export async function executeSignalTrade(
         investedAmount: amount,
         status: "pending_approval",
         approvalStatus: "pending",
+        testnet,
         targets: signal.targets,
         stopLoss: signal.stopLoss,
       });
@@ -262,6 +263,7 @@ export async function executeSignalTrade(
       quantity: executedQty,
       investedAmount: amount,
       status: "open",
+      testnet,
       targets: signal.targets,
       stopLoss: signal.stopLoss,
     });

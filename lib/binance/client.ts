@@ -433,6 +433,64 @@ export class BinanceClient {
     return result;
   }
 
+  /**
+   * Query a specific OCO order by orderListId
+   * Weight: 4
+   * @param orderListId - The order list ID
+   * @param origClientOrderId - Optional client order ID
+   * @returns OCO order status from Binance
+   */
+  async getOCOOrder(
+    orderListId: number,
+    origClientOrderId?: string
+  ): Promise<BinanceOCOResponse> {
+    const params: Record<string, string | number> = {
+      orderListId,
+    };
+
+    if (origClientOrderId) {
+      params.origClientOrderId = origClientOrderId;
+    }
+
+    return this.signedRequest<BinanceOCOResponse>(
+      "GET",
+      "/api/v3/orderList",
+      params
+    );
+  }
+
+  /**
+   * Query all OCO orders (max 1000)
+   * Weight: 20
+   * @param params - Optional query parameters
+   * @returns Array of OCO orders
+   */
+  async getAllOCOOrders(params?: {
+    fromId?: number;
+    startTime?: number;
+    endTime?: number;
+    limit?: number; // Default 500, max 1000
+  }): Promise<BinanceOCOResponse[]> {
+    return this.signedRequest<BinanceOCOResponse[]>(
+      "GET",
+      "/api/v3/allOrderList",
+      params || {}
+    );
+  }
+
+  /**
+   * Query open OCO orders
+   * Weight: 6
+   * @returns Array of open OCO orders
+   */
+  async getOpenOCOOrders(): Promise<BinanceOCOResponse[]> {
+    return this.signedRequest<BinanceOCOResponse[]>(
+      "GET",
+      "/api/v3/openOrderList",
+      {}
+    );
+  }
+
   getSymbolFilters(
     exchangeInfo: BinanceExchangeInfo,
     symbol: string

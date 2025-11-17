@@ -1,0 +1,186 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getUserFromRequest } from "@/lib/auth";
+import { BinanceClient } from "@/lib/binance";
+import { decrypt } from "@/lib/encryption";
+import { connectDB } from "@/lib/db/connection";
+import { User } from "@/lib/db/models/User";
+import { Trade } from "@/lib/db/models/Trade";
+import { BinanceAPIError } from "@/lib/utils/errors";
+
+/**
+ * GET /api/trades/oco-status/[orderListId]
+ *
+ * Fetch real-time OCO order status directly from Binance API
+ *
+ * Query params:
+ * - testnet: "true" | "false" (optional, defaults to user preference)
+ *
+ * Returns:
+ * - Binance OCO order status with listStatusType, listOrderStatus, and individual order details
+ * - Shows actual execution status (FILLED/CANCELED/NEW) from Binance, not computed from prices
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ orderListId: string }> }
+) {
+  // Await params (Next.js 16 requirement)
+  const { orderListId: orderListIdParam } = await params;
+
+  try {
+
+    // 1. Authenticate user
+    const authResult = await getUserFromRequest(request);
+    if (!authResult.user) {
+      return NextResponse.json(
+        { success: false, error: { message: "Unauthorized" } },
+        { status: 401 }
+      );
+    }
+
+    // 2. Get user's API keys from database
+    await connectDB();
+
+    const dbUser = await User.findById(authResult.user._id).select(
+      "+binance.apiKey +binance.apiSecret +binance.useTestnet"
+    );
+
+    if (!dbUser?.binance?.apiKey || !dbUser?.binance?.apiSecret) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message: "Binance API keys not configured. Please add them in Settings.",
+            code: "API_KEYS_MISSING",
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    // 3. Decrypt API keys
+    const apiKey = decrypt(dbUser.binance.apiKey);
+    const apiSecret = decrypt(dbUser.binance.apiSecret);
+
+    // 4. Validate orderListId parameter
+    const orderListId = parseInt(orderListIdParam);
+
+    if (
+      isNaN(orderListId) ||
+      orderListId <= 0 ||
+      orderListId > Number.MAX_SAFE_INTEGER
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message: "Invalid orderListId. Must be a positive integer.",
+            code: "INVALID_PARAMETER",
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    // 5. Verify user owns this OCO order (SECURITY: Authorization check)
+    const trade = await Trade.findOne({
+      userId: String(authResult.user._id),
+      'sellOrders.orderListId': orderListId
+    });
+
+    if (!trade) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message: "OCO order not found or unauthorized",
+            code: "UNAUTHORIZED",
+          },
+        },
+        { status: 404 }
+      );
+    }
+
+    // 6. Use trade's stored testnet preference (SECURITY: No URL override)
+    const useTestnet = trade.testnet || false;
+
+    // 7. Initialize Binance client with correct network
+    const binanceClient = new BinanceClient({
+      apiKey,
+      apiSecret,
+      testnet: useTestnet,
+    });
+
+    // 8. Fetch OCO order status directly from Binance
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `[OCO Status API] Fetching status for orderListId ${orderListId} from ${useTestnet ? "testnet" : "mainnet"}`,
+        {
+          userId: authResult.user._id,
+          testnet: useTestnet,
+        }
+      );
+    }
+
+    const ocoStatus = await binanceClient.getOCOOrder(orderListId);
+
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `[OCO Status API] Success - listStatusType: ${ocoStatus.listStatusType}, listOrderStatus: ${ocoStatus.listOrderStatus}`
+      );
+    }
+
+    // 8. Return real-time status from Binance
+    return NextResponse.json({
+      success: true,
+      data: ocoStatus,
+    });
+  } catch (error: unknown) {
+    console.error("[OCO Status API] Error fetching OCO status:", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      orderListId: orderListIdParam,
+    });
+
+    // Handle Binance API errors specifically
+    if (error instanceof BinanceAPIError) {
+      if (error.binanceCode === -1013) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              message: "Invalid symbol or order parameters",
+              code: "INVALID_SYMBOL",
+              binanceCode: -1013,
+            },
+          },
+          { status: 400 }
+        );
+      }
+
+      if (error.binanceCode === -2013) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              message: "OCO order not found on Binance",
+              code: "ORDER_NOT_FOUND",
+              binanceCode: -2013,
+            },
+          },
+          { status: 404 }
+        );
+      }
+    }
+
+    // Generic error
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          message: error instanceof Error ? error.message : "Failed to fetch OCO status",
+          code: "FETCH_ERROR",
+        },
+      },
+      { status: 500 }
+    );
+  }
+}

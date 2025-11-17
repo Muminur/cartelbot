@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ISignal, ITrade, IOrder } from "@/types";
+import { ISignal, ITrade, IOrder, BinanceOCOResponse } from "@/types";
 import { formatDate, formatPrice } from "@/lib/utils/format";
 import {
   Clock,
@@ -103,6 +103,10 @@ export default function SignalDetailModal({
   const [priceChange, setPriceChange] = useState<number>(0);
   const [priceError, setPriceError] = useState<string | null>(null);
 
+  // OCO status state - stores real-time status from Binance API
+  const [ocoStatuses, setOcoStatuses] = useState<Map<number, BinanceOCOResponse>>(new Map());
+  const [fetchingOcoStatus, setFetchingOcoStatus] = useState(false);
+
   // Reset polling attempts when modal is closed or signal changes
   useEffect(() => {
     if (!isOpen) {
@@ -112,6 +116,8 @@ export default function SignalDetailModal({
       setLivePrice(null);
       setPriceChange(0);
       setPriceError(null);
+      setOcoStatuses(new Map());
+      setFetchingOcoStatus(false);
     }
   }, [isOpen, signal?._id]);
 
@@ -291,6 +297,82 @@ export default function SignalDetailModal({
     //         Having it in dependencies causes the effect to re-run when setLoadingTrade(true) is called,
     //         but the guard check (line 120) prevents execution, leaving loadingTrade stuck at true
   }, [signal?._id, isOpen, pollingAttempts]);
+
+  // Fetch real-time OCO status from Binance API (NOT computed from market prices)
+  const fetchOCOStatuses = useCallback(async () => {
+    if (!trade || !trade.sellOrders || trade.sellOrders.length === 0) return;
+
+    // Extract unique orderListIds from sell orders
+    const orderListIds = new Set(
+      trade.sellOrders
+        .map((order: IOrder) => order.orderListId)
+        .filter((id): id is number => id !== undefined)
+    );
+
+    if (orderListIds.size === 0) return;
+
+    setFetchingOcoStatus(true);
+
+    try {
+      const statusPromises = Array.from(orderListIds).map(async (orderListId) => {
+        try {
+          const response = await fetch(
+            `/api/trades/oco-status/${orderListId}?testnet=${trade.testnet || false}`
+          );
+          const data = await response.json();
+
+          if (data.success) {
+            return [orderListId, data.data] as const;
+          }
+          return null;
+        } catch (error) {
+          console.error(`Failed to fetch OCO status for ${orderListId}:`, error);
+          return null;
+        }
+      });
+
+      const results = await Promise.all(statusPromises);
+      const newStatuses = new Map(
+        results.filter((r): r is [number, BinanceOCOResponse] => r !== null)
+      );
+
+      setOcoStatuses(newStatuses);
+    } catch (error) {
+      console.error("Error fetching OCO statuses:", error);
+    } finally {
+      setFetchingOcoStatus(false);
+    }
+  }, [trade]);
+
+  // Fetch OCO statuses from Binance API when trade data loads
+  useEffect(() => {
+    if (!trade || !trade.sellOrders || trade.sellOrders.length === 0) return;
+
+    let isMounted = true;
+    let interval: NodeJS.Timeout | null = null;
+
+    const safeFetch = async () => {
+      if (!isMounted) return;
+      await fetchOCOStatuses();
+    };
+
+    // Initial fetch
+    safeFetch();
+
+    // Auto-refresh for open trades with active orders
+    const hasActiveOrders = trade.sellOrders.some(
+      (order: IOrder) => order.status === "NEW" || order.status === "PARTIALLY_FILLED"
+    );
+
+    if (trade.status === "open" && hasActiveOrders) {
+      interval = setInterval(safeFetch, 10000);
+    }
+
+    return () => {
+      isMounted = false;
+      if (interval) clearInterval(interval);
+    };
+  }, [trade?.status, trade?.sellOrders?.length, fetchOCOStatuses]);
 
   if (!signal) return null;
 
@@ -607,64 +689,109 @@ export default function SignalDetailModal({
                       </div>
                     ) : trade.sellOrders && trade.sellOrders.length > 0 ? (
                       <div className="space-y-2">
-                        <div className="text-xs font-semibold text-gray-700">OCO SELL ORDERS (Take Profit & Stop Loss)</div>
-                        {trade.sellOrders.map((order: IOrder, index: number) => (
-                          <div key={order.orderId} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs font-semibold text-gray-700">
-                                {order.type === 'STOP_LOSS_LIMIT' ? 'Stop Loss' : `Take Profit #${Math.floor(index / 2) + 1}`}
-                              </span>
-                              <Badge
-                                variant={
-                                  order.status === "FILLED" ? "default" :
-                                  order.status === "CANCELED" ? "outline" :
-                                  "secondary"
-                                }
-                                className={
-                                  order.status === "FILLED" ? "bg-green-500" :
-                                  order.status === "CANCELED" ? "bg-gray-400" :
-                                  "bg-yellow-500"
-                                }
-                              >
-                                {order.status}
-                              </Badge>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              <div>
-                                <span className="text-gray-600">Order ID:</span>
-                                <span className="ml-2 font-mono">{order.orderId}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-600">Quantity:</span>
-                                <span className="ml-2">{order.quantity.toFixed(6)}</span>
-                              </div>
-                              {order.price && (
-                                <div>
-                                  <span className="text-gray-600">Target Price:</span>
-                                  <span className="ml-2 font-medium text-green-700">${formatPrice(order.price)}</span>
-                                </div>
-                              )}
-                              {order.stopPrice && (
-                                <div>
-                                  <span className="text-gray-600">Stop Price:</span>
-                                  <span className="ml-2 font-medium text-red-700">${formatPrice(order.stopPrice)}</span>
-                                </div>
-                              )}
-                              {order.executedQty > 0 && (
-                                <div>
-                                  <span className="text-gray-600">Executed:</span>
-                                  <span className="ml-2">{order.executedQty.toFixed(6)}</span>
-                                </div>
-                              )}
-                              {order.cummulativeQuoteQty > 0 && (
-                                <div>
-                                  <span className="text-gray-600">Filled Value:</span>
-                                  <span className="ml-2 font-medium">${order.cummulativeQuoteQty.toFixed(2)}</span>
-                                </div>
-                              )}
-                            </div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs font-semibold text-gray-700">
+                            OCO SELL ORDERS (Take Profit & Stop Loss)
                           </div>
-                        ))}
+                          {fetchingOcoStatus && (
+                            <RefreshCw className="h-3 w-3 animate-spin text-blue-500" />
+                          )}
+                        </div>
+                        {trade.sellOrders.map((order: IOrder, index: number) => {
+                          // Get real status from Binance if available
+                          const ocoStatus = order.orderListId ? ocoStatuses.get(order.orderListId) : null;
+                          const realOrderStatus = ocoStatus?.orderReports?.find(
+                            (report: any) => report.orderId === order.orderId
+                          );
+
+                          // Use real status from Binance, fallback to database status
+                          const displayStatus = realOrderStatus?.status || order.status;
+                          const executedQty = realOrderStatus?.executedQty
+                            ? parseFloat(realOrderStatus.executedQty)
+                            : order.executedQty;
+                          const cummulativeQuoteQty = realOrderStatus?.cummulativeQuoteQty
+                            ? parseFloat(realOrderStatus.cummulativeQuoteQty)
+                            : order.cummulativeQuoteQty;
+
+                          return (
+                            <div key={order.orderId} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-semibold text-gray-700">
+                                  {order.type === 'STOP_LOSS_LIMIT' ? 'Stop Loss' : `Take Profit #${Math.floor(index / 2) + 1}`}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  {trade.testnet && (
+                                    <Badge variant="outline" className="text-xs bg-orange-100 border-orange-300">
+                                      TESTNET
+                                    </Badge>
+                                  )}
+                                  <Badge
+                                    variant={
+                                      displayStatus === "FILLED" ? "default" :
+                                      displayStatus === "CANCELED" ? "outline" :
+                                      displayStatus === "PARTIALLY_FILLED" ? "secondary" :
+                                      "secondary"
+                                    }
+                                    className={
+                                      displayStatus === "FILLED" ? "bg-green-500" :
+                                      displayStatus === "CANCELED" ? "bg-gray-400" :
+                                      displayStatus === "PARTIALLY_FILLED" ? "bg-blue-500" :
+                                      "bg-yellow-500"
+                                    }
+                                  >
+                                    {displayStatus}
+                                  </Badge>
+                                  {ocoStatus && (
+                                    <span className="text-xs text-green-600 font-medium" title="Status verified from Binance API">
+                                      ✓ Live
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                  <span className="text-gray-600">Order ID:</span>
+                                  <span className="ml-2 font-mono">{order.orderId}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-600">Quantity:</span>
+                                  <span className="ml-2">{order.quantity.toFixed(6)}</span>
+                                </div>
+                                {order.price && (
+                                  <div>
+                                    <span className="text-gray-600">Target Price:</span>
+                                    <span className="ml-2 font-medium text-green-700">${formatPrice(order.price)}</span>
+                                  </div>
+                                )}
+                                {order.stopPrice && (
+                                  <div>
+                                    <span className="text-gray-600">Stop Price:</span>
+                                    <span className="ml-2 font-medium text-red-700">${formatPrice(order.stopPrice)}</span>
+                                  </div>
+                                )}
+                                {executedQty > 0 && (
+                                  <div>
+                                    <span className="text-gray-600">Executed:</span>
+                                    <span className="ml-2 font-semibold text-green-600">{executedQty.toFixed(6)}</span>
+                                  </div>
+                                )}
+                                {cummulativeQuoteQty > 0 && (
+                                  <div>
+                                    <span className="text-gray-600">Filled Value:</span>
+                                    <span className="ml-2 font-medium">${cummulativeQuoteQty.toFixed(2)}</span>
+                                  </div>
+                                )}
+                                {ocoStatus && (
+                                  <div className="col-span-2 mt-1 pt-2 border-t border-gray-300">
+                                    <span className="text-xs text-gray-500">
+                                      OCO List Status: {ocoStatus.listStatusType} | {ocoStatus.listOrderStatus}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : signal.status === "executing" ? (
                       pollingFailed ? (
