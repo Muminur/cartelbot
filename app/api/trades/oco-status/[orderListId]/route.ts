@@ -48,6 +48,13 @@ export async function GET(
     );
 
     if (!dbUser?.binance?.apiKey || !dbUser?.binance?.apiSecret) {
+      console.error("[OCO Status API] 400 ERROR - API keys missing:", {
+        userId: authResult.user._id,
+        hasApiKey: !!dbUser?.binance?.apiKey,
+        hasApiSecret: !!dbUser?.binance?.apiSecret,
+        orderListId: orderListIdParam,
+      });
+
       return NextResponse.json(
         {
           success: false,
@@ -61,8 +68,30 @@ export async function GET(
     }
 
     // 3. Decrypt API keys
-    const apiKey = decrypt(dbUser.binance.apiKey);
-    const apiSecret = decrypt(dbUser.binance.apiSecret);
+    let apiKey: string;
+    let apiSecret: string;
+
+    try {
+      apiKey = decrypt(dbUser.binance.apiKey);
+      apiSecret = decrypt(dbUser.binance.apiSecret);
+    } catch (decryptError) {
+      console.error("[OCO Status API] 400 ERROR - Decryption failed:", {
+        error: decryptError instanceof Error ? decryptError.message : "Unknown error",
+        userId: authResult.user._id,
+        orderListId: orderListIdParam,
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message: "Failed to decrypt API keys. Please re-save your keys in Settings.",
+            code: "DECRYPTION_FAILED",
+          },
+        },
+        { status: 400 }
+      );
+    }
 
     // 4. Validate orderListId parameter
     const orderListId = parseInt(orderListIdParam);
@@ -72,6 +101,15 @@ export async function GET(
       orderListId <= 0 ||
       orderListId > Number.MAX_SAFE_INTEGER
     ) {
+      console.error("[OCO Status API] 400 ERROR - Invalid orderListId:", {
+        orderListIdParam,
+        parsedValue: orderListId,
+        isNaN: isNaN(orderListId),
+        isNegative: orderListId <= 0,
+        isTooLarge: orderListId > Number.MAX_SAFE_INTEGER,
+        userId: authResult.user._id,
+      });
+
       return NextResponse.json(
         {
           success: false,
@@ -146,6 +184,13 @@ export async function GET(
     // Handle Binance API errors specifically
     if (error instanceof BinanceAPIError) {
       if (error.binanceCode === -1013) {
+        console.error("[OCO Status API] 400 ERROR - Binance -1013:", {
+          binanceMessage: error.message,
+          binanceCode: error.binanceCode,
+          orderListId: orderListIdParam,
+          testnet: useTestnet,
+        });
+
         return NextResponse.json(
           {
             success: false,

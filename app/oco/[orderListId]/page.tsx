@@ -13,8 +13,11 @@ import {
   TrendingUp,
   TrendingDown,
   CheckCircle2,
+  AlertCircle,
+  Settings,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface OrderReport {
   orderId: number;
@@ -75,6 +78,7 @@ export default function OCODetailPage() {
   const [currentPrice, setCurrentPrice] = useState<number>(0);
   const [priceChange, setPriceChange] = useState<number>(0);
   const [canceling, setCanceling] = useState(false);
+  const [apiKeysError, setApiKeysError] = useState<string | null>(null);
 
   // Use ref to prevent interval recreation
   const statusRef = useRef<OCOStatus | null>(null);
@@ -102,7 +106,13 @@ export default function OCODetailPage() {
         }
 
         // FIX: Session API returns { success: true, data: { user: {...} } }
-        setUser(data.data.user);
+        const userData = data.data.user;
+        setUser(userData);
+
+        // Check if user has API keys configured
+        if (!userData.hasApiKeys) {
+          setApiKeysError("Binance API keys not configured. Live OCO status cannot be fetched without API keys.");
+        }
       } catch (error) {
         console.error("Failed to fetch session:", error);
         router.push("/login");
@@ -581,6 +591,26 @@ export default function OCODetailPage() {
           </Button>
           <h1 className="text-3xl font-bold">OCO Order #{orderListId}</h1>
         </div>
+
+        {/* API Keys Warning */}
+        {apiKeysError && (
+          <Alert variant="destructive" className="border-orange-500 bg-orange-50">
+            <AlertCircle className="h-4 w-4 text-orange-600" />
+            <AlertTitle className="text-orange-900">API Keys Required</AlertTitle>
+            <AlertDescription className="text-orange-800">
+              {apiKeysError}
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-4 border-orange-600 text-orange-600 hover:bg-orange-100"
+                onClick={() => router.push("/settings")}
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Go to Settings
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Overview Card */}
         {ocoStatus && (

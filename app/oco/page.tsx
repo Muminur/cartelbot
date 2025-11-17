@@ -22,8 +22,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { RefreshCw, Eye, Filter, TrendingUp, TrendingDown } from "lucide-react";
+import { RefreshCw, Eye, Filter, TrendingUp, TrendingDown, AlertCircle, Settings } from "lucide-react";
 import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface OCOOrder {
   orderListId: number;
@@ -57,6 +58,7 @@ export default function OCOOrdersPage() {
   const [orders, setOrders] = useState<OCOOrder[]>([]);
   const [prices, setPrices] = useState<Map<string, PriceData>>(new Map());
   const [refreshing, setRefreshing] = useState(false);
+  const [apiKeysError, setApiKeysError] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     symbol: "",
     status: "all",
@@ -89,7 +91,13 @@ export default function OCOOrdersPage() {
         }
 
         // FIX: Session API returns { success: true, data: { user: {...} } }
-        setUser(data.data.user);
+        const userData = data.data.user;
+        setUser(userData);
+
+        // Check if user has API keys configured
+        if (!userData.hasApiKeys) {
+          setApiKeysError("Binance API keys not configured. Please add them in Settings to view OCO order status.");
+        }
       } catch (error) {
         console.error("Failed to fetch session:", error);
         router.push("/login");
@@ -343,6 +351,26 @@ export default function OCOOrdersPage() {
             Refresh
           </Button>
         </div>
+
+        {/* API Keys Warning */}
+        {apiKeysError && (
+          <Alert variant="destructive" className="border-orange-500 bg-orange-50">
+            <AlertCircle className="h-4 w-4 text-orange-600" />
+            <AlertTitle className="text-orange-900">API Keys Required</AlertTitle>
+            <AlertDescription className="text-orange-800">
+              {apiKeysError}
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-4 border-orange-600 text-orange-600 hover:bg-orange-100"
+                onClick={() => router.push("/settings")}
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Go to Settings
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Filters */}
         <Card>
