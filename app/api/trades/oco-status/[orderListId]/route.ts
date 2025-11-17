@@ -26,6 +26,9 @@ export async function GET(
   // Await params (Next.js 16 requirement)
   const { orderListId: orderListIdParam } = await params;
 
+  // Declare useTestnet outside try block for error handler access
+  let useTestnet = false;
+
   try {
 
     // 1. Authenticate user
@@ -101,7 +104,7 @@ export async function GET(
     }
 
     // 6. Use trade's stored testnet preference (SECURITY: No URL override)
-    const useTestnet = trade.testnet || false;
+    useTestnet = trade.testnet || false;
 
     // 7. Initialize Binance client with correct network
     const binanceClient = new BinanceClient({
@@ -161,9 +164,10 @@ export async function GET(
           {
             success: false,
             error: {
-              message: "OCO order not found on Binance",
+              message: `OCO order not found on Binance ${useTestnet ? 'Testnet' : 'Mainnet'}. The order may have been executed, canceled, expired, or archived (orders older than 90 days are removed from Binance API).`,
               code: "ORDER_NOT_FOUND",
               binanceCode: -2013,
+              network: useTestnet ? 'testnet' : 'mainnet',
             },
           },
           { status: 404 }

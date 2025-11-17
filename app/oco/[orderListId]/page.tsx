@@ -52,6 +52,7 @@ interface TradeData {
   symbol: string;
   signalId: SignalData | null;
   entryPrice: number;
+  testnet: boolean;
   sellOrders: Array<{
     orderListId?: number;
     type: string;
@@ -134,6 +135,7 @@ export default function OCODetailPage() {
             symbol: ocoOrder.symbol,
             signalId: ocoOrder.signalId,
             entryPrice: 0, // Will be populated from buyOrder if needed
+            testnet: ocoOrder.testnet || false,
             sellOrders: ocoOrder.orders || [],
           } as TradeData;
         }
@@ -355,8 +357,17 @@ export default function OCODetailPage() {
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">
-                This OCO order could not be found on Binance. It may have been
-                executed, canceled, or expired.
+                This OCO order could not be found on Binance{" "}
+                <Badge
+                  className={
+                    tradeData.testnet
+                      ? "bg-orange-500 text-white"
+                      : "bg-green-500 text-white"
+                  }
+                >
+                  {tradeData.testnet ? "TESTNET" : "MAINNET"}
+                </Badge>
+                . It may have been executed, canceled, expired, or archived (orders older than 90 days).
                 {signal
                   ? " Below are the signal details associated with this order."
                   : " Signal information is not available for this order."}
@@ -575,7 +586,20 @@ export default function OCODetailPage() {
         {ocoStatus && (
           <Card>
             <CardHeader>
-              <CardTitle>Order Overview</CardTitle>
+              <CardTitle className="flex items-center justify-between">
+                <span>Order Overview</span>
+                {tradeData && (
+                  <Badge
+                    className={
+                      tradeData.testnet
+                        ? "bg-orange-500 text-white"
+                        : "bg-green-500 text-white"
+                    }
+                  >
+                    {tradeData.testnet ? "TESTNET" : "MAINNET"}
+                  </Badge>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
