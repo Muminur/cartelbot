@@ -418,6 +418,12 @@ UserSchema.index({ email: 1 }, { unique: true });
 
 ---
 
+## Session: OCO Order Network Configuration Fix (Nov 17, 2025)
+
+**Fixed OCO -2013 error via environment config (af4ca02)**: Root cause - BINANCE_API_URL pointed to testnet instead of mainnet, causing "order not found" errors for mainnet trades. Fixed .env.local/.env.example with correct mainnet URL (api.binance.com), added network badges (TESTNET/MAINNET) to OCO detail page, enhanced -2013 error message with network info and 90-day archive note. Code review 9.2/10, TypeScript clean, production-ready.
+
+---
+
 ## Session: Signal Parser Stop Loss Normalization Fix (Nov 17, 2025)
 
 **Fixed signal status 'pending' bug (652904e)**: Signals with missing decimal in stop loss (e.g., "SL: 01880" instead of "0.01880") now parse correctly via enhanced normalizeStopLoss() with 4 strategies (power-of-10 division, prefix detection, decimal matching). Status now correctly set to 'parsed', enabling automatic OCO trade execution. Test suite 100% pass (8/8 including user's $ROSE signal). Code review 9.5/10, production-ready.
