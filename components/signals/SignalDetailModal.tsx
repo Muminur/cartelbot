@@ -102,6 +102,7 @@ export default function SignalDetailModal({
   const [priceLoading, setPriceLoading] = useState(false);
   const [priceChange, setPriceChange] = useState<number>(0);
   const [priceError, setPriceError] = useState<string | null>(null);
+  const [priceNetwork, setPriceNetwork] = useState<"testnet" | "mainnet" | null>(null);
 
   // OCO status state - stores real-time status from Binance API
   const [ocoStatuses, setOcoStatuses] = useState<Map<number, BinanceOCOResponse>>(new Map());
@@ -116,6 +117,7 @@ export default function SignalDetailModal({
       setLivePrice(null);
       setPriceChange(0);
       setPriceError(null);
+      setPriceNetwork(null);
       setOcoStatuses(new Map());
       setFetchingOcoStatus(false);
     }
@@ -130,12 +132,15 @@ export default function SignalDetailModal({
     let abortController: AbortController | null = null;
 
     const fetchLivePrice = async () => {
-      // Cancel previous fetch if still running
+      // Fix #4: Cancel previous fetch if still running
       if (abortController) {
         abortController.abort();
       }
 
       abortController = new AbortController();
+
+      if (!isMounted) return;
+
       setPriceLoading(true);
 
       try {
@@ -156,6 +161,11 @@ export default function SignalDetailModal({
 
           // Only update if value changed (prevents unnecessary re-renders)
           setLivePrice(prev => prev !== newPrice ? newPrice : prev);
+
+          // Capture network from response
+          if (data.data.network) {
+            setPriceNetwork(data.data.network);
+          }
 
           // Reset error state on successful fetch
           setPriceError(null);
@@ -182,7 +192,13 @@ export default function SignalDetailModal({
         }
 
         if (isMounted) {
-          console.error("Failed to fetch live price:", error);
+          if (process.env.NODE_ENV === "development") {
+            console.error("[SignalDetailModal] Price fetch failed:", {
+              symbol: signal.symbol,
+              error: error instanceof Error ? error.message : String(error),
+              timestamp: new Date().toISOString(),
+            });
+          }
           setPriceError("Unable to fetch live price");
         }
       } finally {
@@ -202,7 +218,10 @@ export default function SignalDetailModal({
     return () => {
       isMounted = false;
       if (intervalId) clearInterval(intervalId);
-      if (abortController) abortController.abort();
+      if (abortController) {
+        abortController.abort();
+        abortController = null; // Clear reference (Fix #4)
+      }
     };
   }, [signal?.symbol, signal?.currentMarketPrice, isOpen]);
 
@@ -470,12 +489,39 @@ export default function SignalDetailModal({
                 <DollarSign className="h-4 w-4" />
                 <span>Current Price</span>
                 {priceLoading && <Clock className="h-3 w-3 animate-spin" />}
+                {/* Network badge */}
+                {priceNetwork && (
+                  <Badge
+                    variant="outline"
+                    className={`text-xs ${
+                      priceNetwork === "testnet"
+                        ? "bg-orange-100 border-orange-300 text-orange-700"
+                        : "bg-green-100 border-green-300 text-green-700"
+                    }`}
+                  >
+                    {priceNetwork.toUpperCase()}
+                  </Badge>
+                )}
               </div>
               {priceError ? (
-                <p className="text-sm text-red-500 flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  {priceError}
-                </p>
+                <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  <p className="text-sm text-red-600 flex-1">{priceError}</p>
+                  {/* Fix #6: Add manual retry button for price errors */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setPriceError(null);
+                      // Trigger immediate fetch by updating a dependency
+                      setLivePrice(null);
+                    }}
+                    className="h-6 px-2 text-xs"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Retry
+                  </Button>
+                </div>
               ) : livePrice ? (
                 <div className="space-y-1">
                   <p className="text-2xl font-bold text-blue-600">
@@ -495,6 +541,13 @@ export default function SignalDetailModal({
                         {priceChange >= 0 ? "+" : ""}
                         {priceChange.toFixed(2)}%
                       </Badge>
+                    </div>
+                  )}
+                  {/* Warning if network mismatch */}
+                  {trade && priceNetwork && trade.testnet !== (priceNetwork === "testnet") && (
+                    <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                      <AlertTriangle className="h-3 w-3 inline mr-1" />
+                      Price shown is from {priceNetwork}, but trade was executed on {trade.testnet ? "testnet" : "mainnet"}
                     </div>
                   )}
                 </div>

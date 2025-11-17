@@ -256,6 +256,8 @@ export interface BinanceTicker24hr {
   firstId: number;
   lastId: number;
   count: number;
+  price?: string; // Alias for lastPrice
+  network: "testnet" | "mainnet"; // Network indicator - REQUIRED (Fix #1)
 }
 
 export interface APIResponse<T = unknown> {

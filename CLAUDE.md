@@ -1758,3 +1758,7 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: Login Page JSON Parse Error Fix (Nov 16, 2025)
 
 **Fixed "JSON.parse: unexpected character at line 1 column 1" error (bfb1f3b)**: Added content-type validation, Resend client singleton, standardized API error codes (EMAIL_REQUIRED, EMAIL_SEND_FAILED), network error categorization. Prevents email enumeration, improves UX. Code review 7.5/10→9.5/10.
+
+## Session: Responsive Mobile Sidebar Fix (Nov 17, 2025)
+
+**Fixed sidebar vanishing on mobile (d50aece)**: Created MobileSidebar with Sheet drawer (<1024px), hamburger menu in Navigation, shared NAVIGATION_ITEMS constants. Added ARIA attributes (role, aria-label, aria-current). Smooth animations, auto-close on navigate. Code review 7.5/10→9.5/10 after fixes.
