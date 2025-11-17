@@ -156,33 +156,46 @@ export default function SignalDetailModal({
         const data = await response.json();
 
         // Only update state if still mounted
-        if (isMounted && data.success && data.data?.price) {
-          const newPrice = parseFloat(data.data.price);
+        if (isMounted && data.success && data.data) {
+          // Binance returns lastPrice, not price
+          const priceValue = data.data.price || data.data.lastPrice;
 
-          // Only update if value changed (prevents unnecessary re-renders)
-          setLivePrice(prev => prev !== newPrice ? newPrice : prev);
+          if (priceValue) {
+            const newPrice = parseFloat(priceValue);
 
-          // Capture network from response
-          if (data.data.network) {
-            setPriceNetwork(data.data.network);
-          }
-
-          // Reset error state on successful fetch
-          setPriceError(null);
-
-          // Calculate price change from creation
-          if (signal.currentMarketPrice) {
-            const newChange =
-              ((newPrice - signal.currentMarketPrice) /
-                signal.currentMarketPrice) *
-              100;
+            if (process.env.NODE_ENV === "development") {
+              console.log("[SignalDetailModal] Live price fetched:", {
+                symbol: signal.symbol,
+                price: newPrice,
+                network: data.data.network,
+              });
+            }
 
             // Only update if value changed (prevents unnecessary re-renders)
-            setPriceChange(prev => {
-              const roundedNew = parseFloat(newChange.toFixed(2));
-              const roundedPrev = parseFloat(prev.toFixed(2));
-              return roundedNew !== roundedPrev ? newChange : prev;
-            });
+            setLivePrice(prev => prev !== newPrice ? newPrice : prev);
+
+            // Capture network from response
+            if (data.data.network) {
+              setPriceNetwork(data.data.network);
+            }
+
+            // Reset error state on successful fetch
+            setPriceError(null);
+
+            // Calculate price change from creation
+            if (signal.currentMarketPrice) {
+              const newChange =
+                ((newPrice - signal.currentMarketPrice) /
+                  signal.currentMarketPrice) *
+                100;
+
+              // Only update if value changed (prevents unnecessary re-renders)
+              setPriceChange(prev => {
+                const roundedNew = parseFloat(newChange.toFixed(2));
+                const roundedPrev = parseFloat(prev.toFixed(2));
+                return roundedNew !== roundedPrev ? newChange : prev;
+              });
+            }
           }
         }
       } catch (error) {
@@ -522,10 +535,10 @@ export default function SignalDetailModal({
                     Retry
                   </Button>
                 </div>
-              ) : livePrice ? (
+              ) : livePrice !== null ? (
                 <div className="space-y-1">
                   <p className="text-2xl font-bold text-blue-600">
-                    {formatPrice(livePrice)}
+                    ${formatPrice(livePrice)}
                   </p>
                   {signal.currentMarketPrice && (
                     <div className="flex items-center gap-2 text-xs">

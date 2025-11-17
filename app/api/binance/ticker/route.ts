@@ -88,8 +88,9 @@ export async function GET(request: NextRequest) {
       success: true,
       data: {
         ...ticker,
+        price: ticker.lastPrice, // Alias for easier access
         network: useTestnet ? "testnet" : "mainnet", // Always set network (Fix #2)
-      } as const,
+      },
     });
   } catch (error) {
     // Handle invalid symbol error (code -1121) gracefully
