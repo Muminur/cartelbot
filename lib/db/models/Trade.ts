@@ -165,6 +165,8 @@ tradeSchema.index({ status: 1, createdAt: -1 });
 tradeSchema.index({ symbol: 1, createdAt: -1 });
 tradeSchema.index({ userId: 1, status: 1 });
 tradeSchema.index({ signalId: 1 });
+// Index for OCO orders queries (critical for /api/oco performance)
+tradeSchema.index({ userId: 1, "sellOrders.0": 1 });
 
 if (process.env.NODE_ENV === "development") {
   const models = mongoose.models as { [key: string]: any };

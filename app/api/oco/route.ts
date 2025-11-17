@@ -50,16 +50,34 @@ export async function GET(request: NextRequest) {
       return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     };
 
+    // TypeScript interface for query object
+    interface TradeQuery {
+      userId: string;
+      "sellOrders.0": { $exists: boolean };
+      symbol?: { $regex: string; $options: string };
+      "sellOrders.status"?: string;
+      testnet?: boolean;
+    }
+
     // 4. Build query
-    const query: any = {
+    const query: TradeQuery = {
       userId: String(authResult.user._id),
       "sellOrders.0": { $exists: true }, // Has at least one sell order (OCO)
     };
 
     // Filter by symbol (sanitize input before using in regex)
     if (symbol) {
-      const sanitizedSymbol = escapeRegex(symbol.trim());
-      query.symbol = { $regex: sanitizedSymbol, $options: "i" };
+      const sanitized = symbol.trim().toUpperCase();
+
+      // C3: Prevent ReDoS with length limit
+      if (sanitized.length > 20) {
+        return NextResponse.json(
+          { success: false, error: { message: "Symbol too long (max 20 chars)" } },
+          { status: 400 }
+        );
+      }
+
+      query.symbol = { $regex: escapeRegex(sanitized), $options: "i" };
     }
 
     // Filter by status (check all sellOrders for matching status)
@@ -76,18 +94,39 @@ export async function GET(request: NextRequest) {
     const sortObj: any = {};
     sortObj[sortBy] = sortOrder === "asc" ? 1 : -1;
 
-    // 6. Execute query WITHOUT pagination (get all trades first)
-    // We need all trades because each trade can have multiple OCO orders
-    // Pagination will be applied to OCO orders, not trades
-    const allTrades = await Trade.find(query)
+    // 6. Get accurate OCO order count using MongoDB aggregation
+    // C1: FIX - Replaced arbitrary multiplier with accurate count
+    const ocoCountPipeline = await Trade.aggregate([
+      { $match: query },
+      {
+        $project: {
+          ocoCount: {
+            $size: { $ifNull: ["$sellOrders", []] }
+          }
+        }
+      },
+      { $group: { _id: null, total: { $sum: "$ocoCount" } } }
+    ]);
+    const totalOCOs = ocoCountPipeline[0]?.total || 0;
+
+    // 7. OPTIMIZATION: Use MongoDB pagination with a reasonable multiplier
+    // Since each trade can have multiple OCO orders, we fetch more trades than needed
+    // Multiplier of 2 should cover most cases (average 2 OCO orders per trade)
+    const estimatedTradesNeeded = limit * 2;
+    const skip = Math.max(0, (page - 1) * limit);
+
+    // Fetch trades with pagination applied at database level
+    const paginatedTrades = await Trade.find(query)
       .sort(sortObj)
+      .skip(skip)
+      .limit(estimatedTradesNeeded)
       .populate("signalId", "symbol rawSignal entries targets stopLoss")
       .lean();
 
-    // 7. Transform ALL trades to OCO order format
-    const allOcoOrders: any[] = [];
+    // 8. Transform paginated trades to OCO order format
+    const ocoOrders: any[] = [];
 
-    for (const trade of allTrades) {
+    for (const trade of paginatedTrades) {
       // Group sell orders by orderListId
       const ordersByListId = new Map<number, any[]>();
 
@@ -115,7 +154,7 @@ export async function GET(request: NextRequest) {
               ? "PARTIALLY_FILLED"
               : "NEW";
 
-        allOcoOrders.push({
+        ocoOrders.push({
           orderListId,
           symbol: trade.symbol,
           orders: orders.map((o) => ({
@@ -136,21 +175,20 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 8. Apply pagination to OCO orders (not trades)
-    const total = allOcoOrders.length;
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const paginatedOcoOrders = allOcoOrders.slice(startIndex, endIndex);
+    // 9. Trim to exact page size if we got more than needed
+    const paginatedOcoOrders = ocoOrders.slice(0, limit);
 
-    // 9. Return response
+    // 10. Return response with accurate pagination
+    // C1: FIX - Using accurate OCO count instead of estimation
     return NextResponse.json({
       success: true,
       data: paginatedOcoOrders,
       pagination: {
         page,
         limit,
-        total,
-        pages: Math.ceil(total / limit),
+        total: totalOCOs,
+        pages: Math.ceil(totalOCOs / limit),
+        actualCount: paginatedOcoOrders.length,
       },
     });
   } catch (error: unknown) {

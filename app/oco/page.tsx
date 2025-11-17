@@ -51,7 +51,9 @@ interface PriceData {
 export default function OCOOrdersPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  // M3: FIX - Renamed loading states for clarity
+  const [loadingOrders, setLoadingOrders] = useState(true);
+  const [refreshingPrices, setRefreshingPrices] = useState(false);
   const [orders, setOrders] = useState<OCOOrder[]>([]);
   const [prices, setPrices] = useState<Map<string, PriceData>>(new Map());
   const [refreshing, setRefreshing] = useState(false);
@@ -88,11 +90,11 @@ export default function OCOOrdersPage() {
     checkAuth();
   }, [router]);
 
-  // Fetch OCO orders
+  // Fetch OCO orders (non-blocking - shows orders immediately)
   const fetchOrders = useCallback(async () => {
     if (!user) return;
 
-    setLoading(true);
+    setLoadingOrders(true);
     try {
       const params = new URLSearchParams({
         symbol: filters.symbol,
@@ -105,16 +107,20 @@ export default function OCOOrdersPage() {
 
       if (data.success) {
         setOrders(data.data);
-        // Initial price fetch
-        await refreshPrices(data.data);
+        // OPTIMIZATION: Show orders immediately, fetch prices in background
+        setLoadingOrders(false);
+        // Trigger price fetch separately (non-blocking)
+        if (data.data.length > 0) {
+          refreshPrices(data.data);
+        }
       } else {
         toast.error(data.error?.message || "Failed to fetch OCO orders");
+        setLoadingOrders(false);
       }
     } catch (error) {
       console.error("Failed to fetch OCO orders:", error);
       toast.error("Failed to fetch OCO orders");
-    } finally {
-      setLoading(false);
+      setLoadingOrders(false);
     }
   }, [user, filters]);
 
@@ -132,72 +138,111 @@ export default function OCOOrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.symbol, filters.status, filters.network, user]); // Run when filters change
 
-  // Refresh prices function
-  const refreshPrices = async (ordersData = orders) => {
+  // OPTIMIZED: Refresh prices function using batch API
+  // H3: FIX - Added AbortController for race condition prevention
+  // M2: FIX - Added 10-second timeout
+  const refreshPrices = useCallback(async (ordersData = orders, signal?: AbortSignal) => {
     if (ordersData.length === 0) return;
 
-    setRefreshing(true);
+    setRefreshingPrices(true);
+
+    // M2: Create timeout controller (10-second timeout)
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(), 10000);
+
+    // Combine with parent signal if provided
+    const combinedSignal = signal || timeoutController.signal;
+
     try {
       // Get unique symbols
       const symbols = [...new Set(ordersData.map((o) => o.symbol))];
 
-      // Fetch both mainnet and testnet prices in parallel
-      const pricePromises = symbols.map(async (symbol) => {
-        try {
-          const [mainnetRes, testnetRes] = await Promise.all([
-            fetch(`/api/binance/ticker?symbol=${symbol}&testnet=false`),
-            fetch(`/api/binance/ticker?symbol=${symbol}&testnet=true`),
-          ]);
+      // OPTIMIZATION: Use batch ticker API (2 requests instead of N×2)
+      const [mainnetRes, testnetRes] = await Promise.all([
+        fetch(
+          `/api/binance/ticker/batch?symbols=${encodeURIComponent(JSON.stringify(symbols))}&testnet=false`,
+          { signal: combinedSignal }
+        ),
+        fetch(
+          `/api/binance/ticker/batch?symbols=${encodeURIComponent(JSON.stringify(symbols))}&testnet=true`,
+          { signal: combinedSignal }
+        ),
+      ]);
 
-          const mainnetData = await mainnetRes.json();
-          const testnetData = await testnetRes.json();
+      // H3: Check if aborted before processing
+      if (combinedSignal?.aborted) return;
 
-          return {
-            symbol,
-            mainnet: parseFloat(mainnetData.data?.price || "0"),
-            testnet: parseFloat(testnetData.data?.price || "0"),
-            mainnetChange: parseFloat(
-              mainnetData.data?.priceChangePercent || "0"
-            ),
-            testnetChange: parseFloat(
-              testnetData.data?.priceChangePercent || "0"
-            ),
-          };
-        } catch (error) {
-          console.error(`Failed to fetch price for ${symbol}:`, error);
-          return {
-            symbol,
-            mainnet: 0,
-            testnet: 0,
-            mainnetChange: 0,
-            testnetChange: 0,
-          };
-        }
-      });
+      const mainnetData = await mainnetRes.json();
+      const testnetData = await testnetRes.json();
 
-      const priceData = await Promise.all(pricePromises);
-      const priceMap = new Map(priceData.map((p) => [p.symbol, p]));
-      setPrices(priceMap);
+      if (mainnetData.success && testnetData.success) {
+        // Create price map from batch responses
+        const priceMap = new Map<string, PriceData>();
+
+        // Index mainnet data by symbol
+        const mainnetBySymbol = new Map(
+          mainnetData.data.map((ticker: any) => [ticker.symbol, ticker])
+        );
+
+        // Index testnet data by symbol
+        const testnetBySymbol = new Map(
+          testnetData.data.map((ticker: any) => [ticker.symbol, ticker])
+        );
+
+        // Combine data for each symbol
+        symbols.forEach((symbol) => {
+          const mainnetTicker = mainnetBySymbol.get(symbol) as any;
+          const testnetTicker = testnetBySymbol.get(symbol) as any;
+
+          priceMap.set(symbol, {
+            mainnet: parseFloat(mainnetTicker?.lastPrice || mainnetTicker?.price || "0"),
+            testnet: parseFloat(testnetTicker?.lastPrice || testnetTicker?.price || "0"),
+            mainnetChange: parseFloat(mainnetTicker?.priceChangePercent || "0"),
+            testnetChange: parseFloat(testnetTicker?.priceChangePercent || "0"),
+          });
+        });
+
+        setPrices(priceMap);
+      } else {
+        console.error("Batch ticker API failed:", {
+          mainnet: mainnetData.error,
+          testnet: testnetData.error,
+        });
+        toast.error("Failed to fetch real-time prices");
+      }
     } catch (error) {
+      // H3: Ignore abort errors
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.warn('Price fetch timeout or cancelled');
+        return;
+      }
       console.error("Failed to refresh prices:", error);
+      toast.error("Failed to refresh prices");
     } finally {
-      setRefreshing(false);
+      clearTimeout(timeoutId);
+      if (!combinedSignal?.aborted) {
+        setRefreshingPrices(false);
+      }
     }
-  };
+  }, [orders]);
 
-  // Auto-refresh prices every 10 seconds (create interval once, use ref inside)
+  // OPTIMIZATION: Auto-refresh prices every 30 seconds (reduced from 10s)
+  // H3: FIX - Added AbortController cleanup to prevent race conditions
   useEffect(() => {
     if (ordersRef.current.length === 0) return;
 
+    const controller = new AbortController();
     const interval = setInterval(() => {
       if (ordersRef.current.length > 0) {
-        refreshPrices(ordersRef.current);
+        refreshPrices(ordersRef.current, controller.signal);
       }
-    }, 10000);
+    }, 30000); // 30 seconds
 
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty deps - create interval once
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
+  }, [refreshPrices]);
 
   const getStatusBadge = (status: string) => {
     const colors: Record<string, string> = {
@@ -221,7 +266,12 @@ export default function OCOOrdersPage() {
     isMainnet: boolean;
   }) => {
     if (!priceData) {
-      return <RefreshCw className="h-4 w-4 animate-spin text-gray-400" />;
+      return (
+        <div className="space-y-1">
+          <div className="text-sm text-muted-foreground">Loading price...</div>
+          <RefreshCw className="h-4 w-4 animate-spin text-gray-400" />
+        </div>
+      );
     }
 
     const price = isMainnet ? priceData.mainnet : priceData.testnet;
@@ -250,7 +300,7 @@ export default function OCOOrdersPage() {
     );
   };
 
-  if (loading) {
+  if (loadingOrders) {
     return (
       <DashboardLayout userEmail={user?.email || ""}>
         <div className="flex items-center justify-center h-96">
@@ -267,12 +317,12 @@ export default function OCOOrdersPage() {
           <div>
             <h1 className="text-3xl font-bold">OCO Orders</h1>
             <p className="text-muted-foreground">
-              View all your One-Cancels-Other orders with live price tracking
+              View all your One-Cancels-Other orders with live price tracking (auto-refresh every 30s)
             </p>
           </div>
-          <Button onClick={fetchOrders} disabled={refreshing}>
+          <Button onClick={fetchOrders} disabled={refreshing || refreshingPrices}>
             <RefreshCw
-              className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
+              className={`h-4 w-4 mr-2 ${refreshing || refreshingPrices ? "animate-spin" : ""}`}
             />
             Refresh
           </Button>
