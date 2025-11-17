@@ -382,26 +382,33 @@ export class BinanceClient {
     const formattedStopPrice = stopPrice.toFixed(pricePrecision);
     const formattedStopLimitPrice = stopLimitPrice.toFixed(pricePrecision);
 
-    console.log("OCO Order Parameters:", {
+    console.log("OCO Order Parameters (New API):", {
       symbol,
       quantity: formattedQuantity,
-      price: formattedPrice,
-      stopPrice: formattedStopPrice,
-      stopLimitPrice: formattedStopLimitPrice,
+      abovePrice: formattedPrice,
+      belowStopPrice: formattedStopPrice,
+      belowPrice: formattedStopLimitPrice,
       tickSize,
       stepSize,
       pricePrecision,
       quantityPrecision,
     });
 
-    const result = await this.signedRequest<BinanceOCOResponse>("POST", "/api/v3/order/oco", {
+    // Use new OCO endpoint with above/below terminology
+    // For SELL orders:
+    // - aboveType: LIMIT_MAKER (take profit above current price)
+    // - belowType: STOP_LOSS_LIMIT (stop loss below current price)
+    const result = await this.signedRequest<BinanceOCOResponse>("POST", "/api/v3/orderList/oco", {
       symbol,
       side: "SELL",
       quantity: formattedQuantity,
-      price: formattedPrice,
-      stopPrice: formattedStopPrice,
-      stopLimitPrice: formattedStopLimitPrice,
-      stopLimitTimeInForce: "GTC",
+      aboveType: "LIMIT_MAKER",
+      abovePrice: formattedPrice,
+      belowType: "STOP_LOSS_LIMIT",
+      belowStopPrice: formattedStopPrice,
+      belowPrice: formattedStopLimitPrice,
+      belowTimeInForce: "GTC",
+      newOrderRespType: "RESULT",
     });
     this.updateOrderRateLimit();
     return result;
