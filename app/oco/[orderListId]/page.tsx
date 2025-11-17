@@ -36,6 +36,32 @@ interface OCOStatus {
   orderReports: OrderReport[];
 }
 
+interface SignalData {
+  _id: string;
+  symbol: string;
+  entries: number[];
+  targets: number[];
+  stopLoss: number;
+  status: string;
+  rawSignal: string;
+  currentMarketPrice?: number;
+}
+
+interface TradeData {
+  _id: string;
+  symbol: string;
+  signalId: SignalData | null;
+  entryPrice: number;
+  sellOrders: Array<{
+    orderListId?: number;
+    type: string;
+    price: number;
+    stopPrice?: number;
+    quantity: number;
+    status: string;
+  }>;
+}
+
 export default function OCODetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -44,6 +70,7 @@ export default function OCODetailPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [ocoStatus, setOcoStatus] = useState<OCOStatus | null>(null);
+  const [tradeData, setTradeData] = useState<TradeData | null>(null);
   const [currentPrice, setCurrentPrice] = useState<number>(0);
   const [priceChange, setPriceChange] = useState<number>(0);
   const [canceling, setCanceling] = useState(false);
@@ -86,6 +113,38 @@ export default function OCODetailPage() {
     checkAuth();
   }, [router]);
 
+  // Fetch trade data from database
+  const fetchTradeData = async () => {
+    if (!user || !orderListId) return null;
+
+    try {
+      const res = await fetch("/api/oco");
+      const data = await res.json();
+
+      if (data.success && data.data) {
+        // Find the trade with this orderListId
+        const ocoOrder = data.data.find(
+          (order: any) => String(order.orderListId) === String(orderListId)
+        );
+
+        if (ocoOrder && ocoOrder.signalId) {
+          // Return trade data with populated signal
+          return {
+            _id: ocoOrder.tradeId,
+            symbol: ocoOrder.symbol,
+            signalId: ocoOrder.signalId,
+            entryPrice: 0, // Will be populated from buyOrder if needed
+            sellOrders: ocoOrder.orders || [],
+          } as TradeData;
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error("Failed to fetch trade data:", error);
+      return null;
+    }
+  };
+
   // Fetch live status (separate function for interval)
   const fetchLiveStatus = async () => {
     if (!user || !orderListId) return;
@@ -110,15 +169,27 @@ export default function OCODetailPage() {
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/trades/oco-status/${orderListId}`);
-      const data = await res.json();
+      // Fetch both OCO status from Binance and trade data from database
+      const [ocoRes, tradeDataResult] = await Promise.all([
+        fetch(`/api/trades/oco-status/${orderListId}`).catch(() => null),
+        fetchTradeData(),
+      ]);
 
-      if (data.success) {
-        setOcoStatus(data.data);
-        // Fetch current price
-        await fetchCurrentPrice(data.data.symbol);
-      } else {
-        toast.error(data.error?.message || "Failed to fetch order details");
+      // Set trade data (always available from database)
+      if (tradeDataResult) {
+        setTradeData(tradeDataResult);
+        // Fetch current price using symbol from trade data
+        await fetchCurrentPrice(tradeDataResult.symbol);
+      }
+
+      // Set OCO status (may not be available if order not found on Binance)
+      if (ocoRes) {
+        const data = await ocoRes.json();
+        if (data.success) {
+          setOcoStatus(data.data);
+          // Update price with OCO status symbol if available
+          await fetchCurrentPrice(data.data.symbol);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch order details:", error);
@@ -243,15 +314,217 @@ export default function OCODetailPage() {
     );
   }
 
-  if (!ocoStatus) {
+  if (!ocoStatus && !tradeData) {
     return (
       <DashboardLayout userEmail={user?.email || ""}>
         <div className="text-center py-12">
-          <p className="text-muted-foreground">OCO order not found</p>
+          <p className="text-muted-foreground">
+            OCO order not found in Binance or database
+          </p>
           <Button onClick={() => router.push("/oco")} className="mt-4">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to OCO Orders
           </Button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // If OCO not found on Binance but we have trade data, show signal details
+  if (!ocoStatus && tradeData) {
+    const signal = tradeData.signalId;
+
+    return (
+      <DashboardLayout userEmail={user?.email || ""}>
+        <div className="space-y-6">
+          <div className="flex items-center gap-4 flex-wrap">
+            <Button variant="outline" onClick={() => router.push("/oco")}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+            <h1 className="text-3xl font-bold">OCO Order #{orderListId}</h1>
+          </div>
+
+          {/* Warning Card */}
+          <Card className="border-yellow-500">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-yellow-600">
+                <XCircle className="h-5 w-5" />
+                OCO Order Not Found on Binance
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">
+                This OCO order could not be found on Binance. It may have been
+                executed, canceled, or expired. Below are the signal details
+                associated with this order.
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Signal Details Card */}
+          {signal && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Signal Details</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Signal ID</p>
+                    <p className="font-mono text-sm">{signal._id}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Symbol</p>
+                    <p className="text-2xl font-bold">{signal.symbol}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Status</p>
+                    <div className="mt-1">{getStatusBadge(signal.status.toUpperCase())}</div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Current Price</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-2xl font-bold">
+                        ${currentPrice.toFixed(2)}
+                      </p>
+                      <Badge
+                        className={`${
+                          priceChange >= 0
+                            ? "bg-green-500 text-white"
+                            : "bg-red-500 text-white"
+                        } flex items-center gap-1`}
+                      >
+                        {priceChange >= 0 ? (
+                          <TrendingUp className="h-3 w-3" />
+                        ) : (
+                          <TrendingDown className="h-3 w-3" />
+                        )}
+                        {priceChange >= 0 ? "+" : ""}
+                        {priceChange.toFixed(2)}%
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Entry Prices */}
+                <div className="mt-6">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Entry Prices
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {signal.entries.map((entry, idx) => (
+                      <Badge key={idx} variant="outline" className="text-base">
+                        ${entry.toFixed(2)}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Target Prices */}
+                <div className="mt-6">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Target Prices
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {signal.targets.map((target, idx) => (
+                      <Badge
+                        key={idx}
+                        className="bg-green-500 text-white text-base"
+                      >
+                        Target {idx + 1}: ${target.toFixed(2)}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Stop Loss */}
+                <div className="mt-6">
+                  <p className="text-sm text-muted-foreground mb-2">Stop Loss</p>
+                  <Badge className="bg-red-500 text-white text-base">
+                    ${signal.stopLoss.toFixed(2)}
+                  </Badge>
+                </div>
+
+                {/* Raw Signal */}
+                <div className="mt-6">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Raw Signal Text
+                  </p>
+                  <div className="bg-gray-100 p-4 rounded-md">
+                    <pre className="text-sm whitespace-pre-wrap">
+                      {signal.rawSignal}
+                    </pre>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* OCO Orders from Database */}
+          {tradeData.sellOrders.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>OCO Orders (Database Records)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {tradeData.sellOrders.map((order, idx) => {
+                    const isTakeProfit = order.type === "LIMIT_MAKER";
+                    return (
+                      <Card key={idx} className="border">
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              {isTakeProfit ? (
+                                <>
+                                  <TrendingUp className="h-5 w-5 text-green-600" />
+                                  Take Profit
+                                </>
+                              ) : (
+                                <>
+                                  <TrendingDown className="h-5 w-5 text-red-600" />
+                                  Stop Loss
+                                </>
+                              )}
+                            </CardTitle>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2 text-sm">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <p className="text-muted-foreground">Type</p>
+                                <p className="font-mono">{order.type}</p>
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground">Status</p>
+                                {getStatusBadge(order.status)}
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground">
+                                  {isTakeProfit ? "Target Price" : "Stop Price"}
+                                </p>
+                                <p className="font-bold">
+                                  ${(order.stopPrice || order.price).toFixed(2)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-muted-foreground">Quantity</p>
+                                <p className="font-bold">
+                                  {order.quantity.toFixed(6)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </DashboardLayout>
     );
@@ -269,52 +542,55 @@ export default function OCODetailPage() {
         </div>
 
         {/* Overview Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Order Overview</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <p className="text-sm text-muted-foreground">Symbol</p>
-                <p className="text-2xl font-bold">{ocoStatus.symbol}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Current Price</p>
-                <div className="flex items-center gap-2">
-                  <p className="text-2xl font-bold">
-                    ${currentPrice.toFixed(2)}
-                  </p>
-                  <Badge
-                    className={`${
-                      priceChange >= 0
-                        ? "bg-green-500 text-white"
-                        : "bg-red-500 text-white"
-                    } flex items-center gap-1`}
-                  >
-                    {priceChange >= 0 ? (
-                      <TrendingUp className="h-3 w-3" />
-                    ) : (
-                      <TrendingDown className="h-3 w-3" />
-                    )}
-                    {priceChange >= 0 ? "+" : ""}
-                    {priceChange.toFixed(2)}%
-                  </Badge>
+        {ocoStatus && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Order Overview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <p className="text-sm text-muted-foreground">Symbol</p>
+                  <p className="text-2xl font-bold">{ocoStatus.symbol}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Current Price</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-2xl font-bold">
+                      ${currentPrice.toFixed(2)}
+                    </p>
+                    <Badge
+                      className={`${
+                        priceChange >= 0
+                          ? "bg-green-500 text-white"
+                          : "bg-red-500 text-white"
+                      } flex items-center gap-1`}
+                    >
+                      {priceChange >= 0 ? (
+                        <TrendingUp className="h-3 w-3" />
+                      ) : (
+                        <TrendingDown className="h-3 w-3" />
+                      )}
+                      {priceChange >= 0 ? "+" : ""}
+                      {priceChange.toFixed(2)}%
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Status</p>
+                  <div className="mt-1">
+                    {getStatusBadge(ocoStatus.listOrderStatus)}
+                  </div>
                 </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Status</p>
-                <div className="mt-1">
-                  {getStatusBadge(ocoStatus.listOrderStatus)}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Individual Orders */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {ocoStatus.orderReports?.map((report, index) => {
+        {ocoStatus && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {ocoStatus.orderReports?.map((report, index) => {
             const isTakeProfit = report.type === "LIMIT_MAKER";
             const price = parseFloat(report.price);
             const stopPrice = report.stopPrice
@@ -403,10 +679,86 @@ export default function OCODetailPage() {
               </Card>
             );
           })}
-        </div>
+          </div>
+        )}
+
+        {/* Signal Details Card */}
+        {tradeData?.signalId && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Signal Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-sm text-muted-foreground">Signal ID</p>
+                  <p className="font-mono text-sm">{tradeData.signalId._id}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Status</p>
+                  <div className="mt-1">
+                    {getStatusBadge(tradeData.signalId.status.toUpperCase())}
+                  </div>
+                </div>
+              </div>
+
+              {/* Entry Prices */}
+              <div className="mt-6">
+                <p className="text-sm text-muted-foreground mb-2">
+                  Entry Prices
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {tradeData.signalId.entries.map((entry, idx) => (
+                    <Badge key={idx} variant="outline" className="text-base">
+                      ${entry.toFixed(2)}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              {/* Target Prices */}
+              <div className="mt-6">
+                <p className="text-sm text-muted-foreground mb-2">
+                  Target Prices
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {tradeData.signalId.targets.map((target, idx) => (
+                    <Badge
+                      key={idx}
+                      className="bg-green-500 text-white text-base"
+                    >
+                      Target {idx + 1}: ${target.toFixed(2)}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              {/* Stop Loss */}
+              <div className="mt-6">
+                <p className="text-sm text-muted-foreground mb-2">Stop Loss</p>
+                <Badge className="bg-red-500 text-white text-base">
+                  ${tradeData.signalId.stopLoss.toFixed(2)}
+                </Badge>
+              </div>
+
+              {/* Raw Signal */}
+              <div className="mt-6">
+                <p className="text-sm text-muted-foreground mb-2">
+                  Raw Signal Text
+                </p>
+                <div className="bg-gray-100 p-4 rounded-md">
+                  <pre className="text-sm whitespace-pre-wrap">
+                    {tradeData.signalId.rawSignal}
+                  </pre>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Actions */}
-        {ocoStatus.listOrderStatus !== "ALL_DONE" &&
+        {ocoStatus &&
+          ocoStatus.listOrderStatus !== "ALL_DONE" &&
           ocoStatus.listOrderStatus !== "CANCELED" && (
             <Card>
               <CardHeader>
