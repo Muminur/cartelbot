@@ -332,7 +332,7 @@ export default function OCODetailPage() {
 
   // If OCO not found on Binance but we have trade data, show signal details
   if (!ocoStatus && tradeData) {
-    const signal = tradeData.signalId;
+    const signal = tradeData.signalId as SignalData | null;
 
     return (
       <DashboardLayout userEmail={user?.email || ""}>
@@ -356,8 +356,10 @@ export default function OCODetailPage() {
             <CardContent>
               <p className="text-muted-foreground">
                 This OCO order could not be found on Binance. It may have been
-                executed, canceled, or expired. Below are the signal details
-                associated with this order.
+                executed, canceled, or expired.
+                {signal
+                  ? " Below are the signal details associated with this order."
+                  : " Signal information is not available for this order."}
               </p>
             </CardContent>
           </Card>
@@ -380,7 +382,13 @@ export default function OCODetailPage() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Status</p>
-                    <div className="mt-1">{getStatusBadge(signal.status.toUpperCase())}</div>
+                    <div className="mt-1">
+                      {signal.status ? (
+                        getStatusBadge(signal.status.toUpperCase())
+                      ) : (
+                        <Badge variant="outline">Unknown</Badge>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Current Price</p>
@@ -408,55 +416,77 @@ export default function OCODetailPage() {
                 </div>
 
                 {/* Entry Prices */}
-                <div className="mt-6">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Entry Prices
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {signal.entries.map((entry, idx) => (
-                      <Badge key={idx} variant="outline" className="text-base">
-                        ${entry.toFixed(2)}
-                      </Badge>
-                    ))}
+                {signal.entries && signal.entries.length > 0 && (
+                  <div className="mt-6">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Entry Prices
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {signal.entries.map((entry, idx) => (
+                        <Badge key={idx} variant="outline" className="text-base">
+                          ${entry.toFixed(2)}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Target Prices */}
-                <div className="mt-6">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Target Prices
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {signal.targets.map((target, idx) => (
-                      <Badge
-                        key={idx}
-                        className="bg-green-500 text-white text-base"
-                      >
-                        Target {idx + 1}: ${target.toFixed(2)}
-                      </Badge>
-                    ))}
+                {signal.targets && signal.targets.length > 0 && (
+                  <div className="mt-6">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Target Prices
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {signal.targets.map((target, idx) => (
+                        <Badge
+                          key={idx}
+                          className="bg-green-500 text-white text-base"
+                        >
+                          Target {idx + 1}: ${target.toFixed(2)}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Stop Loss */}
-                <div className="mt-6">
-                  <p className="text-sm text-muted-foreground mb-2">Stop Loss</p>
-                  <Badge className="bg-red-500 text-white text-base">
-                    ${signal.stopLoss.toFixed(2)}
-                  </Badge>
-                </div>
+                {signal.stopLoss && (
+                  <div className="mt-6">
+                    <p className="text-sm text-muted-foreground mb-2">Stop Loss</p>
+                    <Badge className="bg-red-500 text-white text-base">
+                      ${signal.stopLoss.toFixed(2)}
+                    </Badge>
+                  </div>
+                )}
 
                 {/* Raw Signal */}
-                <div className="mt-6">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Raw Signal Text
-                  </p>
-                  <div className="bg-gray-100 p-4 rounded-md">
-                    <pre className="text-sm whitespace-pre-wrap">
-                      {signal.rawSignal}
-                    </pre>
+                {signal.rawSignal && (
+                  <div className="mt-6">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Raw Signal Text
+                    </p>
+                    <div className="bg-gray-100 p-4 rounded-md">
+                      <pre className="text-sm whitespace-pre-wrap">
+                        {signal.rawSignal}
+                      </pre>
+                    </div>
                   </div>
-                </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Fallback message when signal is null */}
+          {!signal && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Signal Details</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Signal information not available for this OCO order.
+                </p>
               </CardContent>
             </Card>
           )}
@@ -697,61 +727,73 @@ export default function OCODetailPage() {
                 <div>
                   <p className="text-sm text-muted-foreground">Status</p>
                   <div className="mt-1">
-                    {getStatusBadge(tradeData.signalId.status.toUpperCase())}
+                    {tradeData.signalId.status ? (
+                      getStatusBadge(tradeData.signalId.status.toUpperCase())
+                    ) : (
+                      <Badge variant="outline">Unknown</Badge>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Entry Prices */}
-              <div className="mt-6">
-                <p className="text-sm text-muted-foreground mb-2">
-                  Entry Prices
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {tradeData.signalId.entries.map((entry, idx) => (
-                    <Badge key={idx} variant="outline" className="text-base">
-                      ${entry.toFixed(2)}
-                    </Badge>
-                  ))}
+              {tradeData.signalId.entries && tradeData.signalId.entries.length > 0 && (
+                <div className="mt-6">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Entry Prices
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {tradeData.signalId.entries.map((entry, idx) => (
+                      <Badge key={idx} variant="outline" className="text-base">
+                        ${entry.toFixed(2)}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Target Prices */}
-              <div className="mt-6">
-                <p className="text-sm text-muted-foreground mb-2">
-                  Target Prices
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {tradeData.signalId.targets.map((target, idx) => (
-                    <Badge
-                      key={idx}
-                      className="bg-green-500 text-white text-base"
-                    >
-                      Target {idx + 1}: ${target.toFixed(2)}
-                    </Badge>
-                  ))}
+              {tradeData.signalId.targets && tradeData.signalId.targets.length > 0 && (
+                <div className="mt-6">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Target Prices
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {tradeData.signalId.targets.map((target, idx) => (
+                      <Badge
+                        key={idx}
+                        className="bg-green-500 text-white text-base"
+                      >
+                        Target {idx + 1}: ${target.toFixed(2)}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Stop Loss */}
-              <div className="mt-6">
-                <p className="text-sm text-muted-foreground mb-2">Stop Loss</p>
-                <Badge className="bg-red-500 text-white text-base">
-                  ${tradeData.signalId.stopLoss.toFixed(2)}
-                </Badge>
-              </div>
+              {tradeData.signalId.stopLoss && (
+                <div className="mt-6">
+                  <p className="text-sm text-muted-foreground mb-2">Stop Loss</p>
+                  <Badge className="bg-red-500 text-white text-base">
+                    ${tradeData.signalId.stopLoss.toFixed(2)}
+                  </Badge>
+                </div>
+              )}
 
               {/* Raw Signal */}
-              <div className="mt-6">
-                <p className="text-sm text-muted-foreground mb-2">
-                  Raw Signal Text
-                </p>
-                <div className="bg-gray-100 p-4 rounded-md">
-                  <pre className="text-sm whitespace-pre-wrap">
-                    {tradeData.signalId.rawSignal}
-                  </pre>
+              {tradeData.signalId.rawSignal && (
+                <div className="mt-6">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Raw Signal Text
+                  </p>
+                  <div className="bg-gray-100 p-4 rounded-md">
+                    <pre className="text-sm whitespace-pre-wrap">
+                      {tradeData.signalId.rawSignal}
+                    </pre>
+                  </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         )}

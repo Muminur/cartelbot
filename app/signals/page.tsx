@@ -6,8 +6,17 @@ import Image from "next/image";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import ConfirmationDialog from "@/components/signals/ConfirmationDialog";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { ErrorDetailCard } from "@/components/signals/ErrorDetailCard";
 import { API_ROUTES } from "@/lib/constants";
 import { UserProfile, ParsedSignal } from "@/types";
 import { toast } from "sonner";
@@ -25,6 +34,15 @@ export default function SignalsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [executionError, setExecutionError] = useState<{
+    message: string;
+    code?: string;
+    failureStage?: string;
+    failureReason?: string;
+    tradeId?: string;
+    retryable?: boolean;
+    signalId?: string;
+  } | null>(null);
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -208,10 +226,25 @@ export default function SignalsPage() {
 
       if (!executeResponse.ok || !executeData.success) {
         console.error("[SIGNALS] Trade execution failed:", executeData.error);
-        toast.error(executeData.error?.message || "Trade execution failed");
-        // Still redirect to history even on failure
+
+        // Show detailed error dialog instead of just toast
+        const errorDetails = executeData.error;
+
+        // Set error state to display in UI
+        setExecutionError({
+          message: errorDetails?.message || "Trade execution failed",
+          code: errorDetails?.code,
+          failureStage: errorDetails?.failureStage,
+          failureReason: errorDetails?.failureReason,
+          tradeId: errorDetails?.tradeId,
+          retryable: errorDetails?.retryable,
+          signalId: signalId,
+        });
+
         setSubmitting(false);
-        router.push(`/signals/history?highlight=${signalId}`);
+
+        // Don't redirect immediately - let user see error
+        // User can navigate manually after reading error
         return;
       }
 
@@ -241,6 +274,13 @@ export default function SignalsPage() {
     setParsedSignal(null);
     setError(null);
     setSuccess(null);
+  };
+
+  const handleRetryExecution = () => {
+    if (executionError?.signalId) {
+      setExecutionError(null);
+      router.push(`/trades/execute?signalId=${executionError.signalId}`);
+    }
   };
 
   if (loading) {
@@ -438,6 +478,48 @@ export default function SignalsPage() {
             parsedSignal={parsedSignal}
             isSubmitting={submitting}
           />
+        )}
+
+        {/* Error Dialog for Trade Execution Failures */}
+        {executionError && (
+          <Dialog open={!!executionError} onOpenChange={() => setExecutionError(null)}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Trade Execution Failed</DialogTitle>
+                <DialogDescription>
+                  {executionError.failureStage === 'buy_order'
+                    ? 'The buy order could not be executed.'
+                    : 'The buy order succeeded, but OCO orders failed to create.'}
+                </DialogDescription>
+              </DialogHeader>
+
+              <ErrorDetailCard
+                error={executionError.message}
+                errorCode={executionError.code}
+                failureReason={executionError.failureReason}
+                onRetry={executionError.retryable ? handleRetryExecution : undefined}
+              />
+
+              <DialogFooter className="gap-2 flex-col sm:flex-row">
+                <Button
+                  onClick={() => {
+                    setExecutionError(null);
+                    router.push('/signals/history');
+                  }}
+                  variant="outline"
+                  className="h-12 md:h-10 text-base md:text-sm"
+                >
+                  View Signal History
+                </Button>
+                <Button
+                  onClick={() => setExecutionError(null)}
+                  className="h-12 md:h-10 text-base md:text-sm"
+                >
+                  Submit Another Signal
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         )}
       </div>
     </DashboardLayout>

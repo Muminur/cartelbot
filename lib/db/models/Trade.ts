@@ -154,6 +154,17 @@ const tradeSchema = new Schema<ITrade>(
       type: Boolean,
       default: false,
     },
+    lastError: {
+      message: { type: String },
+      code: { type: String },
+      timestamp: { type: Date },
+    },
+    tradeErrors: [{
+      message: { type: String, required: true },
+      code: String,
+      timestamp: { type: Date, default: Date.now },
+      operation: String,
+    }],
   },
   {
     timestamps: true,

@@ -4,6 +4,7 @@ import { executeSignalTrade, createOCOOrders } from "@/lib/binance";
 import { formatErrorResponse } from "@/lib/utils/errors";
 import { TRADE_EXECUTION } from "@/lib/constants";
 import { Types } from "mongoose";
+import { categorizeError } from "@/lib/utils/error-categorization";
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,10 +54,20 @@ export async function POST(request: NextRequest) {
     });
 
     if (!result.success) {
+      // Categorize the error for detailed response
+      const failureReason = result.error ? categorizeError(new Error(result.error)) : 'UNKNOWN';
+
       return NextResponse.json(
         {
           success: false,
-          error: { message: result.error || "Trade execution failed", statusCode: 400 },
+          error: {
+            message: result.error || "Trade execution failed",
+            code: 'TRADE_EXECUTION_FAILED',
+            statusCode: 400,
+            failureStage: 'buy_order',
+            failureReason,
+            retryable: true,
+          },
         },
         { status: 400 }
       );
@@ -85,14 +96,26 @@ export async function POST(request: NextRequest) {
       } else {
         console.error(`[Trade Execute] OCO creation failed after ${ocoTotalTime}ms:`, ocoResult.error);
 
-        // CRITICAL: Update signal status to 'failed' when OCO creation fails
-        // This ensures the UI can show the failure clearly
-        const { Signal } = await import('@/lib/db/models');
-        await Signal.findByIdAndUpdate(signalId, {
-          status: 'failed',
-        });
+        // Error is already persisted by createOCOOrders() in trade-executor.ts
+        // Just return detailed error response to frontend
+        const failureReason = ocoResult.error ? categorizeError(new Error(ocoResult.error)) : 'UNKNOWN';
 
-        console.log(`[Trade Execute] Signal ${signalId} marked as 'failed' due to OCO creation error`);
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              message: ocoResult.error || 'OCO order creation failed',
+              code: 'OCO_CREATION_FAILED',
+              statusCode: 400,
+              failureStage: 'oco_creation',
+              failureReason,
+              tradeId: result.tradeId,
+              buyOrder: result.buyOrder,
+              retryable: true,
+            },
+          },
+          { status: 400 }
+        );
       }
     }
 

@@ -42,6 +42,21 @@ export interface ISignal extends Document {
   isImageSignal: boolean;
   imageUrl?: string;
   parseErrors?: string[];
+  executionError?: string;
+  executionErrorCode?: string;
+  executionErrorTimestamp?: Date;
+  failureReason?:
+    | 'INSUFFICIENT_BALANCE'
+    | 'INVALID_TARGETS'
+    | 'SETTLEMENT_TIMEOUT'
+    | 'PHANTOM_ORDERS'
+    | 'BINANCE_API_ERROR'
+    | 'NETWORK_ERROR'
+    | 'INVALID_SYMBOL'
+    | 'PERMISSION_DENIED'
+    | 'RATE_LIMITED'
+    | 'FILTER_VIOLATION'
+    | 'UNKNOWN';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,6 +74,13 @@ export interface IOrder {
   cummulativeQuoteQty: number;
   status: string;
   timestamp: Date;
+}
+
+export interface ITradeError {
+  message: string;
+  code?: string;
+  timestamp: Date;
+  operation?: string;
 }
 
 export interface ITrade extends Document {
@@ -81,6 +103,12 @@ export interface ITrade extends Document {
   targets?: number[];
   stopLoss?: number;
   testnet?: boolean;
+  lastError?: {
+    message?: string;
+    code?: string;
+    timestamp?: Date;
+  };
+  tradeErrors?: ITradeError[]; // Renamed from 'errors' to avoid conflict with Document.errors
   createdAt: Date;
   updatedAt: Date;
 }

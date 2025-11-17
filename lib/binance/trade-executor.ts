@@ -9,6 +9,7 @@ import { TRADE_DEFAULTS, TRADE_EXECUTION } from "@/lib/constants";
 import { Types } from "mongoose";
 import { calculatePositionSize, PositionSizingMethod } from "./position-sizing";
 import { validateTradeRisk, getUserRiskLimits } from "./risk-manager";
+import { categorizeError, formatErrorCode } from "@/lib/utils/error-categorization";
 
 interface TradeExecutionParams {
   userId: Types.ObjectId | unknown;
@@ -303,7 +304,24 @@ export async function executeSignalTrade(
       binanceCode: error instanceof BinanceAPIError ? error.binanceCode : undefined,
     });
 
-    await Signal.findByIdAndUpdate(signalId, { status: "failed" });
+    // Store detailed error information in Signal model
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorCode = formatErrorCode(error);
+    const failureReason = categorizeError(error);
+
+    await Signal.findByIdAndUpdate(signalId, {
+      status: "failed",
+      executionError: errorMessage,
+      executionErrorCode: errorCode,
+      executionErrorTimestamp: new Date(),
+      failureReason: failureReason,
+    });
+
+    console.log(`[Trade Executor] Signal ${signalId} marked as failed:`, {
+      errorCode,
+      failureReason,
+      errorMessage: errorMessage.substring(0, 100),
+    });
 
     if (error instanceof BinanceAPIError || error instanceof ValidationError) {
       return {
@@ -899,9 +917,57 @@ export async function createOCOOrders(
       orders,
     };
   } catch (error) {
+    console.error(`[OCO Creation] Failed:`, {
+      tradeId,
+      error: error instanceof Error ? error.message : "Unknown error",
+      errorType: error instanceof BinanceAPIError ? "BinanceAPIError" : "Unknown",
+    });
+
+    // Store error in both Signal and Trade models
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorCode = formatErrorCode(error);
+    const failureReason = categorizeError(error);
+
+    // Load trade to get signalId (trade is out of scope in catch block)
+    const failedTrade = await Trade.findById(tradeId);
+    if (failedTrade) {
+      // Update Signal with OCO failure
+      await Signal.findByIdAndUpdate(failedTrade.signalId, {
+        status: "failed",
+        executionError: `OCO creation failed: ${errorMessage}`,
+        executionErrorCode: errorCode,
+        executionErrorTimestamp: new Date(),
+        failureReason: failureReason,
+      });
+
+      // Update Trade with error history
+      await Trade.findByIdAndUpdate(failedTrade._id, {
+        lastError: {
+          message: errorMessage,
+          code: errorCode,
+          timestamp: new Date(),
+        },
+        $push: {
+          tradeErrors: {
+            message: errorMessage,
+            code: errorCode,
+            timestamp: new Date(),
+            operation: 'OCO_CREATION',
+          },
+        },
+      });
+
+      console.log(`[OCO Creation] Error persisted to database:`, {
+        signalId: failedTrade.signalId,
+        tradeId: failedTrade._id,
+        errorCode,
+        failureReason,
+      });
+    }
+
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: errorMessage,
     };
   }
 }

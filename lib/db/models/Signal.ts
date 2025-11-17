@@ -70,6 +70,31 @@ const signalSchema = new Schema<ISignal>(
       type: [String],
       default: [],
     },
+    executionError: {
+      type: String,
+    },
+    executionErrorCode: {
+      type: String,
+    },
+    executionErrorTimestamp: {
+      type: Date,
+    },
+    failureReason: {
+      type: String,
+      enum: [
+        'INSUFFICIENT_BALANCE',
+        'INVALID_TARGETS',
+        'SETTLEMENT_TIMEOUT',
+        'PHANTOM_ORDERS',
+        'BINANCE_API_ERROR',
+        'NETWORK_ERROR',
+        'INVALID_SYMBOL',
+        'PERMISSION_DENIED',
+        'RATE_LIMITED',
+        'FILTER_VIOLATION',
+        'UNKNOWN',
+      ],
+    },
   },
   {
     timestamps: true,

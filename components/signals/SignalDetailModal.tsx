@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ISignal, ITrade, IOrder, BinanceOCOResponse } from "@/types";
 import { formatDate, formatPrice } from "@/lib/utils/format";
+import { ErrorDetailCard } from "@/components/signals/ErrorDetailCard";
 import {
   Clock,
   TrendingUp,
@@ -471,6 +472,12 @@ export default function SignalDetailModal({
     onClose();
   };
 
+  const handleRetry = () => {
+    // Navigate to execution page with the signal ID
+    router.push(`/trades/execute?signalId=${signal._id}`);
+    onClose();
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -735,25 +742,25 @@ export default function SignalDetailModal({
                     </div>
 
                     {/* OCO Sell Orders - or loading state - or failure */}
-                    {signal.status === "failed" ? (
+                    {signal.status === "failed" && signal.executionError ? (
+                      <ErrorDetailCard
+                        error={signal.executionError}
+                        errorCode={signal.executionErrorCode}
+                        timestamp={signal.executionErrorTimestamp}
+                        failureReason={signal.failureReason}
+                        onRetry={handleRetry}
+                      />
+                    ) : signal.status === "failed" ? (
                       <div className="bg-red-50 p-3 rounded-lg border border-red-200">
                         <div className="flex items-center gap-2 text-sm text-red-800 font-semibold">
                           <AlertTriangle className="h-4 w-4" />
-                          <span>OCO Order Creation Failed</span>
+                          <span>Trade Execution Failed</span>
                         </div>
                         <p className="text-xs text-red-700 mt-2">
-                          The buy order was executed successfully, but the sell orders (OCO - Take Profit & Stop Loss) could not be created. This is usually because:
-                        </p>
-                        <ul className="text-xs text-red-700 mt-2 ml-4 space-y-1 list-disc">
-                          <li><strong>Target prices are below the executed buy price</strong> (market moved up before execution)</li>
-                          <li>Insufficient balance after buy order settlement</li>
-                          <li>Binance API connectivity issues</li>
-                        </ul>
-                        <p className="text-xs text-red-700 mt-2 font-medium">
-                          ⚠️ Your position is OPEN but has NO STOP LOSS protection. You should manually close this trade or set stop loss orders via Binance directly.
+                          No detailed error information available. This may be an old failed signal from before error tracking was implemented.
                         </p>
                       </div>
-                    ) : trade.sellOrders && trade.sellOrders.length > 0 ? (
+                    ) : trade?.sellOrders && trade.sellOrders.length > 0 ? (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <div className="text-xs font-semibold text-gray-700">
