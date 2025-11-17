@@ -411,7 +411,7 @@ export default function OCOOrdersPage() {
                   <TableRow>
                     <TableHead>Order List ID</TableHead>
                     <TableHead>Symbol</TableHead>
-                    <TableHead>Network</TableHead>
+                    <TableHead>Price extracted from Main/Testnet</TableHead>
                     <TableHead>Mainnet Price</TableHead>
                     <TableHead>Testnet Price</TableHead>
                     <TableHead>Status</TableHead>
