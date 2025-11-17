@@ -6,6 +6,7 @@ import {
   BarChart3,
   Wallet,
   Package,
+  ListOrdered,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -20,6 +21,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   { name: "Portfolio", href: "/portfolio", icon: Wallet },
   { name: "Signals", href: "/signals", icon: Signal },
   { name: "Trades", href: "/trades", icon: TrendingUp },
+  { name: "OCO Orders", href: "/oco", icon: ListOrdered },
   { name: "Orphaned Coins", href: "/orphaned-coins", icon: Package },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Settings", href: "/settings", icon: Settings },
