@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Wallet, Settings, AlertCircle, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Wallet, Settings, AlertCircle, TrendingUp, TrendingDown, RefreshCw, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 import { isStablecoin } from "@/lib/utils/stablecoins";
 import Link from "next/link";
@@ -29,6 +30,29 @@ interface ErrorResponse {
   code?: string;
   requiresSetup?: boolean;
   binanceCode?: number;
+}
+
+/**
+ * Custom hook for debouncing values
+ * Delays updating the debounced value until after the specified delay
+ * Useful for search inputs to reduce unnecessary re-renders
+ */
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    // Set up a timer to update the debounced value after the delay
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    // Clean up the timer if value changes before delay expires
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
 }
 
 /**
@@ -126,15 +150,21 @@ export function PortfolioWidget() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ErrorResponse | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Debounce search query to avoid excessive re-renders (300ms delay)
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   // Wrap fetchPortfolio in useCallback to prevent memory leaks
-  const fetchPortfolio = useCallback(async () => {
+  const fetchPortfolio = useCallback(async (signal?: AbortSignal) => {
     try {
       setRefreshing(true);
       setError(null);
 
-      // Fetch account balances
-      const accountResponse = await fetch("/api/binance/account");
+      // Fetch account balances with abort signal for cleanup
+      const accountResponse = await fetch("/api/binance/account", { signal });
       const accountData = await accountResponse.json();
 
       if (!accountData.success) {
@@ -160,45 +190,106 @@ export function PortfolioWidget() {
         }))
         .filter((balance: { total: number }) => balance.total > 0);
 
-      // Fetch ticker data for each asset and calculate values (in parallel)
-      const assetsWithValues = await Promise.all(
-        nonZeroBalances.map(async (balance: { asset: string; free: string; locked: string; total: number }) => {
-          let valueUSDT = 0;
-          let priceChangePercent = "0";
+      // Build list of all symbols to fetch (batch optimization)
+      const symbolsToFetch = new Set<string>();
+      const nonStablecoinBalances = nonZeroBalances.filter((b: { asset: string }) => !isStablecoin(b.asset));
 
-          // Handle stablecoins - no need to fetch ticker data
-          if (isStablecoin(balance.asset)) {
-            valueUSDT = balance.total;
-            priceChangePercent = "0";
-          } else {
-            // Fetch ticker for non-stablecoin assets with fallback to alternative quote currencies
-            const result = await getAssetValueInUSDT(balance.asset, balance.total);
-            valueUSDT = result.valueUSDT;
-            priceChangePercent = result.priceChangePercent;
+      nonStablecoinBalances.forEach((balance: { asset: string }) => {
+        symbolsToFetch.add(`${balance.asset}USDT`);
+        symbolsToFetch.add(`${balance.asset}BUSD`);
+        symbolsToFetch.add(`${balance.asset}BTC`);
+        symbolsToFetch.add(`${balance.asset}ETH`);
+      });
+
+      // Add conversion pairs
+      symbolsToFetch.add("BTCUSDT");
+      symbolsToFetch.add("ETHUSDT");
+
+      // Fetch all tickers in ONE batch call (performance optimization)
+      let tickerMap = new Map<string, { price: number; change: string }>();
+
+      if (symbolsToFetch.size > 0) {
+        try {
+          const encodedSymbols = encodeURIComponent(JSON.stringify([...symbolsToFetch]));
+          const tickerResponse = await fetch(`/api/binance/ticker/batch?symbols=${encodedSymbols}`, { signal });
+          const tickerData = await tickerResponse.json();
+
+          if (tickerData.success && tickerData.data) {
+            tickerData.data.forEach((ticker: { symbol: string; lastPrice: string; priceChangePercent: string }) => {
+              tickerMap.set(ticker.symbol, {
+                price: parseFloat(ticker.lastPrice),
+                change: ticker.priceChangePercent || "0",
+              });
+            });
           }
+        } catch (err) {
+          console.warn("Batch ticker fetch failed, falling back to individual requests:", err);
+          // Will fall back to individual getAssetValueInUSDT calls below
+        }
+      }
 
-          return {
-            asset: balance.asset,
-            free: balance.free,
-            locked: balance.locked,
-            total: balance.total,
-            valueUSDT,
-            priceChangePercent,
-            allocation: 0, // Will calculate after total is known
-          };
-        })
-      );
+      // Calculate values using batch-fetched tickers or fallback
+      const assetsWithValues = nonZeroBalances.map((balance: { asset: string; free: string; locked: string; total: number }) => {
+        let valueUSDT = 0;
+        let priceChangePercent = "0";
+
+        // Handle stablecoins - no need to fetch ticker data
+        if (isStablecoin(balance.asset)) {
+          valueUSDT = balance.total;
+          priceChangePercent = "0";
+        } else if (tickerMap.size > 0) {
+          // Use batch-fetched tickers (fast path)
+          const usdtPair = tickerMap.get(`${balance.asset}USDT`);
+          if (usdtPair) {
+            valueUSDT = balance.total * usdtPair.price;
+            priceChangePercent = usdtPair.change;
+          } else {
+            // Try BUSD
+            const busdPair = tickerMap.get(`${balance.asset}BUSD`);
+            if (busdPair) {
+              valueUSDT = balance.total * busdPair.price;
+              priceChangePercent = busdPair.change;
+            } else {
+              // Try BTC conversion
+              const btcPair = tickerMap.get(`${balance.asset}BTC`);
+              const btcUsdt = tickerMap.get("BTCUSDT");
+              if (btcPair && btcUsdt) {
+                valueUSDT = balance.total * btcPair.price * btcUsdt.price;
+                priceChangePercent = btcPair.change;
+              } else {
+                // Try ETH conversion
+                const ethPair = tickerMap.get(`${balance.asset}ETH`);
+                const ethUsdt = tickerMap.get("ETHUSDT");
+                if (ethPair && ethUsdt) {
+                  valueUSDT = balance.total * ethPair.price * ethUsdt.price;
+                  priceChangePercent = ethPair.change;
+                }
+              }
+            }
+          }
+        }
+
+        return {
+          asset: balance.asset,
+          free: balance.free,
+          locked: balance.locked,
+          total: balance.total,
+          valueUSDT,
+          priceChangePercent,
+          allocation: 0, // Will calculate after total is known
+        };
+      });
 
       // Filter out dust (assets worth less than 0.01 USDT) and assets with no value
       const significantAssets = assetsWithValues.filter(
-        (asset) => asset.valueUSDT >= 0.01
+        (asset: PortfolioAsset) => asset.valueUSDT >= 0.01
       );
 
       // If all assets filtered out but we had balances, show helpful error
       if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
         // Check if it's because no prices were found vs all are dust
         const assetsWithoutPrice = assetsWithValues.filter(
-          (asset) => asset.valueUSDT === 0 && !isStablecoin(asset.asset)
+          (asset: PortfolioAsset) => asset.valueUSDT === 0 && !isStablecoin(asset.asset)
         );
 
         if (assetsWithoutPrice.length > 0) {
@@ -214,19 +305,19 @@ export function PortfolioWidget() {
 
       // Calculate total portfolio value
       const totalValue = significantAssets.reduce(
-        (sum, asset) => sum + asset.valueUSDT,
+        (sum: number, asset: PortfolioAsset) => sum + asset.valueUSDT,
         0
       );
 
       // Calculate allocation percentages
-      const assetsWithAllocation = significantAssets.map((asset) => ({
+      const assetsWithAllocation = significantAssets.map((asset: PortfolioAsset) => ({
         ...asset,
         allocation: totalValue > 0 ? (asset.valueUSDT / totalValue) * 100 : 0,
       }));
 
       // Sort by value (descending)
       const sortedAssets = assetsWithAllocation.sort(
-        (a, b) => b.valueUSDT - a.valueUSDT
+        (a: PortfolioAsset, b: PortfolioAsset) => b.valueUSDT - a.valueUSDT
       );
 
       setPortfolio({
@@ -237,6 +328,10 @@ export function PortfolioWidget() {
 
       setError(null);
     } catch (error) {
+      // Ignore abort errors (component unmounted during fetch)
+      if (error instanceof Error && error.name === 'AbortError') {
+        return;
+      }
       console.error("Error fetching portfolio:", error);
       setError({
         message: "Failed to fetch portfolio data. Please try again.",
@@ -249,12 +344,21 @@ export function PortfolioWidget() {
   }, []); // Empty dependencies - function is stable
 
   useEffect(() => {
-    fetchPortfolio();
+    // Create AbortController for cleanup on unmount
+    const abortController = new AbortController();
 
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchPortfolio, 30000);
+    fetchPortfolio(abortController.signal);
 
-    return () => clearInterval(interval);
+    // Auto-refresh every 30 seconds with abort signal
+    const interval = setInterval(() => {
+      fetchPortfolio(abortController.signal);
+    }, 30000);
+
+    // Cleanup: abort ongoing requests and clear interval
+    return () => {
+      abortController.abort();
+      clearInterval(interval);
+    };
   }, [fetchPortfolio]); // Add fetchPortfolio as dependency
 
   const handleRefresh = () => {
@@ -372,57 +476,130 @@ export function PortfolioWidget() {
               </p>
             </div>
 
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search assets..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1); // Reset to first page on search
+                }}
+                className="pl-10"
+              />
+            </div>
+
             {/* Assets List */}
             <div className="space-y-2">
-              {portfolio.assets.map((asset) => {
-                const priceChange = parseFloat(asset.priceChangePercent);
-                const isPositive = priceChange >= 0;
+              {(() => {
+                // Filter assets by debounced search query (prevents excessive re-renders)
+                const filteredAssets = portfolio.assets.filter((asset) =>
+                  asset.asset.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+                );
+
+                // Calculate pagination
+                const totalPages = Math.ceil(filteredAssets.length / itemsPerPage);
+                const startIndex = (currentPage - 1) * itemsPerPage;
+                const endIndex = startIndex + itemsPerPage;
+                const paginatedAssets = filteredAssets.slice(startIndex, endIndex);
+
+                if (filteredAssets.length === 0) {
+                  return (
+                    <div className="text-center py-6">
+                      <Search className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500">No assets found matching &quot;{debouncedSearchQuery}&quot;</p>
+                    </div>
+                  );
+                }
 
                 return (
-                  <div
-                    key={asset.asset}
-                    className="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <p className="font-medium">{asset.asset}</p>
+                  <>
+                    {paginatedAssets.map((asset) => {
+                      const priceChange = parseFloat(asset.priceChangePercent);
+                      const isPositive = priceChange >= 0;
+
+                      return (
                         <div
-                          className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
-                            isPositive
-                              ? "bg-green-100 text-green-700"
-                              : "bg-red-100 text-red-700"
-                          }`}
+                          key={asset.asset}
+                          className="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
                         >
-                          {isPositive ? (
-                            <TrendingUp className="w-3 h-3" />
-                          ) : (
-                            <TrendingDown className="w-3 h-3" />
-                          )}
-                          {isPositive ? "+" : ""}
-                          {priceChange.toFixed(2)}%
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-medium">{asset.asset}</p>
+                              <div
+                                className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+                                  isPositive
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-red-100 text-red-700"
+                                }`}
+                              >
+                                {isPositive ? (
+                                  <TrendingUp className="w-3 h-3" />
+                                ) : (
+                                  <TrendingDown className="w-3 h-3" />
+                                )}
+                                {isPositive ? "+" : ""}
+                                {priceChange.toFixed(2)}%
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 text-xs text-gray-500">
+                              <span>Balance: {asset.total.toFixed(8)}</span>
+                              {parseFloat(asset.locked) > 0 && (
+                                <span className="text-amber-600">
+                                  Locked: {parseFloat(asset.locked).toFixed(8)}
+                                </span>
+                              )}
+                              <span className="text-purple-600">
+                                {asset.allocation.toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold text-gray-900">
+                              {formatCurrency(asset.valueUSDT)}
+                            </p>
+                            <p className="text-xs text-gray-500">USDT</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between pt-4 border-t">
+                        <p className="text-sm text-gray-600">
+                          Showing {startIndex + 1}-{Math.min(endIndex, filteredAssets.length)} of {filteredAssets.length} assets
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                            disabled={currentPage === 1}
+                            className="h-8 px-2"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </Button>
+                          <span className="text-sm text-gray-600">
+                            Page {currentPage} of {totalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                            disabled={currentPage === totalPages}
+                            className="h-8 px-2"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-gray-500">
-                        <span>Balance: {asset.total.toFixed(8)}</span>
-                        {parseFloat(asset.locked) > 0 && (
-                          <span className="text-amber-600">
-                            Locked: {parseFloat(asset.locked).toFixed(8)}
-                          </span>
-                        )}
-                        <span className="text-purple-600">
-                          {asset.allocation.toFixed(1)}%
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-gray-900">
-                        {formatCurrency(asset.valueUSDT)}
-                      </p>
-                      <p className="text-xs text-gray-500">USDT</p>
-                    </div>
-                  </div>
+                    )}
+                  </>
                 );
-              })}
+              })()}
             </div>
           </div>
         )}

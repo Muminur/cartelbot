@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { MobileSidebar } from "./MobileSidebar";
 import { API_ROUTES } from "@/lib/constants";
 
@@ -44,6 +44,10 @@ export function Navigation({ userEmail }: NavigationProps) {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="p-0">
+                <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+                <SheetDescription className="sr-only">
+                  Access dashboard navigation including signals, trades, portfolio, settings, and subscription management.
+                </SheetDescription>
                 <MobileSidebar onNavigate={() => setMobileMenuOpen(false)} />
               </SheetContent>
             </Sheet>

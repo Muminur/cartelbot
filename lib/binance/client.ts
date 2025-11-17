@@ -252,6 +252,23 @@ export class BinanceClient {
     return response.data;
   }
 
+  async getBatch24hrTicker(symbols: string[]): Promise<BinanceTicker24hr[]> {
+    // Binance API accepts symbols as JSON array: ["BTCUSDT","ETHUSDT"]
+    const encodedSymbols = encodeURIComponent(JSON.stringify(symbols));
+    const response = await this.axios.get<BinanceTicker24hr[]>(
+      `/api/v3/ticker/24hr?symbols=${encodedSymbols}`
+    );
+    return response.data;
+  }
+
+  async getAll24hrTickers(): Promise<BinanceTicker24hr[]> {
+    // Fetch all tickers (no symbol parameter)
+    const response = await this.axios.get<BinanceTicker24hr[]>(
+      "/api/v3/ticker/24hr"
+    );
+    return response.data;
+  }
+
   async createMarketBuyOrder(
     symbol: string,
     quoteOrderQty: number
