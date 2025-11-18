@@ -1837,6 +1837,8 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 **Fixed session API hasApiKeys detection (20af2cb)**: getCurrentUser() wasn't selecting encryptedApiKey/encryptedApiSecret (select: false in schema). Added .select("+encryptedApiKey +encryptedApiSecret") to User.findById(). OCO warning correctly disappears when keys saved. Quality 9.5/10.
 
+**Increased price decimal precision (17d7bca)**: Changed all price displays from 2→6 decimals on OCO pages for better precision. Percentages kept at 2 decimals. Quality 9.5/10.
+
 
 ## Session: Portfolio Pagination Fix (Nov 17, 2025)
 
@@ -1851,3 +1853,8 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: Portfolio Search Enhancement - Symbol + Name Matching (Nov 17, 2025)
 
 **Enhanced search with full coin names (fe0f49d)**: Added 30 crypto name mappings (BTC→Bitcoin). Search now matches both symbol AND full name. Shows full name below ticker. Updated placeholder with examples. Quality 9.5/10.
+
+
+## Session: WebSocket Stream 404 Fix (Nov 17, 2025)
+
+**Fixed /api/websocket/stream 404 errors (bba11f9)**: Hook now calls /api/websocket/start before streaming. Changed start endpoint to return success if connection already active (was 409). Async connect() with proper cleanup. Quality 9.5/10.
