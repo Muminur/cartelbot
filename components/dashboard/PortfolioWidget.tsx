@@ -501,7 +501,9 @@ export function PortfolioWidget() {
 
                 // Calculate pagination
                 const totalPages = Math.ceil(filteredAssets.length / itemsPerPage);
-                const startIndex = (currentPage - 1) * itemsPerPage;
+                // Ensure current page is within valid range
+                const validPage = Math.min(currentPage, Math.max(1, totalPages));
+                const startIndex = (validPage - 1) * itemsPerPage;
                 const endIndex = startIndex + itemsPerPage;
                 const paginatedAssets = filteredAssets.slice(startIndex, endIndex);
 
@@ -577,19 +579,19 @@ export function PortfolioWidget() {
                             variant="outline"
                             size="sm"
                             onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                            disabled={currentPage === 1}
+                            disabled={validPage === 1}
                             className="h-8 px-2"
                           >
                             <ChevronLeft className="w-4 h-4" />
                           </Button>
                           <span className="text-sm text-gray-600">
-                            Page {currentPage} of {totalPages}
+                            Page {validPage} of {totalPages}
                           </span>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                            disabled={currentPage === totalPages}
+                            disabled={validPage === totalPages}
                             className="h-8 px-2"
                           >
                             <ChevronRight className="w-4 h-4" />
