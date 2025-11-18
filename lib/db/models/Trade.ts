@@ -183,6 +183,7 @@ tradeSchema.index({ userId: 1, status: 1 });
 tradeSchema.index({ signalId: 1 });
 // Index for OCO orders queries (critical for /api/oco performance)
 tradeSchema.index({ userId: 1, "sellOrders.0": 1 });
+tradeSchema.index({ userId: 1, "sellOrders.orderListId": 1 }); // CRITICAL: For efficient OCO queries
 
 if (process.env.NODE_ENV === "development") {
   const models = mongoose.models as { [key: string]: any };

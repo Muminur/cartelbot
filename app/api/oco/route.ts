@@ -1,430 +1,300 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
 import { connectDB } from "@/lib/db/connection";
-import { getUserApiKeys } from "@/lib/db/helpers";
-import { BinanceClient } from "@/lib/binance";
-import { decrypt } from "@/lib/encryption";
-import type { BinanceOCOResponse } from "@/types";
+import { Trade } from "@/lib/db/models/Trade";
+import type { ITrade, IOrder } from "@/types";
 
-// C1: Simple in-memory cache layer (10-second TTL)
-const ocoCache = new Map<
-  string,
-  { data: BinanceOCOResponse[]; timestamp: number }
->();
-const CACHE_TTL = 10000; // 10 seconds
-
-/**
- * Get cached OCO orders if still valid
- */
-function getCachedOCO(cacheKey: string): BinanceOCOResponse[] | null {
-  const cached = ocoCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.data;
-  }
-  return null;
-}
+// Type for lean queries (no Mongoose Document methods)
+type LeanTrade = {
+  _id: string;
+  symbol: string;
+  sellOrders?: IOrder[];
+  testnet?: boolean;
+  createdAt?: Date;
+};
 
 /**
- * Cache OCO orders with timestamp
- */
-function setCachedOCO(cacheKey: string, data: BinanceOCOResponse[]): void {
-  ocoCache.set(cacheKey, { data, timestamp: Date.now() });
-
-  // Clean old cache entries to prevent memory leak
-  if (ocoCache.size > 100) {
-    const oldestKey = Array.from(ocoCache.keys())[0];
-    if (oldestKey) {
-      ocoCache.delete(oldestKey);
-    }
-  }
-}
-
-/**
- * C2: Sanitize error messages to prevent API key leakage
- */
-function sanitizeErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    // Remove any potential API keys (32+ alphanumeric sequences)
-    return error.message.replace(/[a-zA-Z0-9]{32,}/g, "[REDACTED]");
-  }
-  return "Failed to fetch OCO orders from Binance";
-}
-
-/**
- * GET /api/oco
+ * GET /api/oco - Fetch OCO orders from database (not Binance)
  *
- * Fetch all user's OCO orders directly from Binance API (both mainnet and testnet)
+ * Query parameters:
+ * - symbol: Filter by symbol (optional)
+ * - status: Filter by status (optional)
+ * - network: Filter by network: mainnet, testnet, or all (default: all)
+ * - page: Page number (default: 1)
+ * - limit: Results per page (default: 20, max: 100)
  *
- * Query params:
- * - symbol: Filter by symbol (case-insensitive)
- * - status: Filter by status (all | EXECUTING | ALL_DONE | REJECT)
- * - network: Filter by network (all | mainnet | testnet)
- * - page: Page number (default 1)
- * - limit: Items per page (default 20)
- * - sortBy: Sort field (default "transactionTime")
- * - sortOrder: Sort order (asc | desc, default "desc")
- *
- * Returns:
- * - Array of OCO orders with details from Binance
- * - Pagination metadata
+ * Returns OCO orders with orderReports from database Trade records
  */
 export async function GET(request: NextRequest) {
+  const startTime = Date.now();
+
   try {
     // 1. Authenticate user
     const authResult = await getUserFromRequest(request);
-    if (!authResult.user) {
+    if (!authResult || !authResult.user) {
       return NextResponse.json(
-        { success: false, error: { message: "Unauthorized" } },
+        {
+          success: false,
+          error: {
+            message: "Unauthorized. Please log in to continue.",
+            code: "UNAUTHORIZED",
+          },
+        },
         { status: 401 }
       );
     }
 
-    // 2. Connect to database and get user API keys
+    const user = authResult.user;
+
+    // C3: Validate user ID exists
+    if (!user._id) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message: "Invalid user session",
+            code: "INVALID_SESSION",
+          },
+        },
+        { status: 401 }
+      );
+    }
+
+    // 2. Parse query parameters
+    const searchParams = request.nextUrl.searchParams;
+    const symbol = searchParams.get("symbol") || "";
+    const statusFilter = searchParams.get("status") || "all";
+    const network = searchParams.get("network") || "all";
+
+    const pageNum = parseInt(searchParams.get("page") || "1", 10);
+    const limitNum = parseInt(searchParams.get("limit") || "20", 10);
+    const page = isNaN(pageNum) ? 1 : Math.max(1, pageNum);
+    const limit = isNaN(limitNum) ? 20 : Math.min(100, Math.max(1, limitNum));
+
+    // 3. Connect to database
     await connectDB();
 
-    const apiKeys = await getUserApiKeys(authResult.user._id);
-    if (!apiKeys || !apiKeys.encryptedApiKey || !apiKeys.encryptedApiSecret) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            message: "API keys not configured. Please add your Binance API keys in Settings.",
-            code: "API_KEYS_MISSING",
-          },
-        },
-        { status: 400 }
-      );
-    }
+    // 4. Build query to fetch trades with OCO orders (sellOrders with orderListId)
+    const query: Record<string, unknown> = {
+      userId: String(user._id),
+      "sellOrders.0": { $exists: true }, // Has at least one sell order
+      "sellOrders.orderListId": { $exists: true }, // Has OCO orders
+    };
 
-    // 3. Parse query parameters with H2: Input validation
-    const { searchParams } = new URL(request.url);
-
-    // Validate symbol (max 20 chars, alphanumeric only)
-    const symbolRaw = searchParams.get("symbol") || "";
-    const symbol = symbolRaw.trim().toUpperCase().slice(0, 20);
-
-    // Validate status (whitelist)
-    const validStatuses = ["all", "EXECUTING", "ALL_DONE", "REJECT"];
-    const statusRaw = searchParams.get("status") || "all";
-    const statusFilter = validStatuses.includes(statusRaw) ? statusRaw : "all";
-
-    // Validate network (whitelist)
-    const validNetworks = ["all", "mainnet", "testnet"];
-    const networkRaw = searchParams.get("network") || "all";
-    const network = validNetworks.includes(networkRaw) ? networkRaw : "all";
-
-    // Validate pagination (bounds checking)
-    const pageRaw = parseInt(searchParams.get("page") || "1");
-    const page = Math.max(1, Math.min(1000, isNaN(pageRaw) ? 1 : pageRaw));
-
-    const limitRaw = parseInt(searchParams.get("limit") || "20");
-    const limit = Math.max(1, Math.min(100, isNaN(limitRaw) ? 20 : limitRaw));
-
-    // Validate sortBy (whitelist)
-    const validSortFields = ["transactionTime", "orderListId", "symbol"];
-    const sortByRaw = searchParams.get("sortBy") || "transactionTime";
-    const sortBy = validSortFields.includes(sortByRaw)
-      ? sortByRaw
-      : "transactionTime";
-
-    // Validate sortOrder (whitelist)
-    const sortOrderRaw = searchParams.get("sortOrder") || "desc";
-    const sortOrder = sortOrderRaw === "asc" ? "asc" : "desc";
-
-    // 4. Decrypt API keys with H1: Error handling
-    let apiKey: string;
-    let apiSecret: string;
-
-    try {
-      apiKey = decrypt(apiKeys.encryptedApiKey);
-      apiSecret = decrypt(apiKeys.encryptedApiSecret);
-    } catch (decryptError) {
-      console.error("[OCO API] Decryption failed:", {
-        userId: authResult.user._id,
-        error:
-          decryptError instanceof Error ? decryptError.message : "Unknown",
-      });
-
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            message:
-              "Failed to decrypt API keys. Please re-save your keys in Settings.",
-            code: "DECRYPTION_FAILED",
-          },
-        },
-        { status: 500 }
-      );
-    }
-
-    // 5. Determine which networks to fetch from
-    const fetchMainnet = network === "all" || network === "mainnet";
-    const fetchTestnet = network === "all" || network === "testnet";
-
-    // 6. Fetch OCO orders from Binance API with C1: Caching and H3: Failure tracking
-    const allOcoOrders: Array<BinanceOCOResponse & { testnet: boolean }> = [];
-    const failedNetworks: string[] = [];
-
-    // Fetch from mainnet if needed
-    if (fetchMainnet) {
-      const mainnetCacheKey = `${authResult.user._id}_mainnet`;
-      let mainnetOrders: BinanceOCOResponse[] = [];
-
-      // Try to get from cache first
-      const cachedMainnet = getCachedOCO(mainnetCacheKey);
-      if (cachedMainnet) {
-        mainnetOrders = cachedMainnet;
-      } else {
-        // Fetch from Binance if cache miss
-        try {
-          const mainnetClient = new BinanceClient({
-            apiKey,
-            apiSecret,
-            testnet: false,
-          });
-
-          // Fetch all OCO orders from mainnet (limit 1000 to prevent huge responses)
-          mainnetOrders = await mainnetClient.getAllOCOOrders({ limit: 1000 });
-
-          // Cache the results
-          setCachedOCO(mainnetCacheKey, mainnetOrders);
-        } catch (error: unknown) {
-          failedNetworks.push("mainnet");
-          console.error("[OCO API] Error fetching mainnet OCO orders:", {
-            error: error instanceof Error ? error.message : "Unknown error",
-            userId: authResult.user._id,
-          });
-          // Continue execution - we'll still try to fetch testnet orders
-        }
-      }
-
-      // Add testnet flag to each order
-      mainnetOrders.forEach((order) => {
-        allOcoOrders.push({ ...order, testnet: false });
-      });
-    }
-
-    // Fetch from testnet if needed
-    if (fetchTestnet) {
-      const testnetCacheKey = `${authResult.user._id}_testnet`;
-      let testnetOrders: BinanceOCOResponse[] = [];
-
-      // Try to get from cache first
-      const cachedTestnet = getCachedOCO(testnetCacheKey);
-      if (cachedTestnet) {
-        testnetOrders = cachedTestnet;
-      } else {
-        // Fetch from Binance if cache miss
-        try {
-          const testnetClient = new BinanceClient({
-            apiKey,
-            apiSecret,
-            testnet: true,
-          });
-
-          // Fetch all OCO orders from testnet (limit 1000 to prevent huge responses)
-          testnetOrders = await testnetClient.getAllOCOOrders({ limit: 1000 });
-
-          // Cache the results
-          setCachedOCO(testnetCacheKey, testnetOrders);
-        } catch (error: unknown) {
-          failedNetworks.push("testnet");
-          console.error("[OCO API] Error fetching testnet OCO orders:", {
-            error: error instanceof Error ? error.message : "Unknown error",
-            userId: authResult.user._id,
-          });
-          // Continue execution - we'll return what we have
-        }
-      }
-
-      // Add testnet flag to each order
-      testnetOrders.forEach((order) => {
-        allOcoOrders.push({ ...order, testnet: true });
-      });
-    }
-
-    // H3: Check if both networks failed
-    if (allOcoOrders.length === 0 && failedNetworks.length > 0) {
-      const networkStr =
-        network === "all" ? "both mainnet and testnet" : network;
-
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            message: `Failed to fetch OCO orders from ${networkStr}. Please try again later.`,
-            code: "FETCH_FAILED",
-            failedNetworks,
-          },
-        },
-        { status: 502 } // Bad Gateway
-      );
-    }
-
-    // 7. Apply filters
-    let filteredOrders = allOcoOrders;
-
-    // Filter by symbol (case-insensitive)
+    // C4: Filter by symbol with NoSQL injection protection
     if (symbol) {
-      const symbolUpper = symbol.trim().toUpperCase();
-      filteredOrders = filteredOrders.filter((order) =>
-        order.symbol.toUpperCase().includes(symbolUpper)
-      );
-    }
+      // Escape regex special characters
+      const escapedSymbol = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-    // Filter by status
-    if (statusFilter !== "all") {
-      filteredOrders = filteredOrders.filter(
-        (order) => order.listOrderStatus === statusFilter
-      );
-    }
-
-    // 8. Sort orders
-    filteredOrders.sort((a, b) => {
-      let aValue: number | string;
-      let bValue: number | string;
-
-      if (sortBy === "transactionTime") {
-        aValue = a.transactionTime;
-        bValue = b.transactionTime;
-      } else if (sortBy === "orderListId") {
-        aValue = a.orderListId;
-        bValue = b.orderListId;
-      } else if (sortBy === "symbol") {
-        aValue = a.symbol;
-        bValue = b.symbol;
-      } else {
-        // Default to transactionTime
-        aValue = a.transactionTime;
-        bValue = b.transactionTime;
+      // Limit length to prevent ReDoS
+      if (escapedSymbol.length > 20) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              message: "Symbol filter too long (max 20 characters)",
+              code: "INVALID_SYMBOL_FILTER",
+            },
+          },
+          { status: 400 }
+        );
       }
 
-      if (typeof aValue === "number" && typeof bValue === "number") {
-        return sortOrder === "asc" ? aValue - bValue : bValue - aValue;
-      } else {
-        // String comparison
-        const strA = String(aValue);
-        const strB = String(bValue);
-        return sortOrder === "asc"
-          ? strA.localeCompare(strB)
-          : strB.localeCompare(strA);
+      query.symbol = { $regex: `^${escapedSymbol}`, $options: "i" };
+    }
+
+    // Filter by network
+    if (network === "mainnet") {
+      query.testnet = false;
+    } else if (network === "testnet") {
+      query.testnet = true;
+    }
+
+    // 5. Fetch trades from database with timeout protection
+    let tradesResult;
+    try {
+      tradesResult = await Trade.find(query)
+        .select("symbol sellOrders testnet createdAt")
+        .sort({ createdAt: -1 })
+        .maxTimeMS(5000) // H4: 5-second timeout
+        .lean()
+        .exec();
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === "MongoServerError") {
+        const mongoError = error as { code?: number };
+        if (mongoError.code === 50) {
+          // MaxTimeMSExpired
+          return NextResponse.json(
+            {
+              success: false,
+              error: {
+                message:
+                  "Database query timeout. Please try a more specific filter.",
+                code: "QUERY_TIMEOUT",
+              },
+            },
+            { status: 504 }
+          );
+        }
       }
+      throw error; // Re-throw other errors
+    }
+
+    // C2: Proper type casting for lean queries
+    const trades = tradesResult as unknown as LeanTrade[];
+
+    const queryTime = Date.now() - startTime;
+    console.log(`[OCO API] Fetched ${trades.length} trades in ${queryTime}ms`, {
+      userId: String(user._id),
+      filters: { symbol, statusFilter, network },
+      pagination: { page, limit },
     });
 
-    // 9. Apply pagination
+    // 6. Transform trades into OCO order format
+    const allOCOOrders = trades.flatMap((trade: LeanTrade) => {
+      // H1: Defensive check for corrupted data
+      if (
+        !Array.isArray(trade.sellOrders) ||
+        trade.sellOrders.length === 0
+      ) {
+        return [];
+      }
+
+      // Group sell orders by orderListId
+      const ocoGroups = new Map<number, IOrder[]>();
+
+      trade.sellOrders.forEach((order: IOrder) => {
+        // Check for orderListId (including 0, which is valid)
+        if (order.orderListId !== undefined && order.orderListId !== null) {
+          const existing = ocoGroups.get(order.orderListId);
+          if (existing) {
+            existing.push(order);
+          } else {
+            ocoGroups.set(order.orderListId, [order]);
+          }
+        }
+      });
+
+      // Create OCO order objects from grouped orders
+      return Array.from(ocoGroups.entries()).map(([orderListId, orders]) => {
+        // H1: Validate orders array
+        if (orders.length === 0) {
+          console.warn(
+            `[OCO API] Empty orders array for orderListId ${orderListId}`
+          );
+        }
+
+        // H2: Determine overall status based on individual order statuses (FIXED LOGIC)
+        const statuses = orders.map((o: IOrder) => o.status);
+        let listOrderStatus: string;
+
+        // Check for rejection first
+        if (statuses.some((s: string) => s === "REJECTED")) {
+          listOrderStatus = "REJECTED";
+        }
+        // OCO is done if at least one order filled (other should be canceled)
+        else if (statuses.some((s: string) => s === "FILLED")) {
+          listOrderStatus = "ALL_DONE";
+        }
+        // All orders canceled/expired
+        else if (
+          statuses.every(
+            (s: string) => s === "CANCELED" || s === "EXPIRED"
+          )
+        ) {
+          listOrderStatus = "ALL_DONE";
+        }
+        // At least one partially filled
+        else if (statuses.some((s: string) => s === "PARTIALLY_FILLED")) {
+          listOrderStatus = "EXECUTING";
+        }
+        // All orders still active
+        else if (statuses.every((s: string) => s === "NEW")) {
+          listOrderStatus = "EXECUTING";
+        }
+        // Mixed state or unknown
+        else {
+          listOrderStatus = "EXECUTING";
+          console.warn(
+            `[OCO API] Unknown status combination for orderListId ${orderListId}:`,
+            statuses
+          );
+        }
+
+        return {
+          orderListId,
+          symbol: trade.symbol,
+          orders: orders.map((order: IOrder) => ({
+            orderId: order.orderId,
+            type: order.type,
+            price: order.price || 0,
+            stopPrice: order.stopPrice,
+            quantity: order.quantity,
+            status: order.status,
+            executedQty: order.executedQty || 0,
+          })),
+          status: listOrderStatus,
+          createdAt:
+            orders[0]?.timestamp?.toISOString() ||
+            trade.createdAt?.toISOString() ||
+            new Date().toISOString(),
+          testnet: trade.testnet ?? false,
+        };
+      });
+    });
+
+    const transformTime = Date.now() - startTime - queryTime;
+    console.log(
+      `[OCO API] Transformed to ${allOCOOrders.length} OCO orders in ${transformTime}ms`
+    );
+
+    // 7. Apply status filter
+    let filteredOrders = allOCOOrders;
+    if (statusFilter !== "all") {
+      filteredOrders = filteredOrders.filter(
+        (order: (typeof allOCOOrders)[0]) => {
+          // Map status filter to listOrderStatus
+          if (statusFilter === "FILLED") {
+            return order.status === "ALL_DONE";
+          }
+          return order.status === statusFilter;
+        }
+      );
+    }
+
+    // 8. Apply pagination
     const totalOrders = filteredOrders.length;
     const totalPages = Math.ceil(totalOrders / limit);
     const skip = Math.max(0, (page - 1) * limit);
     const paginatedOrders = filteredOrders.slice(skip, skip + limit);
 
-    // 10. Enrich orders with missing orderReports by fetching individual order details
-    // FIX: Create clients once instead of per-order for better performance
-    const mainnetEnrichmentClient = new BinanceClient({
-      apiKey,
-      apiSecret,
-      testnet: false,
-    });
-
-    const testnetEnrichmentClient = new BinanceClient({
-      apiKey,
-      apiSecret,
-      testnet: true,
-    });
-
-    // Find orders that need enrichment
-    const ordersNeedingEnrichment = paginatedOrders.filter(
-      order => !order.orderReports || order.orderReports.length === 0
+    console.log(
+      `[OCO API] Returning ${paginatedOrders.length} orders (page ${page}/${totalPages})`
     );
 
-    if (ordersNeedingEnrichment.length > 0) {
-      console.log(`[OCO API] Enriching ${ordersNeedingEnrichment.length} orders with missing orderReports`);
-    }
-
-    // FIX: Use Promise.allSettled with rate limiting (max 5 concurrent requests)
-    const enrichmentPromises = paginatedOrders.map(async (order, index) => {
-      // Check if orderReports is empty or missing
-      if (!order.orderReports || order.orderReports.length === 0) {
-        try {
-          // FIX: Rate limiting - add delay between requests (100ms per request)
-          if (index > 0) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-          }
-
-          // FIX: Reuse clients based on testnet flag
-          const enrichmentClient = order.testnet ? testnetEnrichmentClient : mainnetEnrichmentClient;
-
-          // Fetch detailed order information
-          const detailedOrder = await enrichmentClient.getOCOOrder(order.orderListId);
-
-          return { ...order, orderReports: detailedOrder.orderReports };
-        } catch (error) {
-          console.error(`[OCO API] Failed to enrich order ${order.orderListId}:`, {
-            error: error instanceof Error ? error.message : "Unknown error",
-            orderListId: order.orderListId,
-          });
-          return order; // Return original order if enrichment fails
-        }
-      }
-      return order; // Already has orderReports
-    });
-
-    const enrichedOrders = await Promise.allSettled(enrichmentPromises);
-
-    // FIX: Proper type guard for filtering fulfilled results
-    type EnrichedOrder = BinanceOCOResponse & { testnet: boolean };
-
-    const validOrders = enrichedOrders
-      .filter((result): result is PromiseFulfilledResult<EnrichedOrder> => result.status === 'fulfilled')
-      .map((result) => result.value);
-
-    // Log enrichment summary
-    const failures = enrichedOrders.filter(r => r.status === 'rejected');
-    if (failures.length > 0) {
-      console.error(`[OCO API] ${failures.length}/${paginatedOrders.length} orders failed to enrich`);
-    }
-    if (ordersNeedingEnrichment.length > 0) {
-      const successCount = ordersNeedingEnrichment.length - failures.length;
-      console.log(`[OCO API] Enrichment completed: ${successCount} succeeded, ${failures.length} failed`);
-    }
-
-    // 11. Transform to response format
-    const transformedOrders = validOrders.map((order) => {
-      // Extract order details from orderReports
-      const orders = order.orderReports?.map((report) => ({
-        orderId: report.orderId,
-        type: report.type,
-        price: parseFloat(report.price),
-        stopPrice: report.stopPrice ? parseFloat(report.stopPrice) : undefined,
-        quantity: parseFloat(report.origQty),
-        status: report.status,
-        executedQty: parseFloat(report.executedQty),
-      })) || [];
-
-      return {
-        orderListId: order.orderListId,
-        symbol: order.symbol,
-        orders,
-        status: order.listOrderStatus,
-        createdAt: new Date(order.transactionTime).toISOString(),
-        testnet: order.testnet,
-      };
-    });
-
-    // 12. Return response
+    // 9. Return response
     return NextResponse.json({
       success: true,
-      data: transformedOrders,
+      data: paginatedOrders,
       pagination: {
         page,
         limit,
-        total: totalOrders,
+        total: totalOrders, // Filtered count
+        totalUnfiltered: allOCOOrders.length, // H3: Total count before filtering
         pages: totalPages,
-        actualCount: transformedOrders.length,
+        actualCount: paginatedOrders.length,
+      },
+      meta: {
+        source: "database",
+        queryTimeMs: queryTime,
+        transformTimeMs: transformTime,
+        ...(paginatedOrders.some((o) => o.status === "EXECUTING") && {
+          note: "For real-time updates on active orders, WebSocket stream is recommended.",
+        }),
       },
     });
   } catch (error: unknown) {
-    console.error("[OCO API] Error fetching OCO orders from Binance:", {
+    console.error("[OCO API] Error fetching OCO orders from database:", {
       error: error instanceof Error ? error.message : "Unknown error",
       stack: error instanceof Error ? error.stack : undefined,
     });
@@ -433,8 +303,11 @@ export async function GET(request: NextRequest) {
       {
         success: false,
         error: {
-          message: sanitizeErrorMessage(error), // C2: Sanitize error messages
-          code: "FETCH_ERROR",
+          message:
+            error instanceof Error && error.message.includes("timeout")
+              ? "Database query timeout. Try using filters to narrow results."
+              : "Failed to fetch OCO orders. Please try again later.",
+          code: "INTERNAL_ERROR",
         },
       },
       { status: 500 }
