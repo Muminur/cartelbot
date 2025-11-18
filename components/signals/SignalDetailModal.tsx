@@ -165,6 +165,7 @@ export default function SignalDetailModal({
             const newPrice = parseFloat(priceValue);
 
             if (process.env.NODE_ENV === "development") {
+              // eslint-disable-next-line no-console
               console.log("[SignalDetailModal] Live price fetched:", {
                 symbol: signal.symbol,
                 price: newPrice,
@@ -418,6 +419,10 @@ export default function SignalDetailModal({
     if (!trade || !trade.sellOrders) return new Set();
 
     const filled = new Set<number>();
+
+    // Count how many LIMIT_MAKER (take profit) orders are FILLED
+    let filledTpCount = 0;
+
     trade.sellOrders.forEach((order: IOrder) => {
       // FIX: Use real-time status from Binance API if available, fallback to database
       const ocoStatus = order.orderListId ? ocoStatuses.get(order.orderListId) : null;
@@ -426,19 +431,37 @@ export default function SignalDetailModal({
       );
       const displayStatus = realOrderStatus?.status || order.status;
 
-      // Only count LIMIT_MAKER (take profit) orders that are FILLED
-      if (displayStatus === "FILLED" && order.type === "LIMIT_MAKER" && order.price) {
-        // Find which target index this matches
-        signal.targets.forEach((target, index) => {
-          // FIX: Use percentage-based tolerance instead of fixed 0.0001
-          // This handles different price ranges better (e.g., $0.50 vs $50,000)
-          const tolerance = target * 0.001; // 0.1% tolerance
-          if (Math.abs(order.price! - target) <= tolerance) {
-            filled.add(index);
-          }
-        });
+      // Count FILLED LIMIT_MAKER orders (take profit targets)
+      if (displayStatus === "FILLED" && order.type === "LIMIT_MAKER") {
+        filledTpCount++;
+
+        // Try to match this order to a specific target price
+        // Use price from Binance API if available, fallback to database price
+        const orderPrice = realOrderStatus?.price
+          ? parseFloat(realOrderStatus.price)
+          : order.price;
+
+        if (orderPrice) {
+          signal.targets.forEach((target, index) => {
+            // FIX: Use percentage-based tolerance instead of fixed 0.0001
+            // This handles different price ranges better (e.g., $0.50 vs $50,000)
+            const tolerance = target * 0.001; // 0.1% tolerance
+            if (Math.abs(orderPrice - target) <= tolerance) {
+              filled.add(index);
+            }
+          });
+        }
       }
     });
+
+    // FIX: If we have filled TP orders but couldn't match them to specific targets,
+    // assume targets were hit in order (Target 1, Target 2, etc.)
+    if (filledTpCount > 0 && filled.size === 0) {
+      console.warn(`[getFilledTargets] ${filledTpCount} TP orders filled but couldn't match to targets. Assuming sequential fill.`);
+      for (let i = 0; i < Math.min(filledTpCount, signal.targets.length); i++) {
+        filled.add(i);
+      }
+    }
 
     return filled;
   };
@@ -1008,7 +1031,7 @@ export default function SignalDetailModal({
                             // Determine what happened in this OCO pair
                             const tpTriggered = tpStatus === 'FILLED';
                             const slTriggered = slStatus === 'FILLED';
-                            const bothActive = tpStatus === 'NEW' && slStatus === 'NEW';
+                            // const bothActive = tpStatus === 'NEW' && slStatus === 'NEW';
 
                             const currentTpIndex = tpIndex++;
 
