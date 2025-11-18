@@ -415,7 +415,7 @@ export default function OCODetailPage() {
                     <p className="text-sm text-muted-foreground">Current Price</p>
                     <div className="flex items-center gap-2">
                       <p className="text-2xl font-bold">
-                        ${currentPrice.toFixed(2)}
+                        ${currentPrice.toFixed(6)}
                       </p>
                       <Badge
                         className={`${
@@ -445,7 +445,7 @@ export default function OCODetailPage() {
                     <div className="flex flex-wrap gap-2">
                       {signal.entries.map((entry, idx) => (
                         <Badge key={idx} variant="outline" className="text-base">
-                          ${entry.toFixed(2)}
+                          ${entry.toFixed(6)}
                         </Badge>
                       ))}
                     </div>
@@ -464,7 +464,7 @@ export default function OCODetailPage() {
                           key={idx}
                           className="bg-green-500 text-white text-base"
                         >
-                          Target {idx + 1}: ${target.toFixed(2)}
+                          Target {idx + 1}: ${target.toFixed(6)}
                         </Badge>
                       ))}
                     </div>
@@ -476,7 +476,7 @@ export default function OCODetailPage() {
                   <div className="mt-6">
                     <p className="text-sm text-muted-foreground mb-2">Stop Loss</p>
                     <Badge className="bg-red-500 text-white text-base">
-                      ${signal.stopLoss.toFixed(2)}
+                      ${signal.stopLoss.toFixed(6)}
                     </Badge>
                   </div>
                 )}
@@ -557,7 +557,7 @@ export default function OCODetailPage() {
                                   {isTakeProfit ? "Target Price" : "Stop Price"}
                                 </p>
                                 <p className="font-bold">
-                                  ${(order.stopPrice || order.price).toFixed(2)}
+                                  ${(order.stopPrice || order.price).toFixed(6)}
                                 </p>
                               </div>
                               <div>
@@ -641,7 +641,7 @@ export default function OCODetailPage() {
                   <p className="text-sm text-muted-foreground">Current Price</p>
                   <div className="flex items-center gap-2">
                     <p className="text-2xl font-bold">
-                      ${currentPrice.toFixed(2)}
+                      ${currentPrice.toFixed(6)}
                     </p>
                     <Badge
                       className={`${
@@ -722,12 +722,12 @@ export default function OCODetailPage() {
                           {isTakeProfit ? "Target Price" : "Stop Price"}
                         </p>
                         <p className="font-bold">
-                          ${(stopPrice || price).toFixed(2)}
+                          ${(stopPrice || price).toFixed(6)}
                         </p>
                       </div>
                       <div>
                         <p className="text-muted-foreground">Limit Price</p>
-                        <p className="font-bold">${price.toFixed(2)}</p>
+                        <p className="font-bold">${price.toFixed(6)}</p>
                       </div>
                       <div>
                         <p className="text-muted-foreground">Quantity</p>
@@ -799,7 +799,7 @@ export default function OCODetailPage() {
                   <div className="flex flex-wrap gap-2">
                     {tradeData.signalId.entries.map((entry, idx) => (
                       <Badge key={idx} variant="outline" className="text-base">
-                        ${entry.toFixed(2)}
+                        ${entry.toFixed(6)}
                       </Badge>
                     ))}
                   </div>
@@ -818,7 +818,7 @@ export default function OCODetailPage() {
                         key={idx}
                         className="bg-green-500 text-white text-base"
                       >
-                        Target {idx + 1}: ${target.toFixed(2)}
+                        Target {idx + 1}: ${target.toFixed(6)}
                       </Badge>
                     ))}
                   </div>
@@ -830,7 +830,7 @@ export default function OCODetailPage() {
                 <div className="mt-6">
                   <p className="text-sm text-muted-foreground mb-2">Stop Loss</p>
                   <Badge className="bg-red-500 text-white text-base">
-                    ${tradeData.signalId.stopLoss.toFixed(2)}
+                    ${tradeData.signalId.stopLoss.toFixed(6)}
                   </Badge>
                 </div>
               )}

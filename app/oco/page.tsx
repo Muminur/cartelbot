@@ -304,7 +304,7 @@ export default function OCOOrdersPage() {
 
     return (
       <div className="space-y-1">
-        <div className="font-bold">${price.toFixed(2)}</div>
+        <div className="font-bold">${price.toFixed(6)}</div>
         <Badge
           className={`${
             isPositive
