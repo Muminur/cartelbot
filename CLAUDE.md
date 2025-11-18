@@ -1897,6 +1897,8 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 **Trade Summary P&L calculation fix (eee2052)**: Fixed Trade Summary showing -100% P&L via 5-layer solution: enhanced recalculation trigger (all closed trades not just specific values), smart update detection (0.000001 tolerance), client-side fallback calculation, auto-fix old trades, asterisk indicator when using calculated value. Applied 3 critical fixes: division by zero protection, race condition prevention (early return before async), extracted constants (PNL_UPDATE_TOLERANCE=0.000001). Code quality 8.5→9.5/10.
 
+**Binance ticker API timeout fix (cbc0919)**: Fixed "timeout of 10000ms exceeded" errors on signals history page with 3-layer timeout strategy: increased BinanceClient axios timeout 10s→30s for network latency, added frontend 20s timeout with AbortController cleanup, enhanced error handling distinguishing timeout/network/API errors. Proper cleanup prevents memory leaks. Error codes: 504 Gateway Timeout, 503 Service Unavailable, 404 Not Found. User-friendly messages with retry flags. Code review 9.0/10, production-ready.
+
 ---
 
 ## Session: P&L Calculation Fix - Complete Solution (Nov 18, 2025)
