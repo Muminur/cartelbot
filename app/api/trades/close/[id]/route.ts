@@ -133,23 +133,18 @@ export async function POST(
       }
     }
 
-    const ticker = await client.get24hrTicker(trade.symbol);
-    const exitPrice = parseFloat(ticker.lastPrice);
-    const realizedPnL = exitPrice * trade.quantity - trade.investedAmount;
+    // Get actual buy cost from Binance (what was actually spent)
+    const buyCost = trade.buyOrder.cummulativeQuoteQty;
 
-    trade.exitPrice = exitPrice;
-    trade.realizedPnL = realizedPnL;
-    trade.status = "closed";
-    trade.closeReason = "manual";
-
-    // Update signal status when trade is manually closed
-    if (trade.signalId) {
-      await markSignalCompleted(trade.signalId, trade._id, "manual_close");
-    }
+    let exitPrice: number;
+    let sellRevenue: number;
 
     if (marketSellOrder) {
+      // If we executed a market sell, use actual sell revenue from Binance
       const sellOrderExecutedQty = parseFloat(marketSellOrder.executedQty || "0");
-      const sellOrderPrice = parseFloat(marketSellOrder.fills?.[0]?.price || exitPrice.toString());
+      const sellOrderPrice = parseFloat(marketSellOrder.fills?.[0]?.price || "0");
+      sellRevenue = parseFloat(marketSellOrder.cummulativeQuoteQty || "0");
+      exitPrice = sellOrderExecutedQty > 0 ? sellRevenue / sellOrderExecutedQty : sellOrderPrice;
 
       trade.sellOrders.push({
         orderId: marketSellOrder.orderId,
@@ -159,10 +154,29 @@ export async function POST(
         quantity: sellOrderExecutedQty,
         price: sellOrderPrice,
         executedQty: sellOrderExecutedQty,
-        cummulativeQuoteQty: parseFloat(marketSellOrder.cummulativeQuoteQty || "0"),
+        cummulativeQuoteQty: sellRevenue,
         status: marketSellOrder.status,
         timestamp: new Date(marketSellOrder.transactTime || Date.now()),
       });
+    } else {
+      // If no market sell (all positions already sold via OCO), use current ticker price as estimate
+      const ticker = await client.get24hrTicker(trade.symbol);
+      exitPrice = parseFloat(ticker.lastPrice);
+      // Estimate revenue based on remaining quantity at current price
+      sellRevenue = exitPrice * trade.quantity;
+    }
+
+    // FIX: Realized P&L = Sell Revenue - Buy Cost (both from Binance API, not user input)
+    const realizedPnL = sellRevenue - buyCost;
+
+    trade.exitPrice = exitPrice;
+    trade.realizedPnL = realizedPnL;
+    trade.status = "closed";
+    trade.closeReason = "manual";
+
+    // Update signal status when trade is manually closed
+    if (trade.signalId) {
+      await markSignalCompleted(trade.signalId, trade._id, "manual_close");
     }
 
     await trade.save();

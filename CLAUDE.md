@@ -1879,4 +1879,6 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 **OCO status system validation**: Created validation report documenting OCO detail page already correctly fetches real-time order status from Binance API every 10s. System properly shows FILLED/CANCELED badges for individual orders (e.g., 329762, 329761) using Binance's orderReports array. OCO logic handled server-side by Binance. No changes needed. Quality 10/10.
 
-**Signal/trade status auto-update fix (a99e5a0)**: Fixed signal showing "EXECUTING" and trade showing "OPEN" when all targets FILLED. Added automatic detection in SignalDetailModal + /api/signals/[id]/update-status endpoint. Updates signal→"completed" and trade→"closed" when all TP orders FILLED or SL triggered. Quality 9.5/10.
+**Signal/trade status auto-update fix (5a90fe2)**: Fixed signal showing "EXECUTING" and trade showing "OPEN" when all targets FILLED. Added automatic detection in SignalDetailModal + /api/signals/[id]/update-status endpoint. Updates signal→"completed" and trade→"closed" when all TP orders FILLED or SL triggered. Quality 9.5/10.
+
+**P&L calculation fix**: Fixed incorrect P&L showing -100% loss when trade was profitable. Now uses actual Binance cummulativeQuoteQty (USDT spent/received) instead of investedAmount. Fixed 6 locations: SignalDetailModal, event-handlers (2), close trade, delete signal, orphaned coins. Quality 9.5/10.

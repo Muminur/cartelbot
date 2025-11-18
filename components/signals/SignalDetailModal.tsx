@@ -430,18 +430,26 @@ export default function SignalDetailModal({
               });
 
               if (filledOrders.length > 0) {
-                const totalSellValue = filledOrders.reduce(
+                // Get actual buy cost from Binance (what was actually spent)
+                const buyCost = trade.buyOrder.cummulativeQuoteQty;
+
+                // Get actual sell revenue from filled orders (what was actually received)
+                const sellRevenue = filledOrders.reduce(
                   (sum: number, order: IOrder) => sum + order.cummulativeQuoteQty,
                   0
                 );
+
                 const totalExecutedQty = filledOrders.reduce(
                   (sum: number, order: IOrder) => sum + order.executedQty,
                   0
                 );
 
                 if (totalExecutedQty > 0) {
-                  exitPrice = totalSellValue / totalExecutedQty;
-                  realizedPnL = totalSellValue - trade.investedAmount;
+                  // Weighted average exit price
+                  exitPrice = sellRevenue / totalExecutedQty;
+
+                  // FIX: Realized P&L = Sell Revenue - Buy Cost (both from Binance API, not user input)
+                  realizedPnL = sellRevenue - buyCost;
                 }
               }
 

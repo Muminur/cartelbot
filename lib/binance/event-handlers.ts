@@ -115,13 +115,19 @@ export async function handleExecutionReport(event: BinanceWebSocketEvent): Promi
             trade.status = "closed";
             trade.closeReason = "target";
 
-            const totalSellValue = trade.sellOrders.reduce(
+            // Get actual buy cost from Binance (what was actually spent)
+            const buyCost = trade.buyOrder.cummulativeQuoteQty;
+
+            // Get actual sell revenue from filled orders (what was actually received)
+            const sellRevenue = trade.sellOrders.reduce(
               (sum: number, order: { cummulativeQuoteQty: number }) =>
                 sum + order.cummulativeQuoteQty,
               0
             );
-            trade.realizedPnL = totalSellValue - trade.investedAmount;
-            trade.exitPrice = totalSellValue / totalExecutedQty;
+
+            // FIX: Realized P&L = Sell Revenue - Buy Cost (both from Binance API, not user input)
+            trade.realizedPnL = sellRevenue - buyCost;
+            trade.exitPrice = sellRevenue / totalExecutedQty;
 
             // Update signal status when trade closes
             if (trade.signalId) {
@@ -186,7 +192,11 @@ export async function handleListStatus(event: BinanceWebSocketEvent): Promise<vo
             );
 
             if (filledOrders.length > 0) {
-              const totalSellValue = filledOrders.reduce(
+              // Get actual buy cost from Binance (what was actually spent)
+              const buyCost = trade.buyOrder.cummulativeQuoteQty;
+
+              // Get actual sell revenue from filled orders (what was actually received)
+              const sellRevenue = filledOrders.reduce(
                 (sum: number, order: { cummulativeQuoteQty: number }) =>
                   sum + order.cummulativeQuoteQty,
                 0
@@ -196,8 +206,10 @@ export async function handleListStatus(event: BinanceWebSocketEvent): Promise<vo
                 0
               );
 
-              trade.exitPrice = totalSellValue / totalExecutedQty;
-              trade.realizedPnL = totalSellValue - trade.investedAmount;
+              trade.exitPrice = sellRevenue / totalExecutedQty;
+
+              // FIX: Realized P&L = Sell Revenue - Buy Cost (both from Binance API, not user input)
+              trade.realizedPnL = sellRevenue - buyCost;
               trade.status = "closed";
 
               if (data.r === "STOP_LOSS_LIMIT") {

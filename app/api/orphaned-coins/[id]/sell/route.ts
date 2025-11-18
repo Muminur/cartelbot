@@ -134,9 +134,16 @@ export async function POST(
       });
 
       // 7. Calculate P&L
-      const soldValue = parseFloat(sellOrderResponse.cummulativeQuoteQty || "0");
-      const investedAmount = orphanedCoin.buyPrice * orphanedCoin.quantity;
-      const realizedPnL = soldValue - investedAmount;
+      // Get actual sell revenue from Binance market sell (what was actually received)
+      const sellRevenue = parseFloat(sellOrderResponse.cummulativeQuoteQty || "0");
+
+      // NOTE: For orphaned coins, we don't have the original buy order's cummulativeQuoteQty
+      // So we approximate the buy cost as buyPrice × quantity
+      // This is a reasonable estimate since buyPrice was the actual execution price at the time
+      const buyCost = orphanedCoin.buyPrice * orphanedCoin.quantity;
+
+      // Realized P&L = Sell Revenue (actual from Binance) - Buy Cost (approximated)
+      const realizedPnL = sellRevenue - buyCost;
 
       // 8. Update orphaned coin status
       orphanedCoin.status = "sold";
@@ -155,7 +162,7 @@ export async function POST(
           quantity: orphanedCoin.quantity,
           price: orphanedCoin.buyPrice,
           executedQty: orphanedCoin.quantity,
-          cummulativeQuoteQty: investedAmount.toFixed(2),
+          cummulativeQuoteQty: buyCost, // Use same approximated buy cost for consistency
           status: "FILLED",
           timestamp: orphanedCoin.buyTimestamp,
         },
@@ -175,7 +182,7 @@ export async function POST(
         entryPrice: orphanedCoin.buyPrice,
         exitPrice: parseFloat(sellOrderResponse.fills?.[0]?.price || "0"),
         quantity: orphanedCoin.quantity,
-        investedAmount,
+        investedAmount: buyCost, // Approximated buy cost (buyPrice × quantity)
         realizedPnL,
         status: "closed",
         closeReason: "manual",
@@ -188,7 +195,7 @@ export async function POST(
           message: `Successfully sold ${orphanedCoin.quantity} ${orphanedCoin.symbol}`,
           orderId: sellOrderResponse.orderId,
           executedQty: sellOrderResponse.executedQty,
-          soldValue,
+          soldValue: sellRevenue, // Actual USDT received from Binance
           realizedPnL,
         },
       });

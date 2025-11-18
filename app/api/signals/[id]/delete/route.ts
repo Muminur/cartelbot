@@ -248,9 +248,14 @@ export async function DELETE(
         trade.exitPrice = parseFloat(sellOrderResponse.fills?.[0]?.price || "0");
 
         // Calculate realized P&L
-        const soldValue =
-          parseFloat(sellOrderResponse.cummulativeQuoteQty || "0");
-        trade.realizedPnL = soldValue - trade.investedAmount;
+        // Get actual buy cost from Binance (what was actually spent)
+        const buyCost = trade.buyOrder.cummulativeQuoteQty;
+
+        // Get actual sell revenue from market sell order (what was actually received)
+        const sellRevenue = parseFloat(sellOrderResponse.cummulativeQuoteQty || "0");
+
+        // FIX: Realized P&L = Sell Revenue - Buy Cost (both from Binance API, not user input)
+        trade.realizedPnL = sellRevenue - buyCost;
 
         await trade.save();
 
