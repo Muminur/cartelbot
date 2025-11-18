@@ -130,6 +130,7 @@ export async function POST(request: NextRequest) {
             status: status.status, // FILLED, CANCELED, NEW, etc.
             executedQty: status.executedQty,
             origQty: status.origQty,
+            cummulativeQuoteQty: status.cummulativeQuoteQty, // ✅ CRITICAL: Actual USDT spent/received from Binance
             price: status.price,
             stopPrice: status.stopPrice,
             type: status.type,

@@ -382,6 +382,7 @@ export default function SignalDetailModal({
                   ...order,
                   status: liveStatus.status, // Update with real FILLED/CANCELED status
                   executedQty: parseFloat(liveStatus.executedQty || "0"),
+                  cummulativeQuoteQty: parseFloat(liveStatus.cummulativeQuoteQty || "0"), // ✅ CRITICAL: Actual USDT value from Binance
                 };
               }
 
@@ -1321,10 +1322,10 @@ export default function SignalDetailModal({
                               : stopLoss.executedQty;
                             const tpFilledValue = realTpOrderStatus?.cummulativeQuoteQty
                               ? parseFloat(realTpOrderStatus.cummulativeQuoteQty)
-                              : takeProfit.cummulativeQuoteQty;
+                              : (takeProfit.cummulativeQuoteQty || 0); // ✅ Null coalescing to prevent NaN
                             const slFilledValue = realSlOrderStatus?.cummulativeQuoteQty
                               ? parseFloat(realSlOrderStatus.cummulativeQuoteQty)
-                              : stopLoss.cummulativeQuoteQty;
+                              : (stopLoss.cummulativeQuoteQty || 0); // ✅ Null coalescing to prevent NaN
 
                             // Determine what happened in this OCO pair
                             const tpTriggered = tpStatus === 'FILLED';
