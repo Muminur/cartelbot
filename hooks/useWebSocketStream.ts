@@ -19,8 +19,20 @@ export function useWebSocketStream(options: UseWebSocketStreamOptions = {}) {
   const [lastEvent, setLastEvent] = useState<WebSocketEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
     try {
+      // Step 1: Start the WebSocket connection on the server
+      const startResponse = await fetch("/api/websocket/start", {
+        method: "POST",
+      });
+
+      if (!startResponse.ok) {
+        const errorData = await startResponse.json();
+        setError(errorData.error?.message || "Failed to start WebSocket connection");
+        return () => {};
+      }
+
+      // Step 2: Connect to the SSE stream
       const eventSource = new EventSource("/api/websocket/stream");
 
       eventSource.onopen = () => {
@@ -56,8 +68,15 @@ export function useWebSocketStream(options: UseWebSocketStreamOptions = {}) {
 
   useEffect(() => {
     if (autoConnect) {
-      const cleanup = connect();
-      return cleanup;
+      let cleanup: (() => void) | undefined;
+
+      connect().then((cleanupFn) => {
+        cleanup = cleanupFn;
+      });
+
+      return () => {
+        if (cleanup) cleanup();
+      };
     }
   }, [autoConnect, connect]);
 

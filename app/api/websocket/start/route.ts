@@ -30,14 +30,16 @@ export async function POST(req: NextRequest) {
     if (existingConnection) {
       const status = existingConnection.getConnectionStatus();
       if (status.isActive) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: { message: "WebSocket connection already active" },
+        // Connection already active - return success instead of error
+        return NextResponse.json({
+          success: true,
+          data: {
+            message: "WebSocket connection already active",
+            listenKey: status.listenKey || null,
           },
-          { status: 409 }
-        );
+        });
       } else {
+        // Connection exists but not active - clean it up
         await existingConnection.stop();
         deleteConnection(userId);
       }
