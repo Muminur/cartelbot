@@ -1903,6 +1903,8 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 **closeReason validation fix (6ec2584)**: Fixed "Trade validation failed: closeReason: Invalid close reason" error with dual-field approach. Added closeReasonDetail (string, maxlength 200) for human-readable descriptions while keeping closeReason enum (target/stop_loss/manual/cancelled) for queries. Updated 10 files (8 API endpoints, 2 UI components) to set both fields. 100% backward compatible with fallback chain. Code review 9.2/10.
 
+**Target distribution fix + validation (aa465d4)**: Fixed critical bug where user's custom target distribution (95%, 2.5%, 2.5%) was ignored, always using hardcoded [75%, 15%, 10%]. Added targetDistribution to RiskLimits, updated getUserRiskLimits() to return user settings, modified trade-executor to use riskLimits.targetDistribution. Applied Priority 1 validation: isValidDistribution() helper (length 1-5, values 0-100, sum=100±0.01), server-side API validation, mismatch handling (slice/normalize/equal). 18 test cases (100% pass), TypeScript clean. Code review 8.5→9.5/10.
+
 ---
 
 ## Session: P&L Calculation Fix - Complete Solution (Nov 18, 2025)
