@@ -348,6 +348,58 @@ export default function SignalDetailModal({
     setFetchingOcoStatus(true);
 
     try {
+      // NEW: Fetch individual order statuses from Binance API
+      const ordersToCheck = trade.sellOrders
+        .filter((order: IOrder) => order.orderListId !== undefined)
+        .map((order: IOrder) => ({
+          symbol: trade.symbol,
+          orderId: order.orderId,
+          orderListId: order.orderListId!,
+        }));
+
+      if (ordersToCheck.length > 0) {
+        try {
+          const orderStatusResponse = await fetch("/api/trades/orders/status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orders: ordersToCheck }),
+          });
+
+          const orderStatusData = await orderStatusResponse.json();
+
+          if (orderStatusData.success && orderStatusData.data?.orders) {
+            // Update trade.sellOrders with real-time statuses from Binance
+            const updatedSellOrders = trade.sellOrders.map((order: IOrder) => {
+              const liveStatus = orderStatusData.data.orders.find(
+                (o: any) => o.orderId === order.orderId
+              );
+
+              if (liveStatus && liveStatus.status !== "NOT_FOUND" && liveStatus.status !== "ERROR") {
+                return {
+                  ...order,
+                  status: liveStatus.status, // Update with real FILLED/CANCELED status
+                  executedQty: parseFloat(liveStatus.executedQty || "0"),
+                };
+              }
+
+              return order;
+            });
+
+            // Update trade state with new statuses (only update sellOrders, keep rest of trade object)
+            if (trade) {
+              setTrade({
+                ...trade,
+                sellOrders: updatedSellOrders,
+              } as ITrade);
+            }
+          }
+        } catch (individualOrderError) {
+          console.error("Failed to fetch individual order statuses:", individualOrderError);
+          // Continue with OCO status fetch even if individual fetch fails
+        }
+      }
+
+      // Existing OCO status fetch by orderListId
       const statusPromises = Array.from(orderListIds).map(async (orderListId) => {
         try {
           const response = await fetch(

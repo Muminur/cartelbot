@@ -566,6 +566,48 @@ export class BinanceClient {
   }
 
   /**
+   * Query a specific order by orderId
+   * Weight: 4
+   * @param symbol - Trading pair symbol
+   * @param orderId - The order ID to query
+   * @returns Order status from Binance
+   */
+  async getOrder(
+    symbol: string,
+    orderId: number
+  ): Promise<{
+    symbol: string;
+    orderId: number;
+    orderListId: number;
+    clientOrderId: string;
+    price: string;
+    origQty: string;
+    executedQty: string;
+    cummulativeQuoteQty: string;
+    status: string;
+    timeInForce: string;
+    type: string;
+    side: string;
+    stopPrice?: string;
+    icebergQty?: string;
+    time: number;
+    updateTime: number;
+    isWorking: boolean;
+    origQuoteOrderQty: string;
+  }> {
+    const params: Record<string, string | number> = {
+      symbol,
+      orderId,
+    };
+
+    return this.signedRequest(
+      "GET",
+      "/api/v3/order",
+      params
+    );
+  }
+
+  /**
    * Query open OCO orders
    * Weight: 6
    * @returns Array of open OCO orders
