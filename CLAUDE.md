@@ -1888,3 +1888,5 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: Close Reason Display & Target Distribution Fix (Nov 18, 2025)
 
 **Fixed close reason to show ALL filled targets (18cb87d)**: Signal detail modal now displays all filled targets from Binance OCO API (e.g., "Targets 1,2,3,4 Hit") instead of just first filled. Fixed settings persistence - target distribution now saves correctly (95,5,0 / 75,15,10 / any combination). Code quality 9.5/10, production-ready.
+
+**Fixed Next.js 16 Turbopack font loading error (ecf6c3c)**: Resolved module not found error by using CSS variable fonts (--font-inter) instead of direct className. Updated CSP headers for Google Fonts, added fontFamily to Tailwind config. Build ready after dev server restart.
