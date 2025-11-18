@@ -46,3 +46,25 @@ logs
 *-session-notes.md
 *-diagnostic*.md
 *RESTART-REQUIRED.md
+
+# Session documentation and debug files
+*-SUMMARY.md
+*-FIX.md
+*-FIXES.md
+*-IMPLEMENTATION.md
+*-REPORT.md
+*-GUIDE.md
+*-CHECKLIST.md
+*-COMPLETE.md
+*-VISUAL.md
+*-PLAN.md
+*-AUDIT.md
+*.txt
+*.bat
+test-*.js
+test-*.mjs
+verify-*.js
+verify-*.sh
+investigate-*.js
+validate-*.js
+*.backup
