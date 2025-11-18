@@ -33,6 +33,51 @@ interface ErrorResponse {
 }
 
 /**
+ * Mapping of common cryptocurrency symbols to their full names
+ * Used for enhanced search functionality (search by name or symbol)
+ */
+const COIN_NAMES: Record<string, string> = {
+  BTC: 'Bitcoin',
+  ETH: 'Ethereum',
+  BNB: 'Binance Coin',
+  USDT: 'Tether',
+  USDC: 'USD Coin',
+  BUSD: 'Binance USD',
+  XRP: 'Ripple',
+  ADA: 'Cardano',
+  DOGE: 'Dogecoin',
+  SOL: 'Solana',
+  DOT: 'Polkadot',
+  MATIC: 'Polygon',
+  LTC: 'Litecoin',
+  AVAX: 'Avalanche',
+  LINK: 'Chainlink',
+  UNI: 'Uniswap',
+  ATOM: 'Cosmos',
+  XLM: 'Stellar',
+  ALGO: 'Algorand',
+  VET: 'VeChain',
+  ICP: 'Internet Computer',
+  FIL: 'Filecoin',
+  TRX: 'TRON',
+  ETC: 'Ethereum Classic',
+  XMR: 'Monero',
+  NEAR: 'NEAR Protocol',
+  APT: 'Aptos',
+  ARB: 'Arbitrum',
+  OP: 'Optimism',
+  SUI: 'Sui',
+};
+
+/**
+ * Get full name for a cryptocurrency symbol
+ * Returns the symbol itself if no mapping exists
+ */
+function getCoinName(symbol: string): string {
+  return COIN_NAMES[symbol] || symbol;
+}
+
+/**
  * Custom hook for debouncing values
  * Delays updating the debounced value until after the specified delay
  * Useful for search inputs to reduce unnecessary re-renders
@@ -481,7 +526,7 @@ export function PortfolioWidget() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 type="text"
-                placeholder="Search assets..."
+                placeholder="Search by symbol or name (e.g., BTC or Bitcoin)..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -495,9 +540,14 @@ export function PortfolioWidget() {
             <div className="space-y-2">
               {(() => {
                 // Filter assets by debounced search query (prevents excessive re-renders)
-                const filteredAssets = portfolio.assets.filter((asset) =>
-                  asset.asset.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
-                );
+                // Search matches both symbol (BTC) and full name (Bitcoin)
+                const filteredAssets = portfolio.assets.filter((asset) => {
+                  const searchLower = debouncedSearchQuery.toLowerCase();
+                  const symbolLower = asset.asset.toLowerCase();
+                  const fullName = getCoinName(asset.asset).toLowerCase();
+
+                  return symbolLower.includes(searchLower) || fullName.includes(searchLower);
+                });
 
                 // Calculate pagination
                 const totalPages = Math.ceil(filteredAssets.length / itemsPerPage);
@@ -529,7 +579,12 @@ export function PortfolioWidget() {
                         >
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
-                              <p className="font-medium">{asset.asset}</p>
+                              <div>
+                                <p className="font-medium">{asset.asset}</p>
+                                {getCoinName(asset.asset) !== asset.asset && (
+                                  <p className="text-xs text-gray-500">{getCoinName(asset.asset)}</p>
+                                )}
+                              </div>
                               <div
                                 className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
                                   isPositive
