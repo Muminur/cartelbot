@@ -1866,3 +1866,5 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 **Portfolio invalid symbols fix (2cdfa93)**: Fixed batch ticker API rejecting BTCBTC/ETHETH invalid pairs causing all non-stablecoins to show $0 value. Smart symbol generation avoids self-pairs. Debug logging added. Admin subscriptions useCallback hoisting fix. Quality 9.0/10.
 
 **OCO target counting fix (88889c8)**: Fixed signal details showing OCO "ALL_DONE" but targets "0/4 Hit". Used real-time Binance API status instead of stale database. Added Trade Result summary (P&L, close reason). Replaced all `any` with BinanceOCOOrderReport type. Quality 9.7/10.
+
+**OCO display enhancement (0cbcba1)**: Grouped TP/SL by orderListId pairs, individual status (FILLED/CANCELED/NEW), color-coded cards (green TP, red SL, gray cancelled). Removed confusing "ALL_DONE" text. Quality 9.2/10.
