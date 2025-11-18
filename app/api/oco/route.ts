@@ -318,8 +318,78 @@ export async function GET(request: NextRequest) {
     const skip = Math.max(0, (page - 1) * limit);
     const paginatedOrders = filteredOrders.slice(skip, skip + limit);
 
-    // 10. Transform to response format
-    const transformedOrders = paginatedOrders.map((order) => {
+    // 10. Enrich orders with missing orderReports by fetching individual order details
+    // FIX: Create clients once instead of per-order for better performance
+    const mainnetEnrichmentClient = new BinanceClient({
+      apiKey,
+      apiSecret,
+      testnet: false,
+    });
+
+    const testnetEnrichmentClient = new BinanceClient({
+      apiKey,
+      apiSecret,
+      testnet: true,
+    });
+
+    // Find orders that need enrichment
+    const ordersNeedingEnrichment = paginatedOrders.filter(
+      order => !order.orderReports || order.orderReports.length === 0
+    );
+
+    if (ordersNeedingEnrichment.length > 0) {
+      console.log(`[OCO API] Enriching ${ordersNeedingEnrichment.length} orders with missing orderReports`);
+    }
+
+    // FIX: Use Promise.allSettled with rate limiting (max 5 concurrent requests)
+    const enrichmentPromises = paginatedOrders.map(async (order, index) => {
+      // Check if orderReports is empty or missing
+      if (!order.orderReports || order.orderReports.length === 0) {
+        try {
+          // FIX: Rate limiting - add delay between requests (100ms per request)
+          if (index > 0) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+
+          // FIX: Reuse clients based on testnet flag
+          const enrichmentClient = order.testnet ? testnetEnrichmentClient : mainnetEnrichmentClient;
+
+          // Fetch detailed order information
+          const detailedOrder = await enrichmentClient.getOCOOrder(order.orderListId);
+
+          return { ...order, orderReports: detailedOrder.orderReports };
+        } catch (error) {
+          console.error(`[OCO API] Failed to enrich order ${order.orderListId}:`, {
+            error: error instanceof Error ? error.message : "Unknown error",
+            orderListId: order.orderListId,
+          });
+          return order; // Return original order if enrichment fails
+        }
+      }
+      return order; // Already has orderReports
+    });
+
+    const enrichedOrders = await Promise.allSettled(enrichmentPromises);
+
+    // FIX: Proper type guard for filtering fulfilled results
+    type EnrichedOrder = BinanceOCOResponse & { testnet: boolean };
+
+    const validOrders = enrichedOrders
+      .filter((result): result is PromiseFulfilledResult<EnrichedOrder> => result.status === 'fulfilled')
+      .map((result) => result.value);
+
+    // Log enrichment summary
+    const failures = enrichedOrders.filter(r => r.status === 'rejected');
+    if (failures.length > 0) {
+      console.error(`[OCO API] ${failures.length}/${paginatedOrders.length} orders failed to enrich`);
+    }
+    if (ordersNeedingEnrichment.length > 0) {
+      const successCount = ordersNeedingEnrichment.length - failures.length;
+      console.log(`[OCO API] Enrichment completed: ${successCount} succeeded, ${failures.length} failed`);
+    }
+
+    // 11. Transform to response format
+    const transformedOrders = validOrders.map((order) => {
       // Extract order details from orderReports
       const orders = order.orderReports?.map((report) => ({
         orderId: report.orderId,
@@ -341,7 +411,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // 11. Return response
+    // 12. Return response
     return NextResponse.json({
       success: true,
       data: transformedOrders,

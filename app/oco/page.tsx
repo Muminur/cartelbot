@@ -346,12 +346,22 @@ export default function OCOOrdersPage() {
     const takeProfitOrders = orders.filter(o => o.type === "LIMIT_MAKER");
     const stopLossOrders = orders.filter(o => o.type === "STOP_LOSS_LIMIT");
 
+    // Show helpful message if no orders are available
+    if (orders.length === 0) {
+      return (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <AlertCircle className="h-3 w-3" />
+          <span>No order details available</span>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-2">
         {/* Take Profit Orders */}
         {takeProfitOrders.map((order, idx) => (
           <div key={order.orderId} className="flex items-center gap-2">
-            <span className="text-xs text-green-600 font-semibold">TP #{idx + 1}:</span>
+            <span className="text-xs text-green-600 dark:text-green-400 font-semibold">TP #{idx + 1}:</span>
             <Badge
               className={
                 order.status === "FILLED"
@@ -371,7 +381,7 @@ export default function OCOOrdersPage() {
         {/* Stop Loss Orders */}
         {stopLossOrders.map((order) => (
           <div key={order.orderId} className="flex items-center gap-2">
-            <span className="text-xs text-red-600 font-semibold">SL:</span>
+            <span className="text-xs text-red-600 dark:text-red-400 font-semibold">SL:</span>
             <Badge
               className={
                 order.status === "FILLED"
