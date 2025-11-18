@@ -392,6 +392,93 @@ export default function SignalDetailModal({
                 sellOrders: updatedSellOrders,
               } as ITrade);
             }
+
+            // NEW: Check if all take profit targets are FILLED
+            const takeProfitOrders = updatedSellOrders.filter(
+              (order: IOrder) => order.type === "LIMIT_MAKER"
+            );
+            const allTargetsFilled = takeProfitOrders.length > 0 &&
+              takeProfitOrders.every((order: IOrder) => {
+                const liveStatus = orderStatusData.data.orders.find(
+                  (o: any) => o.orderId === order.orderId
+                );
+                return liveStatus?.status === "FILLED";
+              });
+
+            // Check if stop loss was triggered
+            const stopLossOrders = updatedSellOrders.filter(
+              (order: IOrder) => order.type === "STOP_LOSS_LIMIT"
+            );
+            const stopLossTriggered = stopLossOrders.some((order: IOrder) => {
+              const liveStatus = orderStatusData.data.orders.find(
+                (o: any) => o.orderId === order.orderId
+              );
+              return liveStatus?.status === "FILLED";
+            });
+
+            // If all targets filled OR stop loss triggered, update signal status in database
+            if ((allTargetsFilled || stopLossTriggered) && signal && signal.status === "executing") {
+              // Calculate exit price and P&L
+              let exitPrice: number | undefined;
+              let realizedPnL: number | undefined;
+
+              const filledOrders = updatedSellOrders.filter((order: IOrder) => {
+                const liveStatus = orderStatusData.data.orders.find(
+                  (o: any) => o.orderId === order.orderId
+                );
+                return liveStatus?.status === "FILLED";
+              });
+
+              if (filledOrders.length > 0) {
+                const totalSellValue = filledOrders.reduce(
+                  (sum: number, order: IOrder) => sum + order.cummulativeQuoteQty,
+                  0
+                );
+                const totalExecutedQty = filledOrders.reduce(
+                  (sum: number, order: IOrder) => sum + order.executedQty,
+                  0
+                );
+
+                if (totalExecutedQty > 0) {
+                  exitPrice = totalSellValue / totalExecutedQty;
+                  realizedPnL = totalSellValue - trade.investedAmount;
+                }
+              }
+
+              // Call API to update signal and trade status
+              try {
+                const updateResponse = await fetch(`/api/signals/${signal._id}/update-status`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    allTargetsFilled,
+                    stopLossTriggered,
+                    tradeId: String(trade._id),
+                    exitPrice,
+                    realizedPnL,
+                  }),
+                });
+
+                const updateData = await updateResponse.json();
+
+                if (updateData.success && updateData.data.updated) {
+                  console.log("[SignalDetailModal] Signal and trade status updated:", {
+                    signalId: signal._id,
+                    tradeId: trade._id,
+                    newSignalStatus: updateData.data.signal.status,
+                    newTradeStatus: updateData.data.trade.status,
+                    allTargetsFilled,
+                    stopLossTriggered,
+                  });
+
+                  // Trigger page refresh to show updated status
+                  // The parent component will re-fetch signal data
+                  window.location.reload();
+                }
+              } catch (updateError) {
+                console.error("[SignalDetailModal] Failed to update signal status:", updateError);
+              }
+            }
           }
         } catch (individualOrderError) {
           console.error("Failed to fetch individual order statuses:", individualOrderError);
@@ -428,7 +515,7 @@ export default function SignalDetailModal({
     } finally {
       setFetchingOcoStatus(false);
     }
-  }, [trade]);
+  }, [trade, signal]);
 
   // Fetch OCO statuses from Binance API when trade data loads
   useEffect(() => {
