@@ -293,12 +293,17 @@ export function PortfolioWidget() {
               });
             });
 
-            console.log('[Portfolio] Ticker map populated:', {
-              tickerMapSize: tickerMap.size,
-              symbols: Array.from(tickerMap.keys())
-            });
+            // Debug logging for ticker map contents (dev only)
+            if (process.env.NODE_ENV === 'development') {
+              console.log('[Portfolio] Ticker map populated:', {
+                tickerMapSize: tickerMap.size,
+                symbols: Array.from(tickerMap.keys())
+              });
+            } else {
+              console.log(`[Portfolio] Ticker map populated with ${tickerMap.size} symbols`);
+            }
           } else {
-            console.warn('[Portfolio] Batch ticker failed:', tickerData.error);
+            console.error('[Portfolio] Batch ticker API failed:', tickerData.error);
             // Set error state to show user-friendly message
             if (!error) {
               setError({
@@ -308,7 +313,7 @@ export function PortfolioWidget() {
             }
           }
         } catch (err) {
-          console.error("Batch ticker fetch failed:", err);
+          console.error("[Portfolio] Batch ticker API failed:", err);
           // Set error state to show user-friendly message
           if (!error) {
             setError({
@@ -316,6 +321,11 @@ export function PortfolioWidget() {
               code: "BATCH_TICKER_FAILED",
             });
           }
+        }
+
+        // Warn if ticker map is empty after attempt
+        if (tickerMap.size === 0 && symbolsToFetch.size > 0) {
+          console.warn('[Portfolio] Ticker map is empty - batch ticker may have failed');
         }
       }
 
@@ -363,10 +373,25 @@ export function PortfolioWidget() {
               }
             }
           } else {
-            // Batch ticker failed completely
-            console.error(`[Portfolio] Batch ticker failed for ${balance.asset}. Cannot calculate value.`);
-            valueUSDT = 0;
-            priceChangePercent = "0";
+            // Asset not found in ticker map - could be batch failure or missing pair
+            if (tickerMap.size === 0) {
+              // Batch ticker completely failed (no data for any assets)
+              // Don't log per asset - batch failure already logged at line 316/326
+              valueUSDT = 0;
+              priceChangePercent = "0";
+            } else {
+              // Batch succeeded but this specific asset not found
+              // This is expected for exotic assets without USDT/BTC/ETH pairs
+              // Only log in development mode to avoid console spam
+              if (process.env.NODE_ENV === 'development') {
+                console.warn(
+                  `[Portfolio] ${balance.asset}: Not found in ticker map. ` +
+                  `Asset may not have USDT/BTC/ETH trading pairs on Binance.`
+                );
+              }
+              valueUSDT = 0;
+              priceChangePercent = "0";
+            }
           }
 
           return {
@@ -396,7 +421,10 @@ export function PortfolioWidget() {
 
       // Only retry if reasonable number (<5) to avoid API abuse
       if (assetsMissingPrice.length > 0 && assetsMissingPrice.length <= 4) {
-        console.warn(`[Portfolio] Retrying ${assetsMissingPrice.length} assets with individual requests`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[Portfolio] Retrying ${assetsMissingPrice.length} assets with individual requests:`,
+            assetsMissingPrice.map(a => a.asset).join(', '));
+        }
 
         const fallbackResults = await Promise.allSettled(
           assetsMissingPrice.map(asset =>
@@ -419,6 +447,14 @@ export function PortfolioWidget() {
             console.warn(`[Portfolio] ${assetsMissingPrice[index].asset}: Fallback failed`);
           }
         });
+      } else if (assetsMissingPrice.length > 4) {
+        // Warn about skipped assets (only in development to avoid production console spam)
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(
+            `[Portfolio] ${assetsMissingPrice.length} assets missing price (>${4} retry limit). ` +
+            `Assets: ${assetsMissingPrice.map(a => a.asset).join(', ')}`
+          );
+        }
       }
 
       // Filter out dust (assets worth less than 0.01 USDT) and assets with no value

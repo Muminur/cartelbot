@@ -26,18 +26,38 @@ import { RefreshCw, Eye, Filter, TrendingUp, TrendingDown, AlertCircle, Settings
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
+// Type definitions for order types and statuses
+type OrderType = "LIMIT_MAKER" | "STOP_LOSS_LIMIT" | "TAKE_PROFIT";
+type OrderStatus = "NEW" | "FILLED" | "CANCELED" | "PARTIALLY_FILLED" | "EXECUTING" | "ALL_DONE";
+
+// Session user interface
+interface SessionUser {
+  _id: string;
+  email: string;
+  hasApiKeys: boolean;
+  subscriptionTier?: string;
+}
+
+// Ticker data interface
+interface TickerData {
+  symbol: string;
+  lastPrice?: string;
+  price?: string;
+  priceChangePercent?: string;
+}
+
 interface OCOOrder {
   orderListId: number;
   symbol: string;
   orders: Array<{
     orderId: number;
-    type: string;
+    type: OrderType;
     price: number;
     stopPrice?: number;
     quantity: number;
-    status: string;
+    status: OrderStatus;
   }>;
-  status: string;
+  status: OrderStatus;
   createdAt: string;
   testnet: boolean;
 }
@@ -49,15 +69,18 @@ interface PriceData {
   testnetChange: number;
 }
 
+// Constants for timeouts and intervals
+const PRICE_REFRESH_TIMEOUT_MS = 10_000; // 10 seconds
+const AUTO_REFRESH_INTERVAL_MS = 30_000; // 30 seconds
+
 export default function OCOOrdersPage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
   // M3: FIX - Renamed loading states for clarity
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [refreshingPrices, setRefreshingPrices] = useState(false);
   const [orders, setOrders] = useState<OCOOrder[]>([]);
   const [prices, setPrices] = useState<Map<string, PriceData>>(new Map());
-  const [refreshing, setRefreshing] = useState(false);
   const [apiKeysError, setApiKeysError] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     symbol: "",
@@ -162,7 +185,8 @@ export default function OCOOrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.symbol, filters.status, filters.network]); // Run when filters change (user already in dependency via fetchOrders)
 
-  // OPTIMIZED: Refresh prices function using batch API
+  // OPTIMIZED: Refresh prices function using batch API with graceful degradation
+  // FIX: Allow partial success (mainnet OR testnet, not both required)
   // H3: FIX - Added AbortController for race condition prevention
   // M2: FIX - Added 10-second timeout
   const refreshPrices = useCallback(async (ordersData = orders, signal?: AbortSignal) => {
@@ -170,9 +194,9 @@ export default function OCOOrdersPage() {
 
     setRefreshingPrices(true);
 
-    // M2: Create timeout controller (10-second timeout)
+    // M2: Create timeout controller
     const timeoutController = new AbortController();
-    const timeoutId = setTimeout(() => timeoutController.abort(), 10000);
+    const timeoutId = setTimeout(() => timeoutController.abort(), PRICE_REFRESH_TIMEOUT_MS);
 
     // Combine with parent signal if provided
     const combinedSignal = signal || timeoutController.signal;
@@ -182,7 +206,8 @@ export default function OCOOrdersPage() {
       const symbols = [...new Set(ordersData.map((o) => o.symbol))];
 
       // OPTIMIZATION: Use batch ticker API (2 requests instead of N×2)
-      const [mainnetRes, testnetRes] = await Promise.all([
+      // FIX: Fetch both networks but allow partial success
+      const [mainnetRes, testnetRes] = await Promise.allSettled([
         fetch(
           `/api/binance/ticker/batch?symbols=${encodeURIComponent(JSON.stringify(symbols))}&testnet=false`,
           { signal: combinedSignal }
@@ -196,27 +221,51 @@ export default function OCOOrdersPage() {
       // H3: Check if aborted before processing
       if (combinedSignal?.aborted) return;
 
-      const mainnetData = await mainnetRes.json();
-      const testnetData = await testnetRes.json();
+      // FIX: Graceful degradation - accept partial success
+      let mainnetData = null;
+      let testnetData = null;
+      let hasMainnet = false;
+      let hasTestnet = false;
 
-      if (mainnetData.success && testnetData.success) {
+      // Try to parse mainnet response
+      if (mainnetRes.status === 'fulfilled' && mainnetRes.value.ok) {
+        try {
+          mainnetData = await mainnetRes.value.json();
+          hasMainnet = mainnetData.success;
+        } catch (e) {
+          console.warn('Failed to parse mainnet response:', e);
+        }
+      }
+
+      // Try to parse testnet response
+      if (testnetRes.status === 'fulfilled' && testnetRes.value.ok) {
+        try {
+          testnetData = await testnetRes.value.json();
+          hasTestnet = testnetData.success;
+        } catch (e) {
+          console.warn('Failed to parse testnet response:', e);
+        }
+      }
+
+      // FIX: Show prices if AT LEAST ONE network succeeds
+      if (hasMainnet || hasTestnet) {
         // Create price map from batch responses
         const priceMap = new Map<string, PriceData>();
 
-        // Index mainnet data by symbol
-        const mainnetBySymbol = new Map(
-          mainnetData.data.map((ticker: any) => [ticker.symbol, ticker])
-        );
+        // Index mainnet data by symbol (if available)
+        const mainnetBySymbol = hasMainnet
+          ? new Map(mainnetData.data.map((ticker: TickerData) => [ticker.symbol, ticker]))
+          : new Map();
 
-        // Index testnet data by symbol
-        const testnetBySymbol = new Map(
-          testnetData.data.map((ticker: any) => [ticker.symbol, ticker])
-        );
+        // Index testnet data by symbol (if available)
+        const testnetBySymbol = hasTestnet
+          ? new Map(testnetData.data.map((ticker: TickerData) => [ticker.symbol, ticker]))
+          : new Map();
 
         // Combine data for each symbol
         symbols.forEach((symbol) => {
-          const mainnetTicker = mainnetBySymbol.get(symbol) as any;
-          const testnetTicker = testnetBySymbol.get(symbol) as any;
+          const mainnetTicker = mainnetBySymbol.get(symbol) as TickerData | undefined;
+          const testnetTicker = testnetBySymbol.get(symbol) as TickerData | undefined;
 
           priceMap.set(symbol, {
             mainnet: parseFloat(mainnetTicker?.lastPrice || mainnetTicker?.price || "0"),
@@ -227,12 +276,20 @@ export default function OCOOrdersPage() {
         });
 
         setPrices(priceMap);
+
+        // Show info toast if only one network succeeded
+        if (hasMainnet && !hasTestnet) {
+          toast.info("Mainnet prices loaded. Testnet prices unavailable.", { duration: 3000 });
+        } else if (hasTestnet && !hasMainnet) {
+          toast.info("Testnet prices loaded. Mainnet prices unavailable.", { duration: 3000 });
+        }
       } else {
+        // Both networks failed
         console.error("Batch ticker API failed:", {
-          mainnet: mainnetData.error,
-          testnet: testnetData.error,
+          mainnet: mainnetRes.status === 'rejected' ? mainnetRes.reason : mainnetData?.error,
+          testnet: testnetRes.status === 'rejected' ? testnetRes.reason : testnetData?.error,
         });
-        toast.error("Failed to fetch real-time prices");
+        toast.error("Failed to fetch real-time prices from both networks");
       }
     } catch (error) {
       // H3: Ignore abort errors
@@ -274,12 +331,83 @@ export default function OCOOrdersPage() {
       FILLED: "bg-green-500 text-white",
       CANCELED: "bg-gray-500 text-white",
       PARTIALLY_FILLED: "bg-yellow-500 text-white",
+      EXECUTING: "bg-yellow-500 text-white",
+      ALL_DONE: "bg-green-500 text-white",
     };
     return (
       <Badge className={colors[status] || "bg-gray-500 text-white"}>
         {status}
       </Badge>
     );
+  };
+
+  // Component to display individual TP/SL orders
+  const OrderDetailsCell = ({ orders }: { orders: OCOOrder['orders'] }) => {
+    const takeProfitOrders = orders.filter(o => o.type === "LIMIT_MAKER");
+    const stopLossOrders = orders.filter(o => o.type === "STOP_LOSS_LIMIT");
+
+    return (
+      <div className="space-y-2">
+        {/* Take Profit Orders */}
+        {takeProfitOrders.map((order, idx) => (
+          <div key={order.orderId} className="flex items-center gap-2">
+            <span className="text-xs text-green-600 font-semibold">TP #{idx + 1}:</span>
+            <Badge
+              className={
+                order.status === "FILLED"
+                  ? "bg-green-500 text-white text-xs"
+                  : order.status === "CANCELED"
+                  ? "bg-gray-500 text-white text-xs"
+                  : "bg-blue-500 text-white text-xs"
+              }
+            >
+              {order.status}
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              @${order.price.toFixed(6)}
+            </span>
+          </div>
+        ))}
+        {/* Stop Loss Orders */}
+        {stopLossOrders.map((order) => (
+          <div key={order.orderId} className="flex items-center gap-2">
+            <span className="text-xs text-red-600 font-semibold">SL:</span>
+            <Badge
+              className={
+                order.status === "FILLED"
+                  ? "bg-red-500 text-white text-xs"
+                  : order.status === "CANCELED"
+                  ? "bg-gray-500 text-white text-xs"
+                  : "bg-yellow-500 text-white text-xs"
+              }
+            >
+              {order.status}
+            </Badge>
+            <span className="text-xs text-muted-foreground">
+              @${(order.stopPrice || order.price).toFixed(6)}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Helper function to get row background color based on overall OCO status
+  const getRowClassName = (status: string) => {
+    switch (status) {
+      case "FILLED":
+      case "ALL_DONE":
+        return "bg-green-50 hover:bg-green-100 dark:bg-green-950/20 dark:hover:bg-green-950/30";
+      case "CANCELED":
+        return "bg-gray-50 hover:bg-gray-100 dark:bg-gray-950/20 dark:hover:bg-gray-950/30";
+      case "PARTIALLY_FILLED":
+      case "EXECUTING":
+        return "bg-yellow-50 hover:bg-yellow-100 dark:bg-yellow-950/20 dark:hover:bg-yellow-950/30";
+      case "NEW":
+        return "bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-950/30";
+      default:
+        return "hover:bg-muted/50";
+    }
   };
 
   const PriceCell = ({
@@ -442,7 +570,8 @@ export default function OCOOrdersPage() {
                     <TableHead>Price extracted from Main/Testnet</TableHead>
                     <TableHead>Mainnet Price</TableHead>
                     <TableHead>Testnet Price</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>TP/SL Orders</TableHead>
+                    <TableHead>Overall Status</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -451,7 +580,10 @@ export default function OCOOrdersPage() {
                   {orders.map((order) => {
                     const priceData = prices.get(order.symbol);
                     return (
-                      <TableRow key={order.orderListId}>
+                      <TableRow
+                        key={order.orderListId}
+                        className={getRowClassName(order.status)}
+                      >
                         <TableCell className="font-mono">
                           {order.orderListId}
                         </TableCell>
@@ -475,6 +607,9 @@ export default function OCOOrdersPage() {
                         </TableCell>
                         <TableCell>
                           <PriceCell priceData={priceData} isMainnet={false} />
+                        </TableCell>
+                        <TableCell>
+                          <OrderDetailsCell orders={order.orders} />
                         </TableCell>
                         <TableCell>{getStatusBadge(order.status)}</TableCell>
                         <TableCell>
