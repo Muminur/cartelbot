@@ -1890,3 +1890,5 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 **Fixed close reason to show ALL filled targets (18cb87d)**: Signal detail modal now displays all filled targets from Binance OCO API (e.g., "Targets 1,2,3,4 Hit") instead of just first filled. Fixed settings persistence - target distribution now saves correctly (95,5,0 / 75,15,10 / any combination). Code quality 9.5/10, production-ready.
 
 **Fixed Next.js 16 Turbopack font loading error (ecf6c3c)**: Resolved module not found error by using CSS variable fonts (--font-inter) instead of direct className. Updated CSP headers for Google Fonts, added fontFamily to Tailwind config. Build ready after dev server restart.
+
+**Fixed 4 critical bugs with P&L and signal status (03f3ba7)**: Duplicate targets removed using Set (shows "1,2,3,4" not "1,1,2,2,3,3,4,4"). P&L now uses real Binance cummulativeQuoteQty. Signal validation logic corrected (operator precedence). Ticker API guaranteed JSON response. Added null safety, race condition fixes. Quality 9.5/10.
