@@ -3,6 +3,7 @@ import { getUserFromRequest } from "@/lib/auth";
 import { connectDB } from "@/lib/db/connection";
 import { User } from "@/lib/db/models/User";
 import { TIER_CONFIGS } from "@/lib/subscription/constants";
+import { isValidDistribution } from "@/lib/binance/risk-manager";
 import { z } from "zod";
 
 const updateSettingsSchema = z.object({
@@ -82,15 +83,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate target distribution sums to 100%
+    // CRITICAL: Comprehensive validation for target distribution
     if (validation.data.targetDistribution) {
-      const sum = validation.data.targetDistribution.reduce((a, b) => a + b, 0);
-      if (sum !== 100) {
+      const distribution = validation.data.targetDistribution;
+
+      // Use centralized validation logic
+      if (!isValidDistribution(distribution)) {
+        // Determine specific error reason
+        const length = distribution.length;
+        const sum = distribution.reduce((a, b) => a + b, 0);
+        const hasInvalidValue = distribution.some((v) => v < 0 || v > 100 || isNaN(v));
+
+        let errorMessage = "Invalid target distribution: ";
+
+        if (length < 1 || length > 5) {
+          errorMessage += `must have 1-5 values (got ${length})`;
+        } else if (hasInvalidValue) {
+          errorMessage += "all values must be between 0 and 100";
+        } else if (Math.abs(sum - 100) > 0.01) {
+          errorMessage += `must sum to 100% (got ${sum.toFixed(2)}%)`;
+        } else {
+          errorMessage += "format is invalid";
+        }
+
+        console.warn("[Settings API] Target distribution validation failed:", {
+          distribution,
+          length,
+          sum,
+          hasInvalidValue,
+        });
+
         return NextResponse.json(
-          { success: false, error: "Target distribution must sum to 100%" },
+          { success: false, error: errorMessage },
           { status: 400 }
         );
       }
+
+      console.log("[Settings API] Target distribution validated successfully:", {
+        distribution,
+        sum: distribution.reduce((a, b) => a + b, 0).toFixed(2) + "%",
+      });
     }
 
     await connectDB();

@@ -461,29 +461,61 @@ export async function createOCOOrders(
     const targets = trade.targets; // Use ALL targets from signal
     const orders: OCOOrderResult[] = [];
 
+    // Get user's risk limits (includes custom targetDistribution)
+    const riskLimits = await getUserRiskLimits(trade.userId);
+
     // Calculate distribution percentages for all targets
-    // If user provided percentage-based targets, distribute equally across all
-    // Otherwise use default distribution [75, 15, 10] for first 3 targets
-    const defaultDistribution = TRADE_DEFAULTS.TARGET_DISTRIBUTION; // [75, 15, 10]
+    // Use user's custom distribution from settings, or fall back to default [75, 15, 10]
+    const userDistribution = riskLimits.targetDistribution; // From user settings or default [75, 15, 10]
     let distribution: number[];
 
-    if (targets.length <= defaultDistribution.length) {
-      // Use default distribution, but normalize to 100% if fewer targets than distribution
-      const baseDist = defaultDistribution.slice(0, targets.length);
+    console.log(
+      `[OCO] ${trade.symbol} - User's target distribution setting: ${userDistribution.join(", ")}%`,
+      `(${userDistribution.length} values for ${targets.length} targets)`
+    );
+
+    // CRITICAL: Handle distribution length vs target count mismatch
+    if (targets.length === userDistribution.length) {
+      // Perfect match - use as-is (validation already ensures sum is 100%)
+      distribution = userDistribution;
+      console.log(`[OCO] ${trade.symbol} - Distribution length matches target count - using as-is`);
+    } else if (targets.length < userDistribution.length) {
+      // Fewer targets than distribution values - slice and normalize to 100%
+      // Example: 3 targets but distribution is [75, 15, 10] → use [75, 15, 10]
+      // Example: 2 targets but distribution is [75, 15, 10] → use [75, 15] → normalize to [83.33, 16.67]
+      const baseDist = userDistribution.slice(0, targets.length);
       const sum = baseDist.reduce((a, b) => a + b, 0);
 
-      if (sum === 100) {
-        // Perfect - already sums to 100%
+      if (Math.abs(sum - 100) < 0.01) {
+        // Already sums to 100% (within tolerance)
         distribution = baseDist;
+        console.log(
+          `[OCO] ${trade.symbol} - Sliced distribution already sums to 100%: ${baseDist.join(", ")}%`
+        );
       } else {
-        // Normalize to 100% (e.g., [75, 15] becomes [83.33, 16.67])
-        distribution = baseDist.map(pct => (pct / sum) * 100);
+        // Normalize to 100%
+        distribution = baseDist.map((pct) => (pct / sum) * 100);
+        console.log(
+          `[OCO] ${trade.symbol} - Normalized sliced distribution from ${baseDist.join(", ")}% ` +
+          `(sum=${sum.toFixed(2)}%) to ${distribution.map((d) => d.toFixed(2)).join(", ")}%`
+        );
       }
     } else {
-      // More targets than default distribution - distribute equally
+      // More targets than distribution values - distribute equally
+      // Example: 5 targets but distribution is [75, 15, 10] → use [20, 20, 20, 20, 20]
       const percentagePerTarget = 100 / targets.length;
       distribution = Array(targets.length).fill(percentagePerTarget);
+      console.log(
+        `[OCO] ${trade.symbol} - More targets than distribution values ` +
+        `(${targets.length} > ${userDistribution.length}). Using equal distribution: ` +
+        `${percentagePerTarget.toFixed(2)}% per target`
+      );
     }
+
+    console.log(
+      `[OCO] ${trade.symbol} - Final distribution for ${targets.length} targets: ` +
+      `${distribution.map((d) => d.toFixed(2)).join(", ")}% (sum=${distribution.reduce((a, b) => a + b, 0).toFixed(2)}%)`
+    );
 
     // Use baseAsset from symbol info with fallback to string parsing
     const baseAsset = symbolInfo.baseAsset || trade.symbol.replace(/USDT$/, '');

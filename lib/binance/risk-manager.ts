@@ -8,6 +8,7 @@ export interface RiskLimits {
   maxDailyLoss: number;
   maxOpenPositions: number;
   requireApproval: boolean;
+  targetDistribution: number[];
 }
 
 export interface RiskCheckParams {
@@ -29,7 +30,57 @@ const DEFAULT_RISK_LIMITS: RiskLimits = {
   maxDailyLoss: 1000,
   maxOpenPositions: 10,
   requireApproval: false,
+  targetDistribution: [75, 15, 10],
 };
+
+/**
+ * Validates if target distribution array is valid
+ * @param distribution - Array of percentage values
+ * @returns true if valid, false otherwise
+ */
+export function isValidDistribution(distribution: number[] | undefined | null): boolean {
+  if (!distribution || !Array.isArray(distribution)) {
+    console.warn("[Risk Manager] Invalid distribution: not an array");
+    return false;
+  }
+
+  if (distribution.length < 1 || distribution.length > 5) {
+    console.warn(
+      `[Risk Manager] Invalid distribution: length ${distribution.length} (must be 1-5)`
+    );
+    return false;
+  }
+
+  // Check each value is valid percentage
+  for (let i = 0; i < distribution.length; i++) {
+    const value = distribution[i];
+    if (typeof value !== "number" || isNaN(value)) {
+      console.warn(
+        `[Risk Manager] Invalid distribution: value at index ${i} is not a number (${typeof value})`
+      );
+      return false;
+    }
+
+    if (value < 0 || value > 100) {
+      console.warn(
+        `[Risk Manager] Invalid distribution: value at index ${i} is ${value} (must be 0-100)`
+      );
+      return false;
+    }
+  }
+
+  // Check sum equals 100% (with 0.01 tolerance for floating point)
+  const sum = distribution.reduce((a, b) => a + b, 0);
+  const tolerance = 0.01;
+  if (Math.abs(sum - 100) > tolerance) {
+    console.warn(
+      `[Risk Manager] Invalid distribution: sum is ${sum.toFixed(2)}% (must be 100%)`
+    );
+    return false;
+  }
+
+  return true;
+}
 
 export async function getUserRiskLimits(userId: Types.ObjectId | string): Promise<RiskLimits> {
   await connectDB();
@@ -46,13 +97,26 @@ export async function getUserRiskLimits(userId: Types.ObjectId | string): Promis
     maxDailyLoss?: number;
     maxOpenPositions?: number;
     requireApproval?: boolean;
+    targetDistribution?: number[];
   };
+
+  // CRITICAL: Validate target distribution before using
+  let targetDistribution = userDoc.targetDistribution;
+
+  if (targetDistribution && !isValidDistribution(targetDistribution)) {
+    console.warn(
+      `[Risk Manager] User ${userIdStr} has invalid targetDistribution: ` +
+      `${JSON.stringify(targetDistribution)}. Falling back to default: ${DEFAULT_RISK_LIMITS.targetDistribution.join(", ")}`
+    );
+    targetDistribution = undefined; // Force fallback to default
+  }
 
   return {
     maxPositionSize: userDoc.maxPositionSize ?? DEFAULT_RISK_LIMITS.maxPositionSize,
     maxDailyLoss: userDoc.maxDailyLoss ?? DEFAULT_RISK_LIMITS.maxDailyLoss,
     maxOpenPositions: userDoc.maxOpenPositions ?? DEFAULT_RISK_LIMITS.maxOpenPositions,
     requireApproval: userDoc.requireApproval ?? DEFAULT_RISK_LIMITS.requireApproval,
+    targetDistribution: targetDistribution ?? DEFAULT_RISK_LIMITS.targetDistribution,
   };
 }
 

@@ -104,14 +104,19 @@ function useDebounce<T>(value: T, delay: number): T {
  * Fetches asset price in USDT by trying multiple quote currencies
  * Priority: USDT > BUSD > BTC > ETH
  * Returns valueUSDT and priceChangePercent
+ *
+ * @param asset - The asset symbol (e.g., "BTC", "ETH")
+ * @param balance - The total balance of the asset
+ * @param signal - Optional AbortSignal for request cancellation
  */
 async function getAssetValueInUSDT(
   asset: string,
-  balance: number
+  balance: number,
+  signal?: AbortSignal
 ): Promise<{ valueUSDT: number; priceChangePercent: string }> {
   // Try USDT pair first
   try {
-    const usdtResponse = await fetch(`/api/binance/ticker?symbol=${asset}USDT`);
+    const usdtResponse = await fetch(`/api/binance/ticker?symbol=${asset}USDT`, { signal });
     const usdtData = await usdtResponse.json();
 
     if (usdtData.success && usdtData.data) {
@@ -127,7 +132,7 @@ async function getAssetValueInUSDT(
 
   // Try BUSD pair (BUSD ≈ 1 USD)
   try {
-    const busdResponse = await fetch(`/api/binance/ticker?symbol=${asset}BUSD`);
+    const busdResponse = await fetch(`/api/binance/ticker?symbol=${asset}BUSD`, { signal });
     const busdData = await busdResponse.json();
 
     if (busdData.success && busdData.data) {
@@ -144,8 +149,8 @@ async function getAssetValueInUSDT(
   // Try BTC pair (need to convert BTC to USDT)
   try {
     const [btcPairResponse, btcUsdtResponse] = await Promise.all([
-      fetch(`/api/binance/ticker?symbol=${asset}BTC`),
-      fetch(`/api/binance/ticker?symbol=BTCUSDT`),
+      fetch(`/api/binance/ticker?symbol=${asset}BTC`, { signal }),
+      fetch(`/api/binance/ticker?symbol=BTCUSDT`, { signal }),
     ]);
 
     const btcPairData = await btcPairResponse.json();
@@ -166,8 +171,8 @@ async function getAssetValueInUSDT(
   // Try ETH pair (need to convert ETH to USDT)
   try {
     const [ethPairResponse, ethUsdtResponse] = await Promise.all([
-      fetch(`/api/binance/ticker?symbol=${asset}ETH`),
-      fetch(`/api/binance/ticker?symbol=ETHUSDT`),
+      fetch(`/api/binance/ticker?symbol=${asset}ETH`, { signal }),
+      fetch(`/api/binance/ticker?symbol=ETHUSDT`, { signal }),
     ]);
 
     const ethPairData = await ethPairResponse.json();
@@ -305,72 +310,134 @@ export function PortfolioWidget() {
             });
           } else {
             console.warn('[Portfolio] Batch ticker failed:', tickerData.error);
+            // Set error state to show user-friendly message
+            if (!error) {
+              setError({
+                message: "Unable to fetch real-time prices from Binance. Please refresh the page or try again later.",
+                code: "BATCH_TICKER_FAILED",
+              });
+            }
           }
         } catch (err) {
-          console.warn("Batch ticker fetch failed, falling back to individual requests:", err);
-          // Will fall back to individual getAssetValueInUSDT calls below
+          console.error("Batch ticker fetch failed:", err);
+          // Set error state to show user-friendly message
+          if (!error) {
+            setError({
+              message: "Unable to fetch real-time prices from Binance. Please refresh the page or try again later.",
+              code: "BATCH_TICKER_FAILED",
+            });
+          }
         }
       }
 
-      // Calculate values using batch-fetched tickers or fallback
-      const assetsWithValues = nonZeroBalances.map((balance: { asset: string; free: string; locked: string; total: number }) => {
-        let valueUSDT = 0;
-        let priceChangePercent = "0";
+      // Calculate values using batch-fetched tickers
+      // Use Promise.allSettled to prevent single failure from breaking entire portfolio
+      const settledResults = await Promise.allSettled(
+        nonZeroBalances.map(async (balance: { asset: string; free: string; locked: string; total: number }) => {
+          let valueUSDT = 0;
+          let priceChangePercent = "0";
 
-        // Handle stablecoins - no need to fetch ticker data
-        if (isStablecoin(balance.asset)) {
-          valueUSDT = balance.total;
-          priceChangePercent = "0";
-        } else if (tickerMap.size > 0) {
-          // Use batch-fetched tickers (fast path)
-          const usdtPair = tickerMap.get(`${balance.asset}USDT`);
-          if (usdtPair) {
-            valueUSDT = balance.total * usdtPair.price;
-            priceChangePercent = usdtPair.change;
-            console.log(`[Portfolio] ${balance.asset}: Found USDT pair, value=${valueUSDT.toFixed(2)}`);
-          } else {
-            // Try BUSD
-            const busdPair = tickerMap.get(`${balance.asset}BUSD`);
-            if (busdPair) {
-              valueUSDT = balance.total * busdPair.price;
-              priceChangePercent = busdPair.change;
-              console.log(`[Portfolio] ${balance.asset}: Found BUSD pair, value=${valueUSDT.toFixed(2)}`);
+          // Handle stablecoins - no need to fetch ticker data
+          if (isStablecoin(balance.asset)) {
+            valueUSDT = balance.total;
+            priceChangePercent = "0";
+          } else if (tickerMap.size > 0) {
+            // Use batch-fetched tickers (fast path)
+            const usdtPair = tickerMap.get(`${balance.asset}USDT`);
+            if (usdtPair) {
+              valueUSDT = balance.total * usdtPair.price;
+              priceChangePercent = usdtPair.change;
+              console.log(`[Portfolio] ${balance.asset}: Found USDT pair, value=${valueUSDT.toFixed(2)}`);
             } else {
-              // Try BTC conversion
-              const btcPair = tickerMap.get(`${balance.asset}BTC`);
-              const btcUsdt = tickerMap.get("BTCUSDT");
-              if (btcPair && btcUsdt) {
-                valueUSDT = balance.total * btcPair.price * btcUsdt.price;
-                priceChangePercent = btcPair.change;
-                console.log(`[Portfolio] ${balance.asset}: Found BTC pair, value=${valueUSDT.toFixed(2)}`);
+              // Try BUSD
+              const busdPair = tickerMap.get(`${balance.asset}BUSD`);
+              if (busdPair) {
+                valueUSDT = balance.total * busdPair.price;
+                priceChangePercent = busdPair.change;
+                console.log(`[Portfolio] ${balance.asset}: Found BUSD pair, value=${valueUSDT.toFixed(2)}`);
               } else {
-                // Try ETH conversion
-                const ethPair = tickerMap.get(`${balance.asset}ETH`);
-                const ethUsdt = tickerMap.get("ETHUSDT");
-                if (ethPair && ethUsdt) {
-                  valueUSDT = balance.total * ethPair.price * ethUsdt.price;
-                  priceChangePercent = ethPair.change;
-                  console.log(`[Portfolio] ${balance.asset}: Found ETH pair, value=${valueUSDT.toFixed(2)}`);
+                // Try BTC conversion
+                const btcPair = tickerMap.get(`${balance.asset}BTC`);
+                const btcUsdt = tickerMap.get("BTCUSDT");
+                if (btcPair && btcUsdt) {
+                  valueUSDT = balance.total * btcPair.price * btcUsdt.price;
+                  priceChangePercent = btcPair.change;
+                  console.log(`[Portfolio] ${balance.asset}: Found BTC pair, value=${valueUSDT.toFixed(2)}`);
                 } else {
-                  console.warn(`[Portfolio] ${balance.asset}: NO PRICE FOUND - no USDT/BUSD/BTC/ETH pair`);
+                  // Try ETH conversion
+                  const ethPair = tickerMap.get(`${balance.asset}ETH`);
+                  const ethUsdt = tickerMap.get("ETHUSDT");
+                  if (ethPair && ethUsdt) {
+                    valueUSDT = balance.total * ethPair.price * ethUsdt.price;
+                    priceChangePercent = ethPair.change;
+                    console.log(`[Portfolio] ${balance.asset}: Found ETH pair, value=${valueUSDT.toFixed(2)}`);
+                  } else {
+                    // Don't call fallback here - just assign 0 and handle missing assets after Promise.all
+                    console.warn(`[Portfolio] ${balance.asset}: Not found in batch ticker response`);
+                    valueUSDT = 0;
+                    priceChangePercent = "0";
+                  }
                 }
               }
             }
+          } else {
+            // Show error to user instead of hammering API with 48+ requests
+            console.error(`[Portfolio] Batch ticker failed for ${balance.asset}. Cannot calculate value.`);
+            valueUSDT = 0;
+            priceChangePercent = "0";
           }
-        } else {
-          console.warn(`[Portfolio] ${balance.asset}: Ticker map is empty, cannot calculate value`);
-        }
 
-        return {
-          asset: balance.asset,
-          free: balance.free,
-          locked: balance.locked,
-          total: balance.total,
-          valueUSDT,
-          priceChangePercent,
-          allocation: 0, // Will calculate after total is known
-        };
-      });
+          return {
+            asset: balance.asset,
+            free: balance.free,
+            locked: balance.locked,
+            total: balance.total,
+            valueUSDT,
+            priceChangePercent,
+            allocation: 0, // Will calculate after total is known
+          };
+        })
+      );
+
+      // Extract successful results from Promise.allSettled
+      const assetsWithValues = settledResults
+        .filter((result): result is PromiseFulfilledResult<PortfolioAsset> => result.status === 'fulfilled')
+        .map(result => result.value);
+
+      // Smart retry: Only for missing assets (not full batch failure)
+      const assetsMissingPrice = assetsWithValues.filter(
+        (asset: PortfolioAsset) =>
+          asset.valueUSDT === 0 &&
+          !isStablecoin(asset.asset) &&
+          tickerMap.size > 0  // Only if batch succeeded but assets missing
+      );
+
+      // Only retry if reasonable number (<5) to avoid API abuse
+      if (assetsMissingPrice.length > 0 && assetsMissingPrice.length <= 4) {
+        console.warn(`[Portfolio] Retrying ${assetsMissingPrice.length} assets with individual requests`);
+
+        const fallbackResults = await Promise.allSettled(
+          assetsMissingPrice.map(asset =>
+            getAssetValueInUSDT(asset.asset, asset.total, signal)
+              .then(result => ({ asset: asset.asset, ...result }))
+          )
+        );
+
+        fallbackResults.forEach((result, index) => {
+          if (result.status === 'fulfilled') {
+            const assetIndex = assetsWithValues.findIndex(
+              (a: PortfolioAsset) => a.asset === result.value.asset
+            );
+            if (assetIndex !== -1) {
+              assetsWithValues[assetIndex].valueUSDT = result.value.valueUSDT;
+              assetsWithValues[assetIndex].priceChangePercent = result.value.priceChangePercent;
+              console.log(`[Portfolio] ${result.value.asset}: Fallback successful, value=${result.value.valueUSDT.toFixed(2)}`);
+            }
+          } else {
+            console.warn(`[Portfolio] ${assetsMissingPrice[index].asset}: Fallback failed`);
+          }
+        });
+      }
 
       // Filter out dust (assets worth less than 0.01 USDT) and assets with no value
       const significantAssets = assetsWithValues.filter(
