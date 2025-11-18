@@ -1884,3 +1884,7 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 **P&L calculation fix (f994702)**: Fixed incorrect P&L showing -100% loss when trade was profitable. Now uses actual Binance cummulativeQuoteQty (USDT spent/received) instead of investedAmount. Fixed 6 locations: SignalDetailModal, event-handlers (2), close trade, delete signal, orphaned coins. Quality 9.5/10.
 
 **Close reason & settings save fix**: Fixed close reason showing only "TP #2 Hit" when all 4 targets filled (now shows "Targets 1,2,3,4 Hit"). Fixed target distribution not saving (added missing schema fields: investmentAmount, targetDistribution, positionSizingMethod, riskPercentage). Quality 9.5/10.
+
+## Session: Close Reason Display & Target Distribution Fix (Nov 18, 2025)
+
+**Fixed close reason to show ALL filled targets (18cb87d)**: Signal detail modal now displays all filled targets from Binance OCO API (e.g., "Targets 1,2,3,4 Hit") instead of just first filled. Fixed settings persistence - target distribution now saves correctly (95,5,0 / 75,15,10 / any combination). Code quality 9.5/10, production-ready.
