@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      // Validate symbol format
+      // Validate symbol format (BUSD deprecated Feb 2024, kept for legacy holdings)
       const SYMBOL_REGEX = /^[A-Z]{2,10}(USDT|BTC|ETH|BNB|BUSD)$/;
       const invalidSymbols = symbols.filter(s => !SYMBOL_REGEX.test(s.toUpperCase()));
 
