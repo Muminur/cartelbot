@@ -1839,6 +1839,8 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 **Increased price decimal precision (17d7bca)**: Changed all price displays from 2→6 decimals on OCO pages for better precision. Percentages kept at 2 decimals. Quality 9.5/10.
 
+**Rewrote OCO API to fetch from Binance (bce8be2)**: Complete rewrite - fetches OCO orders from Binance API (mainnet+testnet) instead of database. Added 10s cache, input validation, error sanitization. Quality 9.2/10.
+
 
 ## Session: Portfolio Pagination Fix (Nov 17, 2025)
 
