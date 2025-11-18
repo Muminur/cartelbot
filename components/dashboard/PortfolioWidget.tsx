@@ -239,25 +239,57 @@ export function PortfolioWidget() {
       const symbolsToFetch = new Set<string>();
       const nonStablecoinBalances = nonZeroBalances.filter((b: { asset: string }) => !isStablecoin(b.asset));
 
-      nonStablecoinBalances.forEach((balance: { asset: string }) => {
-        symbolsToFetch.add(`${balance.asset}USDT`);
-        symbolsToFetch.add(`${balance.asset}BUSD`);
-        symbolsToFetch.add(`${balance.asset}BTC`);
-        symbolsToFetch.add(`${balance.asset}ETH`);
+      console.log('[Portfolio] Asset breakdown:', {
+        totalAssets: nonZeroBalances.length,
+        stablecoins: nonZeroBalances.filter((b: { asset: string }) => isStablecoin(b.asset)).map((b: { asset: string }) => b.asset),
+        nonStablecoins: nonStablecoinBalances.map((b: { asset: string }) => b.asset)
       });
 
-      // Add conversion pairs
-      symbolsToFetch.add("BTCUSDT");
-      symbolsToFetch.add("ETHUSDT");
+      nonStablecoinBalances.forEach((balance: { asset: string }) => {
+        // Only add valid trading pairs (avoid BTCBTC, ETHETH, etc.)
+        if (balance.asset !== 'BTC') {
+          symbolsToFetch.add(`${balance.asset}USDT`);
+          symbolsToFetch.add(`${balance.asset}BUSD`);
+          symbolsToFetch.add(`${balance.asset}BTC`);
+        } else {
+          // BTC only needs USDT pair
+          symbolsToFetch.add('BTCUSDT');
+        }
+
+        if (balance.asset !== 'ETH') {
+          symbolsToFetch.add(`${balance.asset}ETH`);
+        } else {
+          // ETH only needs USDT pair
+          symbolsToFetch.add('ETHUSDT');
+        }
+      });
+
+      // Add conversion pairs if not already added
+      if (nonStablecoinBalances.some((b: { asset: string }) => b.asset !== 'BTC')) {
+        symbolsToFetch.add("BTCUSDT");
+      }
+      if (nonStablecoinBalances.some((b: { asset: string }) => b.asset !== 'ETH')) {
+        symbolsToFetch.add("ETHUSDT");
+      }
 
       // Fetch all tickers in ONE batch call (performance optimization)
       let tickerMap = new Map<string, { price: number; change: string }>();
 
       if (symbolsToFetch.size > 0) {
         try {
+          console.log('[Portfolio] Requesting tickers for symbols:', Array.from(symbolsToFetch));
+
           const encodedSymbols = encodeURIComponent(JSON.stringify([...symbolsToFetch]));
           const tickerResponse = await fetch(`/api/binance/ticker/batch?symbols=${encodedSymbols}`, { signal });
           const tickerData = await tickerResponse.json();
+
+          console.log('[Portfolio] Batch ticker API response:', {
+            success: tickerData.success,
+            dataCount: tickerData.data?.length || 0,
+            requestedSymbols: symbolsToFetch.size,
+            meta: tickerData.meta,
+            error: tickerData.error
+          });
 
           if (tickerData.success && tickerData.data) {
             tickerData.data.forEach((ticker: { symbol: string; lastPrice: string; priceChangePercent: string }) => {
@@ -266,6 +298,13 @@ export function PortfolioWidget() {
                 change: ticker.priceChangePercent || "0",
               });
             });
+
+            console.log('[Portfolio] Ticker map populated:', {
+              tickerMapSize: tickerMap.size,
+              symbols: Array.from(tickerMap.keys())
+            });
+          } else {
+            console.warn('[Portfolio] Batch ticker failed:', tickerData.error);
           }
         } catch (err) {
           console.warn("Batch ticker fetch failed, falling back to individual requests:", err);
@@ -288,12 +327,14 @@ export function PortfolioWidget() {
           if (usdtPair) {
             valueUSDT = balance.total * usdtPair.price;
             priceChangePercent = usdtPair.change;
+            console.log(`[Portfolio] ${balance.asset}: Found USDT pair, value=${valueUSDT.toFixed(2)}`);
           } else {
             // Try BUSD
             const busdPair = tickerMap.get(`${balance.asset}BUSD`);
             if (busdPair) {
               valueUSDT = balance.total * busdPair.price;
               priceChangePercent = busdPair.change;
+              console.log(`[Portfolio] ${balance.asset}: Found BUSD pair, value=${valueUSDT.toFixed(2)}`);
             } else {
               // Try BTC conversion
               const btcPair = tickerMap.get(`${balance.asset}BTC`);
@@ -301,6 +342,7 @@ export function PortfolioWidget() {
               if (btcPair && btcUsdt) {
                 valueUSDT = balance.total * btcPair.price * btcUsdt.price;
                 priceChangePercent = btcPair.change;
+                console.log(`[Portfolio] ${balance.asset}: Found BTC pair, value=${valueUSDT.toFixed(2)}`);
               } else {
                 // Try ETH conversion
                 const ethPair = tickerMap.get(`${balance.asset}ETH`);
@@ -308,10 +350,15 @@ export function PortfolioWidget() {
                 if (ethPair && ethUsdt) {
                   valueUSDT = balance.total * ethPair.price * ethUsdt.price;
                   priceChangePercent = ethPair.change;
+                  console.log(`[Portfolio] ${balance.asset}: Found ETH pair, value=${valueUSDT.toFixed(2)}`);
+                } else {
+                  console.warn(`[Portfolio] ${balance.asset}: NO PRICE FOUND - no USDT/BUSD/BTC/ETH pair`);
                 }
               }
             }
           }
+        } else {
+          console.warn(`[Portfolio] ${balance.asset}: Ticker map is empty, cannot calculate value`);
         }
 
         return {

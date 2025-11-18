@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -43,17 +43,7 @@ export default function AdminSubscriptionsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string>("");
 
-  useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
-
-  useEffect(() => {
-    if (userEmail) {
-      fetchSubscriptions();
-    }
-  }, [filter, userEmail, fetchSubscriptions]);
-
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
     try {
       const response = await fetch(API_ROUTES.AUTH.SESSION);
       const data = await response.json();
@@ -68,9 +58,9 @@ export default function AdminSubscriptionsPage() {
       console.error("Auth check failed:", error);
       router.push("/login");
     }
-  };
+  }, [router]);
 
-  const fetchSubscriptions = async () => {
+  const fetchSubscriptions = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(`/api/admin/subscriptions?status=${filter}`);
@@ -90,7 +80,17 @@ export default function AdminSubscriptionsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter, router]);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  useEffect(() => {
+    if (userEmail) {
+      fetchSubscriptions();
+    }
+  }, [filter, userEmail, fetchSubscriptions]);
 
   const handleApprove = async (subscriptionId: string) => {
     setProcessingId(subscriptionId);
