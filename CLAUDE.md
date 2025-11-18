@@ -1901,6 +1901,8 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 **ECONNRESET network error fix (4cb6356)**: Fixed root cause of "read ECONNRESET" errors with HTTP keep-alive + retry logic. Added httpAgent/httpsAgent with keepAlive (30s heartbeat, maxSockets:50, maxFreeSockets:10) to reuse TCP connections. Reduced timeout 30s→10s preventing pool exhaustion. Wrapped get24hrTicker() with retryWithBackoff (3 attempts, exponential 1s/2s/4s). Added destroy() method to prevent memory leaks. Success rate 40%→99%, response time 20-30s→1-2s, 95% fewer ECONNRESET. Code review 9.3/10.
 
+**closeReason validation fix (6ec2584)**: Fixed "Trade validation failed: closeReason: Invalid close reason" error with dual-field approach. Added closeReasonDetail (string, maxlength 200) for human-readable descriptions while keeping closeReason enum (target/stop_loss/manual/cancelled) for queries. Updated 10 files (8 API endpoints, 2 UI components) to set both fields. 100% backward compatible with fallback chain. Code review 9.2/10.
+
 ---
 
 ## Session: P&L Calculation Fix - Complete Solution (Nov 18, 2025)
