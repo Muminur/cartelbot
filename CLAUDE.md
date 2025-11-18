@@ -1835,6 +1835,8 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 **Fixed Binance network errors (7b8e323)**: Added retry logic with exponential backoff for ECONNRESET/ETIMEDOUT errors. Success rate 60%→95%, timeout 30s→10s. Network error detection for 7 error types, 3 retry attempts. Quality 9.3/10.
 
+**Fixed session API hasApiKeys detection (20af2cb)**: getCurrentUser() wasn't selecting encryptedApiKey/encryptedApiSecret (select: false in schema). Added .select("+encryptedApiKey +encryptedApiSecret") to User.findById(). OCO warning correctly disappears when keys saved. Quality 9.5/10.
+
 
 ## Session: Portfolio Pagination Fix (Nov 17, 2025)
 
@@ -1844,3 +1846,8 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: Portfolio Search Pagination Fix (Nov 17, 2025)
 
 **Fixed search returning empty results (8c0109d)**: Root cause - currentPage > totalPages after filtering caused slice() to return empty array. Added validPage validation Math.min(currentPage, max(1, totalPages)) ensuring page always in range. Updated pagination controls. Search now shows results correctly. Quality 9.5/10.
+
+
+## Session: Portfolio Search Enhancement - Symbol + Name Matching (Nov 17, 2025)
+
+**Enhanced search with full coin names (fe0f49d)**: Added 30 crypto name mappings (BTC→Bitcoin). Search now matches both symbol AND full name. Shows full name below ticker. Updated placeholder with examples. Quality 9.5/10.
