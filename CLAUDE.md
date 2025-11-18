@@ -2047,4 +2047,4 @@ Response format for orderReports is selected using the newOrderRespType paramete
 ---
 
 ## Session: Nov 18, 2025 - Portfolio BUSD Fix + Advanced Dark Mode
-Fixed -1121 errors by removing delisted BUSD pairs (43% API reduction). Implemented comprehensive dark mode (Nord/Solarized themes, auto-switch, custom colors). Commit: 9742875, 72d7f98
+Fixed -1121 errors by removing delisted BUSD pairs (43% API reduction). Implemented comprehensive dark mode (Nord/Solarized themes, auto-switch, custom colors). Commits: 72d7f98, 9742875, 115da31. Improved logging clarity (dev/prod separation)
