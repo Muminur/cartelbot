@@ -175,11 +175,17 @@ export default function SignalDetailModal({
     let isMounted = true;
     let intervalId: NodeJS.Timeout | null = null;
     let abortController: AbortController | null = null;
+    let fetchTimeoutId: NodeJS.Timeout | null = null;
 
     const fetchLivePrice = async () => {
       // Fix #4: Cancel previous fetch if still running
       if (abortController) {
         abortController.abort();
+      }
+
+      // Clear previous timeout if exists
+      if (fetchTimeoutId) {
+        clearTimeout(fetchTimeoutId);
       }
 
       abortController = new AbortController();
@@ -188,11 +194,22 @@ export default function SignalDetailModal({
 
       setPriceLoading(true);
 
+      // Add 20s timeout (shorter than backend 30s to detect issues early)
+      fetchTimeoutId = setTimeout(() => {
+        abortController?.abort();
+      }, 20000);
+
       try {
         const response = await fetch(
           `/api/binance/ticker?symbol=${signal.symbol}`,
           { signal: abortController.signal }
         );
+
+        // Clear timeout on successful response
+        if (fetchTimeoutId) {
+          clearTimeout(fetchTimeoutId);
+          fetchTimeoutId = null;
+        }
 
         if (!response.ok) {
           throw new Error(`Failed to fetch price: ${response.statusText}`);
@@ -245,8 +262,17 @@ export default function SignalDetailModal({
           }
         }
       } catch (error) {
-        // Ignore abort errors (expected when component unmounts)
+        // Clear timeout on error
+        if (fetchTimeoutId) {
+          clearTimeout(fetchTimeoutId);
+          fetchTimeoutId = null;
+        }
+
+        // Ignore abort errors (expected when component unmounts or times out)
         if (error instanceof Error && error.name === 'AbortError') {
+          if (isMounted) {
+            setPriceError("Request timed out. Binance API may be slow.");
+          }
           return;
         }
 
@@ -277,6 +303,7 @@ export default function SignalDetailModal({
     return () => {
       isMounted = false;
       if (intervalId) clearInterval(intervalId);
+      if (fetchTimeoutId) clearTimeout(fetchTimeoutId);
       if (abortController) {
         abortController.abort();
         abortController = null; // Clear reference (Fix #4)

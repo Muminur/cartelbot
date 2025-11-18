@@ -47,7 +47,7 @@ export class BinanceClient {
 
     this.axios = axios.create({
       baseURL: this.baseURL,
-      timeout: 10000, // Reduced from 30s to 10s for faster failure detection
+      timeout: 30000, // 30s timeout for Binance API (network latency + API response time)
       headers: {
         "X-MBX-APIKEY": this.apiKey,
         "Content-Type": "application/json",

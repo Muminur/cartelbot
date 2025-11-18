@@ -121,6 +121,42 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
 
+    // Handle timeout errors specifically
+    if (error instanceof Error && (
+      error.message.includes('timeout') ||
+      error.message.includes('ETIMEDOUT') ||
+      error.message.includes('ECONNABORTED')
+    )) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "TIMEOUT_ERROR",
+            message: `Request to Binance API timed out for ${symbol}. The API may be experiencing high load or network issues.`,
+            statusCode: 504,
+            retry: true,
+          },
+        },
+        { status: 504 }
+      );
+    }
+
+    // Handle network connection errors
+    if (error instanceof Error && error.message.includes('Network connection to Binance failed')) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "NETWORK_ERROR",
+            message: error.message,
+            statusCode: 503,
+            retry: true,
+          },
+        },
+        { status: 503 }
+      );
+    }
+
     // Handle invalid symbol error (code -1121) gracefully
     if (error instanceof BinanceAPIError && error.binanceCode === -1121) {
       return NextResponse.json(

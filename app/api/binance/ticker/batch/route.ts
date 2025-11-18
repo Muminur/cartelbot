@@ -142,6 +142,32 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    // Handle timeout errors specifically
+    if (error instanceof Error && (
+      error.message.includes('timeout') ||
+      error.message.includes('ETIMEDOUT') ||
+      error.message.includes('ECONNABORTED')
+    )) {
+      console.error("GET /api/binance/ticker/batch - Timeout error:", {
+        message: error.message,
+        timestamp: new Date().toISOString(),
+        symbolCount: symbols?.length || 0,
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "TIMEOUT_ERROR",
+            message: `Batch ticker request timed out for ${symbols?.length || 0} symbols. Binance API may be experiencing high load.`,
+            statusCode: 504,
+            retry: true,
+          },
+        },
+        { status: 504 }
+      );
+    }
+
     // Handle invalid symbol error gracefully
     if (error instanceof BinanceAPIError && error.binanceCode === -1121) {
       return NextResponse.json(
