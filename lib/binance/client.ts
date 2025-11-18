@@ -1,5 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
 import crypto from "crypto";
+import { Agent as HttpAgent } from "http";
+import { Agent as HttpsAgent } from "https";
 import { env } from "@/lib/config/env";
 import { BinanceAPIError } from "@/lib/utils/errors";
 import {
@@ -45,13 +47,31 @@ export class BinanceClient {
       ? env.BINANCE_TESTNET_URL
       : env.BINANCE_API_URL;
 
+    // Create HTTP agents with keep-alive to prevent ECONNRESET errors
+    // Keep-alive reuses TCP connections instead of creating new ones each time
+    const httpAgent = new HttpAgent({
+      keepAlive: true,
+      keepAliveMsecs: 30000, // Send keep-alive probe every 30 seconds
+      maxSockets: 50, // Maximum concurrent connections per host
+      maxFreeSockets: 10, // Maximum idle connections to keep open
+    });
+
+    const httpsAgent = new HttpsAgent({
+      keepAlive: true,
+      keepAliveMsecs: 30000,
+      maxSockets: 50,
+      maxFreeSockets: 10,
+    });
+
     this.axios = axios.create({
       baseURL: this.baseURL,
-      timeout: 30000, // 30s timeout for Binance API (network latency + API response time)
+      timeout: 10000, // 10s timeout (reduced from 30s to prevent connection pool exhaustion)
       headers: {
         "X-MBX-APIKEY": this.apiKey,
         "Content-Type": "application/json",
       },
+      httpAgent,
+      httpsAgent,
     });
 
     this.axios.interceptors.response.use(
@@ -297,11 +317,20 @@ export class BinanceClient {
   }
 
   async get24hrTicker(symbol: string): Promise<BinanceTicker24hr> {
-    const response = await this.axios.get<BinanceTicker24hr>(
-      "/api/v3/ticker/24hr",
-      { params: { symbol } }
+    // Use retry logic with exponential backoff for network errors (ECONNRESET, ETIMEDOUT)
+    // This prevents immediate failures on transient connection issues
+    return this.retryWithBackoff(
+      async () => {
+        const response = await this.axios.get<BinanceTicker24hr>(
+          "/api/v3/ticker/24hr",
+          { params: { symbol } }
+        );
+        return response.data;
+      },
+      3, // maxRetries: 3 attempts (total 4 tries)
+      1000, // initialDelay: 1s, then 2s, then 4s (exponential backoff)
+      [] // Don't skip retry on any error codes for public endpoint
     );
-    return response.data;
   }
 
   async getBatch24hrTicker(symbols: string[]): Promise<BinanceTicker24hr[]> {
@@ -666,6 +695,24 @@ export class BinanceClient {
   getWebSocketURL(): string {
     const isTestnet = this.baseURL.includes("testnet.binance.vision");
     return isTestnet ? env.BINANCE_TESTNET_WS : env.BINANCE_WS_URL;
+  }
+
+  /**
+   * Cleanup HTTP agents to free socket connections
+   * Call this when BinanceClient instance is no longer needed
+   * Prevents memory leaks when creating/destroying clients frequently
+   */
+  destroy(): void {
+    const httpAgent = this.axios.defaults.httpAgent as HttpAgent | undefined;
+    const httpsAgent = this.axios.defaults.httpsAgent as HttpsAgent | undefined;
+
+    if (httpAgent && typeof httpAgent.destroy === "function") {
+      httpAgent.destroy();
+    }
+
+    if (httpsAgent && typeof httpsAgent.destroy === "function") {
+      httpsAgent.destroy();
+    }
   }
 }
 
