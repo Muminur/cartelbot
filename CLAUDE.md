@@ -1868,3 +1868,5 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 **OCO target counting fix (88889c8)**: Fixed signal details showing OCO "ALL_DONE" but targets "0/4 Hit". Used real-time Binance API status instead of stale database. Added Trade Result summary (P&L, close reason). Replaced all `any` with BinanceOCOOrderReport type. Quality 9.7/10.
 
 **OCO display enhancement (0cbcba1)**: Grouped TP/SL by orderListId pairs, individual status (FILLED/CANCELED/NEW), color-coded cards (green TP, red SL, gray cancelled). Removed confusing "ALL_DONE" text. Quality 9.2/10.
+
+**Target counter fix (41d8e15)**: Fixed counter showing "0/4 Hit" when targets filled. Color-coded badges (red SL, green targets hit, gray none). Next.js 16 Suspense boundary added. Quality 9.75/10.
