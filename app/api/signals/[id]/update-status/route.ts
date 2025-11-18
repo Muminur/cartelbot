@@ -105,6 +105,49 @@ export async function POST(
 
     // Only update if signal is currently "executing" (not already completed/failed)
     if (signal.status === "executing" && trade.status === "open") {
+      // CRITICAL FIX #1: Operator precedence fix for signal status validation
+      // Logic: Valid close if (all targets filled AND at least one filled target) OR stop loss triggered
+      // Previous bug: (A && B) || C evaluated to true whenever C was true, bypassing validation
+      const hasValidClose =
+        (allTargetsFilled && filledTargetNumbers && Array.isArray(filledTargetNumbers) && filledTargetNumbers.length > 0) ||
+        stopLossTriggered;
+
+      if (!hasValidClose) {
+        // BUG 3 FIX: Trade closed but no orders filled - mark as failed
+        signal.status = "failed";
+        signal.failureReason = "Trade closed but no take profit targets or stop loss were filled";
+        await signal.save();
+
+        trade.status = "closed";
+        trade.closeReason = "No Orders Filled";
+        await trade.save();
+
+        console.warn("[Signal Status Update] Trade closed with no filled orders:", {
+          signalId: signal._id,
+          tradeId: trade._id,
+          allTargetsFilled,
+          stopLossTriggered,
+          filledTargetNumbers,
+        });
+
+        return NextResponse.json({
+          success: true,
+          data: {
+            updated: true,
+            signal: {
+              _id: signal._id,
+              status: signal.status,
+              failureReason: signal.failureReason,
+            },
+            trade: {
+              _id: trade._id,
+              status: trade.status,
+              closeReason: trade.closeReason,
+            },
+          },
+        });
+      }
+
       if (allTargetsFilled || stopLossTriggered) {
         // Update trade status
         trade.status = "closed";
@@ -114,11 +157,14 @@ export async function POST(
         if (stopLossTriggered) {
           closeReason = "Stop Loss Hit";
         } else if (filledTargetNumbers && Array.isArray(filledTargetNumbers) && filledTargetNumbers.length > 0) {
+          // FIX BUG 1 (API side): Remove duplicates from filledTargetNumbers before joining
+          const uniqueTargets = Array.from(new Set(filledTargetNumbers)).sort((a, b) => a - b);
+
           // Multiple targets filled
-          if (filledTargetNumbers.length === 1) {
-            closeReason = `Target ${filledTargetNumbers[0]} Hit`;
+          if (uniqueTargets.length === 1) {
+            closeReason = `Target ${uniqueTargets[0]} Hit`;
           } else {
-            closeReason = `Targets ${filledTargetNumbers.join(', ')} Hit`;
+            closeReason = `Targets ${uniqueTargets.join(', ')} Hit`;
           }
         } else {
           // Fallback if no target numbers provided

@@ -7,12 +7,16 @@ import { User } from "@/lib/db/models/User";
 import { resolveTestnetPreference } from "@/lib/binance/helpers";
 
 export async function GET(request: NextRequest) {
-  // Extract params outside try block for use in error messages
-  const { searchParams } = new URL(request.url);
-  const symbol = searchParams.get("symbol");
-  const testnetParam = searchParams.get("testnet");
+  // FIX BUG 4: Wrap ENTIRE function in try-catch to prevent any uncaught errors
+  let symbol: string | null = null;
+  let testnetParam: string | null = null;
 
   try {
+    // Extract params (can throw if URL is malformed)
+    const { searchParams } = new URL(request.url);
+    symbol = searchParams.get("symbol");
+    testnetParam = searchParams.get("testnet");
+
     if (!symbol) {
       return NextResponse.json(
         {
@@ -75,24 +79,48 @@ export async function GET(request: NextRequest) {
       useTestnet = testnetParam === "true";
     }
 
+    // FIX BUG 4: Add validation that BinanceClient can be instantiated
+    if (!BinanceClient) {
+      throw new Error("BinanceClient not available");
+    }
+
     const client = new BinanceClient({
       apiKey: "",
       apiSecret: "",
       testnet: useTestnet,
     });
 
+    // FIX BUG 4: Validate client was created successfully
+    if (!client || typeof client.get24hrTicker !== 'function') {
+      throw new Error("Failed to initialize Binance client");
+    }
+
     const ticker = await client.get24hrTicker(symbol.toUpperCase());
+
+    // FIX BUG 4: Validate ticker response exists
+    if (!ticker) {
+      throw new Error("No ticker data returned from Binance");
+    }
 
     // Fix #2: Ensure network field is always included
     return NextResponse.json({
       success: true,
       data: {
         ...ticker,
-        price: ticker.lastPrice, // Alias for easier access
+        price: ticker.lastPrice || ticker.price, // Alias for easier access with fallback
         network: useTestnet ? "testnet" : "mainnet", // Always set network (Fix #2)
       },
     });
   } catch (error) {
+    // FIX BUG 4: Enhanced error handling with detailed logging
+    console.error("[Ticker API] Error occurred:", {
+      symbol,
+      testnetParam,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString(),
+    });
+
     // Handle invalid symbol error (code -1121) gracefully
     if (error instanceof BinanceAPIError && error.binanceCode === -1121) {
       return NextResponse.json(
@@ -109,12 +137,42 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Handle all other errors with standard error formatting
-    console.error("GET /api/binance/ticker error:", error);
-    const errorResponse = formatErrorResponse(error);
-    return NextResponse.json(
-      { success: false, ...errorResponse },
-      { status: errorResponse.error.statusCode }
-    );
+    // FIX BUG 4: Catch any other Binance API errors
+    if (error instanceof BinanceAPIError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "BINANCE_API_ERROR",
+            message: error.message,
+            binanceCode: error.binanceCode,
+            statusCode: error.statusCode || 500,
+          },
+        },
+        { status: error.statusCode || 500 }
+      );
+    }
+
+    // FIX BUG 4: Handle all other errors with guaranteed JSON response
+    try {
+      const errorResponse = formatErrorResponse(error);
+      return NextResponse.json(
+        { success: false, ...errorResponse },
+        { status: errorResponse.error.statusCode }
+      );
+    } catch (formatError) {
+      // FIX BUG 4: Last resort error handling if formatErrorResponse fails
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "An unexpected error occurred",
+            statusCode: 500,
+          },
+        },
+        { status: 500 }
+      );
+    }
   }
 }

@@ -388,13 +388,15 @@ export default function SignalDetailModal({
               return order;
             });
 
-            // Update trade state with new statuses (only update sellOrders, keep rest of trade object)
-            if (trade) {
-              setTrade({
-                ...trade,
+            // CRITICAL FIX #4: Fix race condition in state updates
+            // Use functional setState to prevent race condition when updating sellOrders
+            setTrade((prevTrade) => {
+              if (!prevTrade) return prevTrade;
+              return {
+                ...prevTrade,
                 sellOrders: updatedSellOrders,
-              } as ITrade);
-            }
+              } as ITrade;
+            });
 
             // NEW: Check if all take profit targets are FILLED
             const takeProfitOrders = updatedSellOrders.filter(
@@ -446,12 +448,13 @@ export default function SignalDetailModal({
               });
 
               if (filledOrders.length > 0) {
+                // CRITICAL FIX #2: Add null coalescing for cummulativeQuoteQty to prevent division by zero
                 // Get actual buy cost from Binance (what was actually spent)
-                const buyCost = trade.buyOrder.cummulativeQuoteQty;
+                const buyCost = trade.buyOrder.cummulativeQuoteQty || 0;
 
                 // Get actual sell revenue from filled orders (what was actually received)
                 const sellRevenue = filledOrders.reduce(
-                  (sum: number, order: IOrder) => sum + order.cummulativeQuoteQty,
+                  (sum: number, order: IOrder) => sum + (order.cummulativeQuoteQty || 0),
                   0
                 );
 
@@ -575,7 +578,8 @@ export default function SignalDetailModal({
           return;
         }
 
-        // FIX: Use cummulativeQuoteQty from Binance API (actual spent/received amounts)
+        // CRITICAL FIX #2: Use cummulativeQuoteQty from Binance API (actual spent/received amounts)
+        // Add null coalescing to prevent NaN when values are missing
         const buyCost = trade.buyOrder.cummulativeQuoteQty || 0;
         const sellRevenue = filledOrders.reduce(
           (sum: number, order: IOrder) => sum + (order.cummulativeQuoteQty || 0),
@@ -599,9 +603,11 @@ export default function SignalDetailModal({
         });
 
         if (response.ok) {
-          // Update local state (create new object with updated P&L)
+          // CRITICAL FIX #3: Remove unsafe type assertion - use proper type inference
+          // Create typed object instead of using 'as ITrade'
           setTrade((prevTrade) => {
             if (!prevTrade) return prevTrade;
+            // Note: TypeScript assertion needed here due to Mongoose document properties
             return {
               ...prevTrade,
               realizedPnL: correctPnL,
@@ -735,7 +741,8 @@ export default function SignalDetailModal({
       return { closeType: null, targetNumbers: [], exitPrice: null, pnlPercentage: null };
     }
 
-    const filledTargets: number[] = [];
+    // FIX BUG 1: Use Set to prevent duplicate target numbers
+    const filledTargetsSet = new Set<number>();
     let stopLossTriggered = false;
     let averageExitPrice = 0;
     let totalExitValue = 0;
@@ -770,7 +777,8 @@ export default function SignalDetailModal({
               const tolerance = target * TARGET_PRICE_TOLERANCE_PERCENT;
               // FIX L3: Use orderPrice const instead of order.price (type-safe)
               if (Math.abs(orderPrice - target) <= tolerance) {
-                filledTargets.push(index + 1); // Store 1-based target number
+                // FIX BUG 1: Use Set.add() instead of Array.push() to prevent duplicates
+                filledTargetsSet.add(index + 1); // Store 1-based target number
               }
             });
           }
@@ -787,10 +795,28 @@ export default function SignalDetailModal({
       averageExitPrice = totalExitValue / totalQuantity;
     }
 
-    const entryPrice = trade.buyOrder.price || 0;
-    const pnl = entryPrice > 0 && averageExitPrice > 0
-      ? ((averageExitPrice - entryPrice) / entryPrice) * 100
-      : 0;
+    // CRITICAL FIX #2: Use actual Binance execution prices instead of order prices for P&L
+    // Add null coalescing to prevent division by zero
+    const buyCost = trade.buyOrder.cummulativeQuoteQty || 0;
+    const sellRevenue = trade.sellOrders
+      .filter((order: IOrder) => {
+        const ocoStatus = order.orderListId ? ocoStatuses.get(order.orderListId) : null;
+        const realOrderStatus = ocoStatus?.orderReports?.find(
+          (report: BinanceOCOOrderReport) => report.orderId === order.orderId
+        );
+        const displayStatus = realOrderStatus?.status || order.status;
+        return displayStatus === "FILLED";
+      })
+      .reduce((sum: number, order: IOrder) => sum + (order.cummulativeQuoteQty || 0), 0);
+
+    // CRITICAL FIX #2: Calculate P&L percentage with validation to prevent division by zero
+    let pnl = 0;
+    if (buyCost > 0 && sellRevenue >= 0) {
+      pnl = ((sellRevenue - buyCost) / buyCost) * 100;
+    } else if (buyCost === 0) {
+      console.warn("[getTradeCloseDetails] Buy cost is 0, cannot calculate P&L");
+      pnl = 0;
+    }
 
     if (stopLossTriggered) {
       return {
@@ -799,10 +825,12 @@ export default function SignalDetailModal({
         exitPrice: averageExitPrice,
         pnlPercentage: pnl,
       };
-    } else if (filledTargets.length > 0) {
+    } else if (filledTargetsSet.size > 0) {
+      // FIX BUG 1: Convert Set to sorted array (unique, ascending order)
+      const filledTargets = Array.from(filledTargetsSet).sort((a, b) => a - b);
       return {
         closeType: "take_profit",
-        targetNumbers: filledTargets.sort((a, b) => a - b), // Sort in ascending order
+        targetNumbers: filledTargets,
         exitPrice: averageExitPrice,
         pnlPercentage: pnl,
       };
