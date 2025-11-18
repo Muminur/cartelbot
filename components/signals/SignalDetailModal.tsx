@@ -923,101 +923,240 @@ export default function SignalDetailModal({
                             <RefreshCw className="h-3 w-3 animate-spin text-blue-500" />
                           )}
                         </div>
-                        {trade.sellOrders.map((order: IOrder, index: number) => {
-                          // Get real status from Binance if available
-                          const ocoStatus = order.orderListId ? ocoStatuses.get(order.orderListId) : null;
-                          const realOrderStatus = ocoStatus?.orderReports?.find(
-                            (report: BinanceOCOOrderReport) => report.orderId === order.orderId
-                          );
+                        {(() => {
+                          // Group orders by OCO pairs (orderListId)
+                          const ocoGroups = new Map<number, IOrder[]>();
+                          trade.sellOrders.forEach((order: IOrder) => {
+                            if (order.orderListId) {
+                              const existing = ocoGroups.get(order.orderListId) || [];
+                              existing.push(order);
+                              ocoGroups.set(order.orderListId, existing);
+                            }
+                          });
 
-                          // Use real status from Binance, fallback to database status
-                          const displayStatus = realOrderStatus?.status || order.status;
-                          const executedQty = realOrderStatus?.executedQty
-                            ? parseFloat(realOrderStatus.executedQty)
-                            : order.executedQty;
-                          const cummulativeQuoteQty = realOrderStatus?.cummulativeQuoteQty
-                            ? parseFloat(realOrderStatus.cummulativeQuoteQty)
-                            : order.cummulativeQuoteQty;
+                          // Process each OCO pair
+                          let tpIndex = 1;
+                          return Array.from(ocoGroups.values()).map((orders) => {
+                            // Identify Take Profit and Stop Loss from the pair
+                            const takeProfit = orders.find(o => o.type === 'LIMIT_MAKER');
+                            const stopLoss = orders.find(o => o.type === 'STOP_LOSS_LIMIT');
 
-                          return (
-                            <div key={order.orderId} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-semibold text-gray-700">
-                                  {order.type === 'STOP_LOSS_LIMIT' ? 'Stop Loss' : `Take Profit #${Math.floor(index / 2) + 1}`}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                  {trade.testnet && (
-                                    <Badge variant="outline" className="text-xs bg-orange-100 border-orange-300">
-                                      TESTNET
+                            if (!takeProfit || !stopLoss) {
+                              // Fallback: Display orders individually if pairing failed
+                              return orders.map((order: IOrder) => {
+                                const ocoStatus = order.orderListId ? ocoStatuses.get(order.orderListId) : null;
+                                const realOrderStatus = ocoStatus?.orderReports?.find(
+                                  (report: BinanceOCOOrderReport) => report.orderId === order.orderId
+                                );
+                                const displayStatus = realOrderStatus?.status || order.status;
+
+                                return (
+                                  <div key={order.orderId} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-xs font-semibold text-gray-700">
+                                        Order #{order.orderId}
+                                      </span>
+                                      <Badge variant="outline">{displayStatus}</Badge>
+                                    </div>
+                                  </div>
+                                );
+                              });
+                            }
+
+                            // Get real statuses from Binance
+                            const ocoStatus = takeProfit.orderListId ? ocoStatuses.get(takeProfit.orderListId) : null;
+                            const realTpOrderStatus = ocoStatus?.orderReports?.find(
+                              (report: BinanceOCOOrderReport) => report.orderId === takeProfit.orderId
+                            );
+                            const realSlOrderStatus = ocoStatus?.orderReports?.find(
+                              (report: BinanceOCOOrderReport) => report.orderId === stopLoss.orderId
+                            );
+
+                            // Use real status from Binance, fallback to database status
+                            const tpStatus = realTpOrderStatus?.status || takeProfit.status;
+                            const slStatus = realSlOrderStatus?.status || stopLoss.status;
+                            const tpExecutedQty = realTpOrderStatus?.executedQty
+                              ? parseFloat(realTpOrderStatus.executedQty)
+                              : takeProfit.executedQty;
+                            const slExecutedQty = realSlOrderStatus?.executedQty
+                              ? parseFloat(realSlOrderStatus.executedQty)
+                              : stopLoss.executedQty;
+                            const tpFilledValue = realTpOrderStatus?.cummulativeQuoteQty
+                              ? parseFloat(realTpOrderStatus.cummulativeQuoteQty)
+                              : takeProfit.cummulativeQuoteQty;
+                            const slFilledValue = realSlOrderStatus?.cummulativeQuoteQty
+                              ? parseFloat(realSlOrderStatus.cummulativeQuoteQty)
+                              : stopLoss.cummulativeQuoteQty;
+
+                            // Determine what happened in this OCO pair
+                            const tpTriggered = tpStatus === 'FILLED';
+                            const slTriggered = slStatus === 'FILLED';
+                            const bothActive = tpStatus === 'NEW' && slStatus === 'NEW';
+
+                            const currentTpIndex = tpIndex++;
+
+                            return (
+                              <div key={takeProfit.orderListId} className="bg-gray-50 p-4 rounded-lg border-2 border-gray-300 space-y-3">
+                                {/* Take Profit Section */}
+                                <div className={`p-3 rounded-lg border-2 ${
+                                  tpTriggered
+                                    ? 'bg-green-50 border-green-300'
+                                    : tpStatus === 'CANCELED'
+                                    ? 'bg-gray-100 border-gray-300'
+                                    : 'bg-blue-50 border-blue-200'
+                                }`}>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-bold text-gray-800">
+                                        Take Profit #{currentTpIndex}
+                                      </span>
+                                      {tpTriggered && (
+                                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {trade.testnet && (
+                                        <Badge variant="outline" className="text-xs bg-orange-100 border-orange-300">
+                                          TESTNET
+                                        </Badge>
+                                      )}
+                                      <Badge
+                                        className={
+                                          tpTriggered ? "bg-green-500 text-white" :
+                                          tpStatus === "CANCELED" ? "bg-gray-400 text-white" :
+                                          tpStatus === "PARTIALLY_FILLED" ? "bg-blue-500 text-white" :
+                                          "bg-yellow-500 text-white"
+                                        }
+                                      >
+                                        {tpStatus}
+                                      </Badge>
+                                    </div>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div>
+                                      <span className="text-gray-600">Target Price:</span>
+                                      <span className="ml-2 font-medium text-green-700">
+                                        ${formatPrice(takeProfit.price || 0)}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-600">Quantity:</span>
+                                      <span className="ml-2">{takeProfit.quantity.toFixed(6)}</span>
+                                    </div>
+                                    {tpExecutedQty > 0 && (
+                                      <>
+                                        <div>
+                                          <span className="text-gray-600">Executed:</span>
+                                          <span className="ml-2 font-semibold text-green-600">
+                                            {tpExecutedQty.toFixed(6)}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-600">Filled Value:</span>
+                                          <span className="ml-2 font-medium">${tpFilledValue.toFixed(2)}</span>
+                                        </div>
+                                      </>
+                                    )}
+                                    <div className="col-span-2">
+                                      <span className="text-gray-600">Order ID:</span>
+                                      <span className="ml-2 font-mono text-xs">{takeProfit.orderId}</span>
+                                    </div>
+                                  </div>
+                                  {tpTriggered && slStatus === 'CANCELED' && (
+                                    <div className="mt-2 pt-2 border-t border-green-200">
+                                      <span className="text-xs text-green-700 font-medium">
+                                        ✓ Take profit executed successfully
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Stop Loss Section */}
+                                <div className={`p-3 rounded-lg border-2 ${
+                                  slTriggered
+                                    ? 'bg-red-50 border-red-300'
+                                    : slStatus === 'CANCELED'
+                                    ? 'bg-gray-100 border-gray-300'
+                                    : 'bg-orange-50 border-orange-200'
+                                }`}>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-bold text-gray-800">
+                                        Stop Loss for TP #{currentTpIndex}
+                                      </span>
+                                      {slTriggered && (
+                                        <AlertTriangle className="h-4 w-4 text-red-600" />
+                                      )}
+                                    </div>
+                                    <Badge
+                                      className={
+                                        slTriggered ? "bg-red-500 text-white" :
+                                        slStatus === "CANCELED" ? "bg-gray-400 text-white" :
+                                        slStatus === "PARTIALLY_FILLED" ? "bg-blue-500 text-white" :
+                                        "bg-yellow-500 text-white"
+                                      }
+                                    >
+                                      {slStatus}
                                     </Badge>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2 text-xs">
+                                    <div>
+                                      <span className="text-gray-600">Stop Price:</span>
+                                      <span className="ml-2 font-medium text-red-700">
+                                        ${formatPrice(stopLoss.stopPrice || 0)}
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-600">Quantity:</span>
+                                      <span className="ml-2">{stopLoss.quantity.toFixed(6)}</span>
+                                    </div>
+                                    {slExecutedQty > 0 && (
+                                      <>
+                                        <div>
+                                          <span className="text-gray-600">Executed:</span>
+                                          <span className="ml-2 font-semibold text-red-600">
+                                            {slExecutedQty.toFixed(6)}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-600">Filled Value:</span>
+                                          <span className="ml-2 font-medium">${slFilledValue.toFixed(2)}</span>
+                                        </div>
+                                      </>
+                                    )}
+                                    <div className="col-span-2">
+                                      <span className="text-gray-600">Order ID:</span>
+                                      <span className="ml-2 font-mono text-xs">{stopLoss.orderId}</span>
+                                    </div>
+                                  </div>
+                                  {slTriggered && tpStatus === 'CANCELED' && (
+                                    <div className="mt-2 pt-2 border-t border-red-200">
+                                      <span className="text-xs text-red-700 font-medium">
+                                        ⚠ Stop loss triggered - Take profit auto-cancelled
+                                      </span>
+                                    </div>
                                   )}
-                                  <Badge
-                                    variant={
-                                      displayStatus === "FILLED" ? "default" :
-                                      displayStatus === "CANCELED" ? "outline" :
-                                      displayStatus === "PARTIALLY_FILLED" ? "secondary" :
-                                      "secondary"
-                                    }
-                                    className={
-                                      displayStatus === "FILLED" ? "bg-green-500" :
-                                      displayStatus === "CANCELED" ? "bg-gray-400" :
-                                      displayStatus === "PARTIALLY_FILLED" ? "bg-blue-500" :
-                                      "bg-yellow-500"
-                                    }
-                                  >
-                                    {displayStatus}
-                                  </Badge>
-                                  {ocoStatus && (
-                                    <span className="text-xs text-green-600 font-medium" title="Status verified from Binance API">
-                                      ✓ Live
-                                    </span>
+                                  {slStatus === 'CANCELED' && tpTriggered && (
+                                    <div className="mt-2 pt-2 border-t border-gray-300">
+                                      <span className="text-xs text-gray-600">
+                                        Auto-cancelled when take profit filled
+                                      </span>
+                                    </div>
                                   )}
                                 </div>
-                              </div>
-                              <div className="grid grid-cols-2 gap-2 text-xs">
-                                <div>
-                                  <span className="text-gray-600">Order ID:</span>
-                                  <span className="ml-2 font-mono">{order.orderId}</span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-600">Quantity:</span>
-                                  <span className="ml-2">{order.quantity.toFixed(6)}</span>
-                                </div>
-                                {order.price && (
-                                  <div>
-                                    <span className="text-gray-600">Target Price:</span>
-                                    <span className="ml-2 font-medium text-green-700">${formatPrice(order.price)}</span>
-                                  </div>
-                                )}
-                                {order.stopPrice && (
-                                  <div>
-                                    <span className="text-gray-600">Stop Price:</span>
-                                    <span className="ml-2 font-medium text-red-700">${formatPrice(order.stopPrice)}</span>
-                                  </div>
-                                )}
-                                {executedQty > 0 && (
-                                  <div>
-                                    <span className="text-gray-600">Executed:</span>
-                                    <span className="ml-2 font-semibold text-green-600">{executedQty.toFixed(6)}</span>
-                                  </div>
-                                )}
-                                {cummulativeQuoteQty > 0 && (
-                                  <div>
-                                    <span className="text-gray-600">Filled Value:</span>
-                                    <span className="ml-2 font-medium">${cummulativeQuoteQty.toFixed(2)}</span>
-                                  </div>
-                                )}
+
+                                {/* Live Status Indicator - Only show when using Binance API data */}
                                 {ocoStatus && (
-                                  <div className="col-span-2 mt-1 pt-2 border-t border-gray-300">
-                                    <span className="text-xs text-gray-500">
-                                      OCO List Status: {ocoStatus.listStatusType} | {ocoStatus.listOrderStatus}
+                                  <div className="flex items-center justify-center gap-2 pt-2 border-t border-gray-300">
+                                    <span className="text-xs text-green-600 font-medium" title="Status verified from Binance API">
+                                      ✓ Live data from Binance
                                     </span>
                                   </div>
                                 )}
                               </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          });
+                        })()}
                       </div>
                     ) : signal.status === "executing" ? (
                       pollingFailed ? (
