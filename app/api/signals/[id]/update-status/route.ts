@@ -37,7 +37,7 @@ export async function POST(
 
     // 2. Parse request body
     const body = await request.json();
-    const { allTargetsFilled, stopLossTriggered, tradeId, exitPrice, realizedPnL } = body;
+    const { allTargetsFilled, stopLossTriggered, tradeId, exitPrice, realizedPnL, filledTargetNumbers } = body;
 
     // 3. Await params (Next.js async params)
     const resolvedParams = await params;
@@ -108,7 +108,24 @@ export async function POST(
       if (allTargetsFilled || stopLossTriggered) {
         // Update trade status
         trade.status = "closed";
-        trade.closeReason = stopLossTriggered ? "stop_loss" : "target";
+
+        // Determine specific close reason based on which targets were filled
+        let closeReason: string;
+        if (stopLossTriggered) {
+          closeReason = "Stop Loss Hit";
+        } else if (filledTargetNumbers && Array.isArray(filledTargetNumbers) && filledTargetNumbers.length > 0) {
+          // Multiple targets filled
+          if (filledTargetNumbers.length === 1) {
+            closeReason = `Target ${filledTargetNumbers[0]} Hit`;
+          } else {
+            closeReason = `Targets ${filledTargetNumbers.join(', ')} Hit`;
+          }
+        } else {
+          // Fallback if no target numbers provided
+          closeReason = "target";
+        }
+
+        trade.closeReason = closeReason;
 
         if (exitPrice !== undefined) {
           trade.exitPrice = exitPrice;

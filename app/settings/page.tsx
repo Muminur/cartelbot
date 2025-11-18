@@ -111,6 +111,10 @@ export default function SettingsPage() {
             setRequireApproval(data.requireApproval || false);
             setEmergencyStop(data.emergencyStop || false);
             setUseTestnet(data.useTestnet || false);
+            setInvestmentAmount(data.investmentAmount || 100);
+            setTargetDistribution(data.targetDistribution || [75, 15, 10]);
+            setPositionSizingMethod(data.positionSizingMethod || "fixed");
+            setRiskPercentage(data.riskPercentage || 2);
           }
         }
 
@@ -232,6 +236,13 @@ export default function SettingsPage() {
       return;
     }
 
+    // Validate target distribution sums to 100%
+    const distributionSum = targetDistribution.reduce((a, b) => a + b, 0);
+    if (distributionSum !== 100) {
+      toast.error("Target distribution must sum to 100%");
+      return;
+    }
+
     setSavingTradeSettings(true);
 
     try {
@@ -245,6 +256,10 @@ export default function SettingsPage() {
           requireApproval,
           emergencyStop,
           useTestnet,
+          investmentAmount,
+          targetDistribution,
+          positionSizingMethod,
+          riskPercentage,
         }),
       });
 

@@ -397,6 +397,19 @@ export default function SignalDetailModal({
             const takeProfitOrders = updatedSellOrders.filter(
               (order: IOrder) => order.type === "LIMIT_MAKER"
             );
+
+            // Track which specific targets were filled
+            const filledTargetNumbers: number[] = [];
+            takeProfitOrders.forEach((order: IOrder, index: number) => {
+              const liveStatus = orderStatusData.data.orders.find(
+                (o: any) => o.orderId === order.orderId
+              );
+              if (liveStatus?.status === "FILLED") {
+                // TP #1 = index 0, so add 1 to get display number
+                filledTargetNumbers.push(index + 1);
+              }
+            });
+
             const allTargetsFilled = takeProfitOrders.length > 0 &&
               takeProfitOrders.every((order: IOrder) => {
                 const liveStatus = orderStatusData.data.orders.find(
@@ -464,6 +477,7 @@ export default function SignalDetailModal({
                     tradeId: String(trade._id),
                     exitPrice,
                     realizedPnL,
+                    filledTargetNumbers,  // NEW: Send which specific targets were filled
                   }),
                 });
 

@@ -12,6 +12,10 @@ const updateSettingsSchema = z.object({
   requireApproval: z.boolean().optional(),
   emergencyStop: z.boolean().optional(),
   useTestnet: z.boolean().optional(),
+  investmentAmount: z.number().min(10).max(100000).optional(),
+  targetDistribution: z.array(z.number()).length(3).optional(),
+  positionSizingMethod: z.enum(["fixed", "percentage", "risk_based"]).optional(),
+  riskPercentage: z.number().min(0.5).max(10).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -43,6 +47,10 @@ export async function GET(request: NextRequest) {
         requireApproval: userDoc.requireApproval,
         emergencyStop: userDoc.emergencyStop,
         useTestnet: userDoc.useTestnet || false,
+        investmentAmount: userDoc.investmentAmount,
+        targetDistribution: userDoc.targetDistribution,
+        positionSizingMethod: userDoc.positionSizingMethod,
+        riskPercentage: userDoc.riskPercentage,
       },
     });
   } catch (error) {
@@ -72,6 +80,17 @@ export async function POST(request: NextRequest) {
         { success: false, error: validation.error.errors[0].message },
         { status: 400 }
       );
+    }
+
+    // Validate target distribution sums to 100%
+    if (validation.data.targetDistribution) {
+      const sum = validation.data.targetDistribution.reduce((a, b) => a + b, 0);
+      if (sum !== 100) {
+        return NextResponse.json(
+          { success: false, error: "Target distribution must sum to 100%" },
+          { status: 400 }
+        );
+      }
     }
 
     await connectDB();
@@ -122,6 +141,10 @@ export async function POST(request: NextRequest) {
         requireApproval: updatedUser.requireApproval,
         emergencyStop: updatedUser.emergencyStop,
         useTestnet: updatedUser.useTestnet || false,
+        investmentAmount: updatedUser.investmentAmount,
+        targetDistribution: updatedUser.targetDistribution,
+        positionSizingMethod: updatedUser.positionSizingMethod,
+        riskPercentage: updatedUser.riskPercentage,
       },
     });
   } catch (error) {

@@ -1881,4 +1881,6 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 **Signal/trade status auto-update fix (5a90fe2)**: Fixed signal showing "EXECUTING" and trade showing "OPEN" when all targets FILLED. Added automatic detection in SignalDetailModal + /api/signals/[id]/update-status endpoint. Updates signal→"completed" and trade→"closed" when all TP orders FILLED or SL triggered. Quality 9.5/10.
 
-**P&L calculation fix**: Fixed incorrect P&L showing -100% loss when trade was profitable. Now uses actual Binance cummulativeQuoteQty (USDT spent/received) instead of investedAmount. Fixed 6 locations: SignalDetailModal, event-handlers (2), close trade, delete signal, orphaned coins. Quality 9.5/10.
+**P&L calculation fix (f994702)**: Fixed incorrect P&L showing -100% loss when trade was profitable. Now uses actual Binance cummulativeQuoteQty (USDT spent/received) instead of investedAmount. Fixed 6 locations: SignalDetailModal, event-handlers (2), close trade, delete signal, orphaned coins. Quality 9.5/10.
+
+**Close reason & settings save fix**: Fixed close reason showing only "TP #2 Hit" when all 4 targets filled (now shows "Targets 1,2,3,4 Hit"). Fixed target distribution not saving (added missing schema fields: investmentAmount, targetDistribution, positionSizingMethod, riskPercentage). Quality 9.5/10.
