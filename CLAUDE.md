@@ -1828,3 +1828,7 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: OCO API Migration to New Binance Endpoint (Nov 17, 2025)
 
 **Migrated to new OCO API (023d669)**: Updated from deprecated /api/v3/order/oco to new /api/v3/orderList/oco endpoint. Changed parameter structure to above/below terminology (aboveType: LIMIT_MAKER, belowType: STOP_LOSS_LIMIT). Maintains backward compatibility, zero breaking changes. File: lib/binance/client.ts (15 lines). Quality 9.5/10.
+
+## Session: OCO API Keys Detection Fix (Nov 18, 2025)
+
+**Fixed OCO "API keys missing" error (81f5a19)**: Root cause - querying non-existent nested fields (binance.apiKey) instead of actual schema fields (encryptedApiKey). Fixed 3 endpoints: oco-status, cleanup-phantom-orders GET/POST. Code review 9.5/10, production-ready.
