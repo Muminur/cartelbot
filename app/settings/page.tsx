@@ -118,15 +118,11 @@ export default function SettingsPage() {
           }
         }
 
-        // Load user-specific settings from session
+        // Load notification preferences from session (only fields not in settings API)
         if (sessionData.data.user) {
           const userData = sessionData.data.user;
-          setInvestmentAmount(userData.investmentAmount || 100);
-          setTargetDistribution(userData.targetDistribution || [75, 15, 10]);
-          setPositionSizingMethod(userData.positionSizingMethod || "fixed");
-          setRiskPercentage(userData.riskPercentage || 2);
 
-          // Load notification preferences
+          // Load notification preferences (not returned by settings API)
           if (userData.emailNotifications) {
             setOnTradeExecuted(userData.emailNotifications.onTradeExecuted ?? true);
             setOnTargetHit(userData.emailNotifications.onTargetHit ?? true);
@@ -176,6 +172,21 @@ export default function SettingsPage() {
         setApiKey("");
         setApiSecret("");
         setApiKeyPreview(`${apiKey.substring(0, 8)}...`);
+
+        // FIX H2: Fetch latest settings to sync testnet preference
+        // This ensures the frontend state matches what was saved in the database
+        try {
+          const settingsResponse = await fetch("/api/user/settings");
+          if (settingsResponse.ok) {
+            const settingsData = await settingsResponse.json();
+            if (settingsData.success && settingsData.data) {
+              setUseTestnet(settingsData.data.useTestnet || false);
+            }
+          }
+        } catch (syncError) {
+          console.error("Failed to sync testnet preference:", syncError);
+          // Don't show error to user - keys saved successfully is what matters
+        }
       } else {
         toast.error(data.error?.message || "Failed to save API keys");
       }

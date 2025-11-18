@@ -36,6 +36,9 @@ import {
 const MAX_POLLING_ATTEMPTS = 10;
 const POLLING_INTERVAL_MS = 3000;
 
+// FIX M1: Extract tolerance constant to avoid magic number
+const TARGET_PRICE_TOLERANCE_PERCENT = 0.001; // 0.1% tolerance for price matching
+
 interface SignalDetailModalProps {
   signal: ISignal | null;
   isOpen: boolean;
@@ -539,6 +542,83 @@ export default function SignalDetailModal({
     }
   }, [trade, signal]);
 
+  // Recalculate P&L for trades with incorrect values (old bug fix)
+  useEffect(() => {
+    if (!trade || !signal) return;
+
+    // Check if this is a closed trade with potentially incorrect P&L
+    // Old bug: P&L was calculated as -investedAmount (-100.00)
+    const hasIncorrectPnL =
+      trade.status === "closed" &&
+      trade.realizedPnL !== undefined &&
+      trade.realizedPnL !== null &&
+      (trade.realizedPnL === -100 || trade.realizedPnL === -trade.investedAmount);
+
+    if (!hasIncorrectPnL) return;
+
+    console.log("[SignalDetailModal] Detected incorrect P&L, recalculating:", {
+      tradeId: trade._id,
+      currentPnL: trade.realizedPnL,
+      investedAmount: trade.investedAmount,
+    });
+
+    // Recalculate P&L from actual order data
+    const recalculatePnL = async () => {
+      try {
+        // Get filled orders
+        const filledOrders = trade.sellOrders.filter(
+          (order: IOrder) => order.status === "FILLED"
+        );
+
+        if (filledOrders.length === 0) {
+          console.warn("[SignalDetailModal] No filled orders found for closed trade");
+          return;
+        }
+
+        // FIX: Use cummulativeQuoteQty from Binance API (actual spent/received amounts)
+        const buyCost = trade.buyOrder.cummulativeQuoteQty || 0;
+        const sellRevenue = filledOrders.reduce(
+          (sum: number, order: IOrder) => sum + (order.cummulativeQuoteQty || 0),
+          0
+        );
+
+        const correctPnL = sellRevenue - buyCost;
+
+        console.log("[SignalDetailModal] Recalculated P&L:", {
+          buyCost,
+          sellRevenue,
+          oldPnL: trade.realizedPnL,
+          newPnL: correctPnL,
+        });
+
+        // Update trade in database
+        const response = await fetch(`/api/trades/${trade._id}/update-pnl`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ realizedPnL: correctPnL }),
+        });
+
+        if (response.ok) {
+          // Update local state (create new object with updated P&L)
+          setTrade((prevTrade) => {
+            if (!prevTrade) return prevTrade;
+            return {
+              ...prevTrade,
+              realizedPnL: correctPnL,
+            } as ITrade;
+          });
+          console.log("[SignalDetailModal] P&L updated successfully");
+        } else {
+          console.error("[SignalDetailModal] Failed to update P&L in database");
+        }
+      } catch (error) {
+        console.error("[SignalDetailModal] Error recalculating P&L:", error);
+      }
+    };
+
+    recalculatePnL();
+  }, [trade?._id, trade?.status, trade?.realizedPnL, signal?._id]);
+
   // Fetch OCO statuses from Binance API when trade data loads
   useEffect(() => {
     if (!trade || !trade.sellOrders || trade.sellOrders.length === 0) return;
@@ -603,14 +683,16 @@ export default function SignalDetailModal({
           : order.price;
 
         if (orderPrice) {
-          signal.targets.forEach((target, index) => {
-            // FIX: Use percentage-based tolerance instead of fixed 0.0001
-            // This handles different price ranges better (e.g., $0.50 vs $50,000)
-            const tolerance = target * 0.001; // 0.1% tolerance
-            if (Math.abs(orderPrice - target) <= tolerance) {
-              filled.add(index);
-            }
-          });
+          // FIX H3: Add null check for signal.targets array
+          if (signal.targets && Array.isArray(signal.targets)) {
+            signal.targets.forEach((target, index) => {
+              // FIX M1: Use constant instead of magic number
+              const tolerance = target * TARGET_PRICE_TOLERANCE_PERCENT;
+              if (Math.abs(orderPrice - target) <= tolerance) {
+                filled.add(index);
+              }
+            });
+          }
         }
       }
     });
@@ -645,15 +727,21 @@ export default function SignalDetailModal({
   // Helper to get trade close details (which TP hit or SL hit)
   const getTradeCloseDetails = (): {
     closeType: "take_profit" | "stop_loss" | null;
-    targetNumber: number | null;
+    targetNumbers: number[];
     exitPrice: number | null;
     pnlPercentage: number | null;
   } => {
     if (!trade || !trade.sellOrders || signal.status !== "completed") {
-      return { closeType: null, targetNumber: null, exitPrice: null, pnlPercentage: null };
+      return { closeType: null, targetNumbers: [], exitPrice: null, pnlPercentage: null };
     }
 
-    // Check which order was filled
+    const filledTargets: number[] = [];
+    let stopLossTriggered = false;
+    let averageExitPrice = 0;
+    let totalExitValue = 0;
+    let totalQuantity = 0;
+
+    // Check ALL orders to find which targets were filled
     for (const order of trade.sellOrders) {
       const ocoStatus = order.orderListId ? ocoStatuses.get(order.orderListId) : null;
       const realOrderStatus = ocoStatus?.orderReports?.find(
@@ -667,41 +755,60 @@ export default function SignalDetailModal({
       if (displayStatus === "FILLED" && executedQty > 0) {
         if (order.type === "STOP_LOSS_LIMIT") {
           // Stop loss hit
+          stopLossTriggered = true;
           const exitPrice = order.stopPrice || 0;
-          const entryPrice = trade.buyOrder.price || 0;
-          const pnl = entryPrice > 0 ? ((exitPrice - entryPrice) / entryPrice) * 100 : 0;
-
-          return {
-            closeType: "stop_loss",
-            targetNumber: null,
-            exitPrice,
-            pnlPercentage: pnl,
-          };
+          totalExitValue += exitPrice * executedQty;
+          totalQuantity += executedQty;
         } else if (order.type === "LIMIT_MAKER" && order.price) {
           // Take profit hit - find which target
-          let targetIndex = -1;
-          signal.targets.forEach((target, index) => {
-            const tolerance = target * 0.001; // 0.1% tolerance
-            if (Math.abs(order.price! - target) <= tolerance) {
-              targetIndex = index;
-            }
-          });
+          // FIX H3: Add null check for signal.targets array
+          if (signal.targets && Array.isArray(signal.targets)) {
+            // Store order price in const for type safety
+            const orderPrice = order.price;
+            signal.targets.forEach((target, index) => {
+              // FIX M1: Use constant instead of magic number
+              const tolerance = target * TARGET_PRICE_TOLERANCE_PERCENT;
+              // FIX L3: Use orderPrice const instead of order.price (type-safe)
+              if (Math.abs(orderPrice - target) <= tolerance) {
+                filledTargets.push(index + 1); // Store 1-based target number
+              }
+            });
+          }
 
           const exitPrice = order.price;
-          const entryPrice = trade.buyOrder.price || 0;
-          const pnl = entryPrice > 0 ? ((exitPrice - entryPrice) / entryPrice) * 100 : 0;
-
-          return {
-            closeType: "take_profit",
-            targetNumber: targetIndex >= 0 ? targetIndex + 1 : null,
-            exitPrice,
-            pnlPercentage: pnl,
-          };
+          totalExitValue += exitPrice * executedQty;
+          totalQuantity += executedQty;
         }
       }
     }
 
-    return { closeType: null, targetNumber: null, exitPrice: null, pnlPercentage: null };
+    // Calculate weighted average exit price
+    if (totalQuantity > 0) {
+      averageExitPrice = totalExitValue / totalQuantity;
+    }
+
+    const entryPrice = trade.buyOrder.price || 0;
+    const pnl = entryPrice > 0 && averageExitPrice > 0
+      ? ((averageExitPrice - entryPrice) / entryPrice) * 100
+      : 0;
+
+    if (stopLossTriggered) {
+      return {
+        closeType: "stop_loss",
+        targetNumbers: [],
+        exitPrice: averageExitPrice,
+        pnlPercentage: pnl,
+      };
+    } else if (filledTargets.length > 0) {
+      return {
+        closeType: "take_profit",
+        targetNumbers: filledTargets.sort((a, b) => a - b), // Sort in ascending order
+        exitPrice: averageExitPrice,
+        pnlPercentage: pnl,
+      };
+    }
+
+    return { closeType: null, targetNumbers: [], exitPrice: null, pnlPercentage: null };
   };
 
   const handleEdit = () => {
@@ -1042,7 +1149,9 @@ export default function SignalDetailModal({
                                 }`}>
                                   {closeDetails.closeType === "stop_loss"
                                     ? "Stop Loss Triggered"
-                                    : `Take Profit #${closeDetails.targetNumber} Hit`}
+                                    : closeDetails.targetNumbers.length === 1
+                                    ? `Target ${closeDetails.targetNumbers[0]} Hit`
+                                    : `Targets ${closeDetails.targetNumbers.join(", ")} Hit`}
                                 </div>
                               </div>
                               <div>
