@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ISignal, ITrade, IOrder, BinanceOCOResponse } from "@/types";
+import { ISignal, ITrade, IOrder, BinanceOCOResponse, BinanceOCOOrderReport } from "@/types";
 import { formatDate, formatPrice } from "@/lib/utils/format";
 import { ErrorDetailCard } from "@/components/signals/ErrorDetailCard";
 import {
@@ -419,11 +419,21 @@ export default function SignalDetailModal({
 
     const filled = new Set<number>();
     trade.sellOrders.forEach((order: IOrder) => {
-      if (order.status === "FILLED" && order.type === "LIMIT_MAKER" && order.price) {
+      // FIX: Use real-time status from Binance API if available, fallback to database
+      const ocoStatus = order.orderListId ? ocoStatuses.get(order.orderListId) : null;
+      const realOrderStatus = ocoStatus?.orderReports?.find(
+        (report: BinanceOCOOrderReport) => report.orderId === order.orderId
+      );
+      const displayStatus = realOrderStatus?.status || order.status;
+
+      // Only count LIMIT_MAKER (take profit) orders that are FILLED
+      if (displayStatus === "FILLED" && order.type === "LIMIT_MAKER" && order.price) {
         // Find which target index this matches
         signal.targets.forEach((target, index) => {
-          if (Math.abs(order.price! - target) < 0.0001) {
-            // Floating point comparison
+          // FIX: Use percentage-based tolerance instead of fixed 0.0001
+          // This handles different price ranges better (e.g., $0.50 vs $50,000)
+          const tolerance = target * 0.001; // 0.1% tolerance
+          if (Math.abs(order.price! - target) <= tolerance) {
             filled.add(index);
           }
         });
@@ -436,10 +446,78 @@ export default function SignalDetailModal({
   // Helper to check if stop loss was hit
   const isStopLossHit = (): boolean => {
     if (!trade || !trade.sellOrders) return false;
-    return trade.sellOrders.some(
-      (order: IOrder) =>
-        order.status === "FILLED" && order.type === "STOP_LOSS_LIMIT"
-    );
+    return trade.sellOrders.some((order: IOrder) => {
+      // FIX: Use real-time status from Binance API if available
+      const ocoStatus = order.orderListId ? ocoStatuses.get(order.orderListId) : null;
+      const realOrderStatus = ocoStatus?.orderReports?.find(
+        (report: BinanceOCOOrderReport) => report.orderId === order.orderId
+      );
+      const displayStatus = realOrderStatus?.status || order.status;
+
+      return displayStatus === "FILLED" && order.type === "STOP_LOSS_LIMIT";
+    });
+  };
+
+  // Helper to get trade close details (which TP hit or SL hit)
+  const getTradeCloseDetails = (): {
+    closeType: "take_profit" | "stop_loss" | null;
+    targetNumber: number | null;
+    exitPrice: number | null;
+    pnlPercentage: number | null;
+  } => {
+    if (!trade || !trade.sellOrders || signal.status !== "completed") {
+      return { closeType: null, targetNumber: null, exitPrice: null, pnlPercentage: null };
+    }
+
+    // Check which order was filled
+    for (const order of trade.sellOrders) {
+      const ocoStatus = order.orderListId ? ocoStatuses.get(order.orderListId) : null;
+      const realOrderStatus = ocoStatus?.orderReports?.find(
+        (report: BinanceOCOOrderReport) => report.orderId === order.orderId
+      );
+      const displayStatus = realOrderStatus?.status || order.status;
+      const executedQty = realOrderStatus?.executedQty
+        ? parseFloat(realOrderStatus.executedQty)
+        : order.executedQty;
+
+      if (displayStatus === "FILLED" && executedQty > 0) {
+        if (order.type === "STOP_LOSS_LIMIT") {
+          // Stop loss hit
+          const exitPrice = order.stopPrice || 0;
+          const entryPrice = trade.buyOrder.price || 0;
+          const pnl = entryPrice > 0 ? ((exitPrice - entryPrice) / entryPrice) * 100 : 0;
+
+          return {
+            closeType: "stop_loss",
+            targetNumber: null,
+            exitPrice,
+            pnlPercentage: pnl,
+          };
+        } else if (order.type === "LIMIT_MAKER" && order.price) {
+          // Take profit hit - find which target
+          let targetIndex = -1;
+          signal.targets.forEach((target, index) => {
+            const tolerance = target * 0.001; // 0.1% tolerance
+            if (Math.abs(order.price! - target) <= tolerance) {
+              targetIndex = index;
+            }
+          });
+
+          const exitPrice = order.price;
+          const entryPrice = trade.buyOrder.price || 0;
+          const pnl = entryPrice > 0 ? ((exitPrice - entryPrice) / entryPrice) * 100 : 0;
+
+          return {
+            closeType: "take_profit",
+            targetNumber: targetIndex >= 0 ? targetIndex + 1 : null,
+            exitPrice,
+            pnlPercentage: pnl,
+          };
+        }
+      }
+    }
+
+    return { closeType: null, targetNumber: null, exitPrice: null, pnlPercentage: null };
   };
 
   const handleEdit = () => {
@@ -716,6 +794,81 @@ export default function SignalDetailModal({
                   </div>
                 ) : trade ? (
                   <div className="space-y-4">
+                    {/* Trade Result Summary - Show for completed trades */}
+                    {signal.status === "completed" && (() => {
+                      const closeDetails = getTradeCloseDetails();
+                      if (closeDetails.closeType) {
+                        const isProfit = closeDetails.pnlPercentage && closeDetails.pnlPercentage > 0;
+                        return (
+                          <div className={`p-4 rounded-lg border-2 ${
+                            closeDetails.closeType === "stop_loss"
+                              ? "bg-red-50 border-red-300"
+                              : "bg-green-50 border-green-300"
+                          }`}>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                {closeDetails.closeType === "stop_loss" ? (
+                                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                                ) : (
+                                  <TrendingUp className="h-5 w-5 text-green-600" />
+                                )}
+                                <span className={`font-bold text-sm ${
+                                  closeDetails.closeType === "stop_loss"
+                                    ? "text-red-800"
+                                    : "text-green-800"
+                                }`}>
+                                  TRADE CLOSED
+                                </span>
+                              </div>
+                              <Badge
+                                variant="outline"
+                                className={`font-bold ${
+                                  isProfit
+                                    ? "bg-green-100 text-green-800 border-green-400"
+                                    : "bg-red-100 text-red-800 border-red-400"
+                                }`}
+                              >
+                                {isProfit ? "+" : ""}{closeDetails.pnlPercentage?.toFixed(2)}% P&L
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 text-sm">
+                              <div>
+                                <span className="text-gray-600 font-medium">Close Reason:</span>
+                                <div className={`mt-1 font-bold ${
+                                  closeDetails.closeType === "stop_loss"
+                                    ? "text-red-700"
+                                    : "text-green-700"
+                                }`}>
+                                  {closeDetails.closeType === "stop_loss"
+                                    ? "Stop Loss Triggered"
+                                    : `Take Profit #${closeDetails.targetNumber} Hit`}
+                                </div>
+                              </div>
+                              <div>
+                                <span className="text-gray-600 font-medium">Exit Price:</span>
+                                <div className="mt-1 font-bold text-gray-900">
+                                  ${closeDetails.exitPrice?.toFixed(6)}
+                                </div>
+                              </div>
+                              <div>
+                                <span className="text-gray-600 font-medium">Entry Price:</span>
+                                <div className="mt-1 font-medium text-gray-700">
+                                  ${trade.buyOrder.price?.toFixed(6)}
+                                </div>
+                              </div>
+                              <div>
+                                <span className="text-gray-600 font-medium">Invested Amount:</span>
+                                <div className="mt-1 font-medium text-gray-700">
+                                  ${trade.investedAmount.toFixed(2)} USDT
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+
                     {/* Buy Order */}
                     <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
                       <div className="text-xs font-semibold text-blue-900 mb-2">BUY ORDER</div>
@@ -774,7 +927,7 @@ export default function SignalDetailModal({
                           // Get real status from Binance if available
                           const ocoStatus = order.orderListId ? ocoStatuses.get(order.orderListId) : null;
                           const realOrderStatus = ocoStatus?.orderReports?.find(
-                            (report: any) => report.orderId === order.orderId
+                            (report: BinanceOCOOrderReport) => report.orderId === order.orderId
                           );
 
                           // Use real status from Binance, fallback to database status
