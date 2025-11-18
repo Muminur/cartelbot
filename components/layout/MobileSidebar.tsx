@@ -18,14 +18,14 @@ export function MobileSidebar({ onNavigate }: MobileSidebarProps) {
   };
 
   return (
-    <div className="h-full bg-white">
+    <div className="h-full bg-white dark:bg-card transition-colors">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b">
+      <div className="flex items-center justify-between p-4 border-b dark:border-border">
         <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center">
+          <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-700 dark:from-purple-600 dark:to-purple-800 rounded-full flex items-center justify-center">
             <span className="text-sm font-bold text-white">CB</span>
           </div>
-          <span className="text-lg font-bold">Menu</span>
+          <span className="text-lg font-bold text-foreground">Menu</span>
         </div>
       </div>
 
@@ -41,8 +41,8 @@ export function MobileSidebar({ onNavigate }: MobileSidebarProps) {
               className={cn(
                 "w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-purple-50 text-purple-700"
-                  : "text-gray-700 hover:bg-gray-50 active:bg-gray-100"
+                  ? "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400"
+                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-accent active:bg-gray-100 dark:active:bg-accent/80"
               )}
             >
               <item.icon className="w-5 h-5" />

@@ -6,6 +6,7 @@ import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { MobileSidebar } from "./MobileSidebar";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { API_ROUTES } from "@/lib/constants";
 
 interface NavigationProps {
@@ -26,7 +27,7 @@ export function Navigation({ userEmail }: NavigationProps) {
   };
 
   return (
-    <nav className="bg-white border-b sticky top-0 z-50">
+    <nav className="bg-white dark:bg-card border-b dark:border-border sticky top-0 z-50 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Left side: Hamburger + Logo */}
@@ -53,16 +54,17 @@ export function Navigation({ userEmail }: NavigationProps) {
             </Sheet>
 
             {/* Logo */}
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center">
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-700 dark:from-purple-600 dark:to-purple-800 rounded-full flex items-center justify-center">
               <span className="text-lg font-bold text-white">CB</span>
             </div>
-            <span className="text-xl font-bold">CartelBot</span>
+            <span className="text-xl font-bold text-foreground">CartelBot</span>
           </div>
 
-          {/* Right side: User email + Logout */}
-          <div className="flex items-center space-x-4">
+          {/* Right side: Theme Toggle + User email + Logout */}
+          <div className="flex items-center space-x-2 sm:space-x-4">
+            <ThemeToggle />
             {userEmail && (
-              <span className="text-sm text-gray-600 hidden sm:block">{userEmail}</span>
+              <span className="text-sm text-muted-foreground hidden sm:block">{userEmail}</span>
             )}
             <Button variant="outline" size="sm" onClick={handleLogout}>
               Logout
