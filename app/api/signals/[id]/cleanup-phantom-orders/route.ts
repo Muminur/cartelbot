@@ -114,10 +114,10 @@ export async function GET(
 
     // 5. Get user's API keys
     const fullUser = await User.findById(user._id).select(
-      "+binance.apiKey +binance.apiSecret"
+      "+encryptedApiKey +encryptedApiSecret useTestnet"
     );
 
-    if (!fullUser?.binance?.apiKey || !fullUser?.binance?.apiSecret) {
+    if (!fullUser?.encryptedApiKey || !fullUser?.encryptedApiSecret) {
       return NextResponse.json(
         {
           success: false,
@@ -128,9 +128,9 @@ export async function GET(
     }
 
     // 6. Decrypt API keys and initialize client
-    const apiKey = decrypt(fullUser.binance.apiKey);
-    const apiSecret = decrypt(fullUser.binance.apiSecret);
-    const useTestnet = fullUser.preferences?.useTestnet ?? false;
+    const apiKey = decrypt(fullUser.encryptedApiKey);
+    const apiSecret = decrypt(fullUser.encryptedApiSecret);
+    const useTestnet = fullUser.useTestnet ?? false;
 
     const binanceClient = new BinanceClient({
       apiKey,
@@ -297,10 +297,10 @@ export async function POST(
 
     // 5. Get user's API keys
     const fullUser = await User.findById(user._id).select(
-      "+binance.apiKey +binance.apiSecret"
+      "+encryptedApiKey +encryptedApiSecret useTestnet"
     );
 
-    if (!fullUser?.binance?.apiKey || !fullUser?.binance?.apiSecret) {
+    if (!fullUser?.encryptedApiKey || !fullUser?.encryptedApiSecret) {
       return NextResponse.json(
         {
           success: false,
@@ -311,9 +311,9 @@ export async function POST(
     }
 
     // 6. Decrypt API keys and initialize client
-    const apiKey = decrypt(fullUser.binance.apiKey);
-    const apiSecret = decrypt(fullUser.binance.apiSecret);
-    const useTestnet = fullUser.preferences?.useTestnet ?? false;
+    const apiKey = decrypt(fullUser.encryptedApiKey);
+    const apiSecret = decrypt(fullUser.encryptedApiSecret);
+    const useTestnet = fullUser.useTestnet ?? false;
 
     const binanceClient = new BinanceClient({
       apiKey,

@@ -44,14 +44,14 @@ export async function GET(
     await connectDB();
 
     const dbUser = await User.findById(authResult.user._id).select(
-      "+binance.apiKey +binance.apiSecret +binance.useTestnet"
+      "+encryptedApiKey +encryptedApiSecret useTestnet"
     );
 
-    if (!dbUser?.binance?.apiKey || !dbUser?.binance?.apiSecret) {
+    if (!dbUser?.encryptedApiKey || !dbUser?.encryptedApiSecret) {
       console.error("[OCO Status API] 400 ERROR - API keys missing:", {
         userId: authResult.user._id,
-        hasApiKey: !!dbUser?.binance?.apiKey,
-        hasApiSecret: !!dbUser?.binance?.apiSecret,
+        hasApiKey: !!dbUser?.encryptedApiKey,
+        hasApiSecret: !!dbUser?.encryptedApiSecret,
         orderListId: orderListIdParam,
       });
 
@@ -72,8 +72,8 @@ export async function GET(
     let apiSecret: string;
 
     try {
-      apiKey = decrypt(dbUser.binance.apiKey);
-      apiSecret = decrypt(dbUser.binance.apiSecret);
+      apiKey = decrypt(dbUser.encryptedApiKey);
+      apiSecret = decrypt(dbUser.encryptedApiSecret);
     } catch (decryptError) {
       console.error("[OCO Status API] 400 ERROR - Decryption failed:", {
         error: decryptError instanceof Error ? decryptError.message : "Unknown error",
