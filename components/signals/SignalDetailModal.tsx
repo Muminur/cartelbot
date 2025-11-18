@@ -39,6 +39,11 @@ const POLLING_INTERVAL_MS = 3000;
 // FIX M1: Extract tolerance constant to avoid magic number
 const TARGET_PRICE_TOLERANCE_PERCENT = 0.001; // 0.1% tolerance for price matching
 
+// CRITICAL FIX #1: Extract magic numbers to named constants
+const PNL_UPDATE_TOLERANCE = 0.000001; // 6 decimal places (USDT precision)
+const PRICE_REFRESH_INTERVAL_MS = 5000; // 5 seconds
+const OCO_STATUS_REFRESH_INTERVAL_MS = 10000; // 10 seconds
+
 interface SignalDetailModalProps {
   signal: ISignal | null;
   isOpen: boolean;
@@ -84,6 +89,42 @@ const getStatusColor = (status: string) => {
     default:
       return "bg-gray-500";
   }
+};
+
+// Helper function to calculate P&L from order data
+// This serves as a fallback when database P&L is incorrect
+const calculatePnLFromOrders = (trade: ITrade | null): { pnl: number; percentage: number } | null => {
+  if (!trade || !trade.buyOrder || !trade.sellOrders) {
+    return null;
+  }
+
+  // Get filled sell orders
+  const filledOrders = trade.sellOrders.filter(
+    (order: IOrder) => order.status === "FILLED"
+  );
+
+  if (filledOrders.length === 0) {
+    return null;
+  }
+
+  // Calculate P&L using cummulativeQuoteQty (actual USDT spent/received from Binance)
+  const buyCost = trade.buyOrder.cummulativeQuoteQty || 0;
+  const sellRevenue = filledOrders.reduce(
+    (sum: number, order: IOrder) => sum + (order.cummulativeQuoteQty || 0),
+    0
+  );
+
+  if (buyCost === 0) {
+    return null; // Avoid division by zero
+  }
+
+  const pnl = sellRevenue - buyCost;
+  // CRITICAL FIX #1: Division by Zero Protection
+  const percentage = trade.investedAmount > 0
+    ? (pnl / trade.investedAmount) * 100
+    : 0;
+
+  return { pnl, percentage };
 };
 
 export default function SignalDetailModal({
@@ -229,8 +270,8 @@ export default function SignalDetailModal({
     // Initial fetch
     fetchLivePrice();
 
-    // Set up interval for auto-refresh (every 5 seconds)
-    intervalId = setInterval(fetchLivePrice, 5000);
+    // Set up interval for auto-refresh using named constant
+    intervalId = setInterval(fetchLivePrice, PRICE_REFRESH_INTERVAL_MS);
 
     // Cleanup
     return () => {
@@ -551,19 +592,21 @@ export default function SignalDetailModal({
     if (!trade || !signal) return;
 
     // Check if this is a closed trade with potentially incorrect P&L
-    // Old bug: P&L was calculated as -investedAmount (-100.00)
-    const hasIncorrectPnL =
+    // The old bug stored P&L as -investedAmount, but we need to recalculate for ALL closed trades
+    // to ensure correctness, especially if database has stale values
+    const shouldRecalculatePnL =
       trade.status === "closed" &&
-      trade.realizedPnL !== undefined &&
-      trade.realizedPnL !== null &&
-      (trade.realizedPnL === -100 || trade.realizedPnL === -trade.investedAmount);
+      trade.buyOrder?.cummulativeQuoteQty !== undefined &&
+      trade.buyOrder?.cummulativeQuoteQty > 0 &&
+      trade.sellOrders?.some((order: IOrder) => order.status === "FILLED");
 
-    if (!hasIncorrectPnL) return;
+    if (!shouldRecalculatePnL) return;
 
-    console.log("[SignalDetailModal] Detected incorrect P&L, recalculating:", {
+    console.log("[SignalDetailModal] Recalculating P&L for closed trade:", {
       tradeId: trade._id,
       currentPnL: trade.realizedPnL,
       investedAmount: trade.investedAmount,
+      buyOrderCummulative: trade.buyOrder?.cummulativeQuoteQty,
     });
 
     // Recalculate P&L from actual order data
@@ -579,8 +622,8 @@ export default function SignalDetailModal({
           return;
         }
 
-        // CRITICAL FIX #2: Use cummulativeQuoteQty from Binance API (actual spent/received amounts)
-        // Add null coalescing to prevent NaN when values are missing
+        // CRITICAL FIX: Use cummulativeQuoteQty from Binance API (actual USDT spent/received)
+        // This is the ACTUAL amount, not calculated from quantity * price
         const buyCost = trade.buyOrder.cummulativeQuoteQty || 0;
         const sellRevenue = filledOrders.reduce(
           (sum: number, order: IOrder) => sum + (order.cummulativeQuoteQty || 0),
@@ -589,12 +632,28 @@ export default function SignalDetailModal({
 
         const correctPnL = sellRevenue - buyCost;
 
-        console.log("[SignalDetailModal] Recalculated P&L:", {
-          buyCost,
-          sellRevenue,
-          oldPnL: trade.realizedPnL,
-          newPnL: correctPnL,
+        console.log("[SignalDetailModal] P&L Calculation:", {
+          buyCost: buyCost.toFixed(6),
+          sellRevenue: sellRevenue.toFixed(6),
+          filledOrdersCount: filledOrders.length,
+          filledOrderDetails: filledOrders.map((order: IOrder) => ({
+            orderId: order.orderId,
+            status: order.status,
+            cummulativeQuoteQty: order.cummulativeQuoteQty,
+          })),
+          calculatedPnL: correctPnL.toFixed(6),
+          storedPnL: trade.realizedPnL?.toFixed(6) || "null",
+          needsUpdate: Math.abs(correctPnL - (trade.realizedPnL || 0)) > 0.000001,
         });
+
+        // CRITICAL FIX #2: Race Condition Protection
+        // Check if update is needed BEFORE any async operations to prevent infinite loops
+        const needsUpdate = Math.abs(correctPnL - (trade.realizedPnL || 0)) > PNL_UPDATE_TOLERANCE;
+
+        if (!needsUpdate) {
+          console.log("[SignalDetailModal] P&L already correct, skipping update");
+          return; // Early exit before any async operations
+        }
 
         // Update trade in database
         const response = await fetch(`/api/trades/${trade._id}/update-pnl`, {
@@ -604,22 +663,30 @@ export default function SignalDetailModal({
         });
 
         if (response.ok) {
-          // CRITICAL FIX #3: Remove unsafe type assertion - use proper type inference
-          // Create typed object instead of using 'as ITrade'
+          // Update local state with corrected P&L
           setTrade((prevTrade) => {
             if (!prevTrade) return prevTrade;
-            // Note: TypeScript assertion needed here due to Mongoose document properties
             return {
               ...prevTrade,
               realizedPnL: correctPnL,
             } as ITrade;
           });
-          console.log("[SignalDetailModal] P&L updated successfully");
+          console.log("[SignalDetailModal] P&L updated successfully:", {
+            oldValue: trade.realizedPnL,
+            newValue: correctPnL,
+          });
         } else {
-          console.error("[SignalDetailModal] Failed to update P&L in database");
+          const errorData = await response.json();
+          console.error("[SignalDetailModal] Failed to update P&L in database:", {
+            status: response.status,
+            error: errorData,
+          });
         }
       } catch (error) {
-        console.error("[SignalDetailModal] Error recalculating P&L:", error);
+        console.error("[SignalDetailModal] Error recalculating P&L:", {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
       }
     };
 
@@ -647,7 +714,7 @@ export default function SignalDetailModal({
     );
 
     if (trade.status === "open" && hasActiveOrders) {
-      interval = setInterval(safeFetch, 10000);
+      interval = setInterval(safeFetch, OCO_STATUS_REFRESH_INTERVAL_MS);
     }
 
     return () => {
@@ -1554,14 +1621,45 @@ export default function SignalDetailModal({
                             <span className="ml-2 font-medium">${formatPrice(trade.exitPrice)}</span>
                           </div>
                         )}
-                        {trade.realizedPnL !== undefined && trade.realizedPnL !== null && (
-                          <div>
-                            <span className="text-gray-600">Realized P&L:</span>
-                            <span className={`ml-2 font-bold ${trade.realizedPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
-                              ${trade.realizedPnL.toFixed(2)} ({((trade.realizedPnL / trade.investedAmount) * 100).toFixed(2)}%)
-                            </span>
-                          </div>
-                        )}
+                        {(() => {
+                          // Calculate P&L from orders as fallback/verification
+                          const calculatedPnL = calculatePnLFromOrders(trade);
+
+                          // Use calculated P&L if available and database P&L is missing or looks incorrect
+                          // The old bug stored P&L as -100 or -investedAmount
+                          const shouldUseCalculated = calculatedPnL && (
+                            trade.realizedPnL === undefined ||
+                            trade.realizedPnL === null ||
+                            trade.realizedPnL === -100 ||
+                            trade.realizedPnL === -trade.investedAmount
+                          );
+
+                          const displayPnL = shouldUseCalculated
+                            ? calculatedPnL.pnl
+                            : trade.realizedPnL;
+                          const displayPercentage = shouldUseCalculated
+                            ? calculatedPnL.percentage
+                            : ((trade.realizedPnL || 0) / trade.investedAmount) * 100;
+
+                          // Only display if we have a valid P&L value
+                          if (displayPnL === undefined || displayPnL === null) {
+                            return null;
+                          }
+
+                          return (
+                            <div>
+                              <span className="text-gray-600">Realized P&L:</span>
+                              <span className={`ml-2 font-bold ${displayPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                ${displayPnL.toFixed(2)} ({displayPercentage.toFixed(2)}%)
+                              </span>
+                              {shouldUseCalculated && (
+                                <span className="ml-1 text-xs text-gray-500" title="Calculated from actual order values">
+                                  *
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                         {trade.closeReason && (
                           <div>
                             <span className="text-gray-600">Close Reason:</span>
