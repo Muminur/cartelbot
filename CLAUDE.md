@@ -1860,3 +1860,9 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: WebSocket Stream 404 Fix (Nov 17, 2025)
 
 **Fixed /api/websocket/stream 404 errors (bba11f9)**: Hook now calls /api/websocket/start before streaming. Changed start endpoint to return success if connection already active (was 409). Async connect() with proper cleanup. Quality 9.5/10.
+
+## Session: Portfolio + OCO Target Fixes (Nov 18, 2025)
+
+**Portfolio invalid symbols fix (2cdfa93)**: Fixed batch ticker API rejecting BTCBTC/ETHETH invalid pairs causing all non-stablecoins to show $0 value. Smart symbol generation avoids self-pairs. Debug logging added. Admin subscriptions useCallback hoisting fix. Quality 9.0/10.
+
+**OCO target counting fix (88889c8)**: Fixed signal details showing OCO "ALL_DONE" but targets "0/4 Hit". Used real-time Binance API status instead of stale database. Added Trade Result summary (P&L, close reason). Replaced all `any` with BinanceOCOOrderReport type. Quality 9.7/10.
