@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,7 +45,7 @@ const getStatusBadgeVariant = (status: string) => {
   }
 };
 
-export default function SignalHistoryPage() {
+function SignalHistoryPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -511,5 +511,13 @@ export default function SignalHistoryPage() {
         />
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function SignalHistoryPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <SignalHistoryPageContent />
+    </Suspense>
   );
 }

@@ -680,9 +680,26 @@ export default function SignalDetailModal({
                 Target Prices
               </div>
               {trade && (
-                <Badge variant="outline" className="text-xs">
-                  {getFilledTargets().size}/{signal.targets.length} Hit
-                </Badge>
+                <>
+                  {isStopLossHit() ? (
+                    <Badge variant="destructive" className="text-xs bg-red-100 text-red-800 border-red-300">
+                      <AlertTriangle className="h-3 w-3 mr-1 inline" />
+                      SL Hit
+                    </Badge>
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className={`text-xs ${
+                        getFilledTargets().size > 0
+                          ? 'bg-green-100 text-green-800 border-green-300'
+                          : 'bg-gray-100 text-gray-600 border-gray-300'
+                      }`}
+                    >
+                      {getFilledTargets().size > 0 && <CheckCircle2 className="h-3 w-3 mr-1 inline" />}
+                      {getFilledTargets().size}/{signal.targets.length} Hit
+                    </Badge>
+                  )}
+                </>
               )}
             </div>
             <div className="flex flex-wrap gap-2">
