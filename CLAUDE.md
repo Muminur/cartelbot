@@ -1892,6 +1892,8 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 **Fixed Next.js 16 Turbopack font loading error (ecf6c3c)**: Resolved module not found error by using CSS variable fonts (--font-inter) instead of direct className. Updated CSP headers for Google Fonts, added fontFamily to Tailwind config. Build ready after dev server restart.
 
 **Fixed 4 critical bugs with P&L and signal status (03f3ba7)**: Duplicate targets removed using Set (shows "1,2,3,4" not "1,1,2,2,3,3,4,4"). P&L now uses real Binance cummulativeQuoteQty. Signal validation logic corrected (operator precedence). Ticker API guaranteed JSON response. Added null safety, race condition fixes. Quality 9.5/10.
+
+**Fixed P&L -100% by including cummulativeQuoteQty (45ac160)**: API fetched field from Binance but didn't include in response. Added to order status API (line 133), updated SignalDetailModal storage (line 385). Filled values now show actual USDT, P&L accurate.
 - Remember the Binance OCO API documentation when you work with binance api. New Order list - OCO (TRADE)
 POST /api/v3/orderList/oco
 
