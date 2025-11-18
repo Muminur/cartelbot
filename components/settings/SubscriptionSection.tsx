@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { CheckCircle2, Clock, XCircle, Crown, Zap, Star, Copy, ExternalLink } from "lucide-react";
-import { TIER_CONFIGS } from "@/lib/subscription";
+import { TIER_CONFIGS } from "@/lib/subscription/constants";
 
 interface SubscriptionStatus {
   currentTier: {

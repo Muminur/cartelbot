@@ -56,7 +56,7 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierConfig> = {
     price: 10,
     features: {
       signalsPerMonth: -1, // Unlimited
-      maxOpenPositions: 50,
+      maxOpenPositions: 200,
       prioritySupport: true,
       advancedAnalytics: true,
       telegramNotifications: true,

@@ -71,10 +71,10 @@ const nextConfig = {
           value: [
             "default-src 'self'",
             "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net",
-            "style-src 'self' 'unsafe-inline'",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
             "img-src 'self' data: https:",
-            "font-src 'self' data:",
-            "connect-src 'self' https://api.binance.com https://testnet.binance.vision wss://stream.binance.com:9443 wss://stream.testnet.binance.vision:9443 https://cdn.jsdelivr.net",
+            "font-src 'self' data: https://fonts.gstatic.com",
+            "connect-src 'self' https://api.binance.com https://testnet.binance.vision wss://stream.binance.com:9443 wss://stream.testnet.binance.vision:9443 https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com",
             "worker-src 'self' blob: https://cdn.jsdelivr.net",
             "child-src 'self' blob:",
             "frame-ancestors 'none'",

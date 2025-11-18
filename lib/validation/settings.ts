@@ -35,7 +35,7 @@ export const tradingSettingsSchema = z.object({
     .number()
     .int("Max open positions must be a whole number")
     .min(1, "Must allow at least 1 open position")
-    .max(50, "Cannot have more than 50 open positions"),
+    .max(200, "Cannot have more than 200 open positions"),
   requireApproval: z.boolean(),
   emergencyStop: z.boolean(),
 });
@@ -84,7 +84,7 @@ export const userSettingsSchema = z.object({
   investmentAmount: z.number().min(10).max(100000).optional(),
   targetDistribution: z.array(z.number()).length(3).optional(),
   maxDailyLoss: z.number().min(0).max(10000).optional(),
-  maxOpenPositions: z.number().int().min(1).max(50).optional(),
+  maxOpenPositions: z.number().int().min(1).max(200).optional(),
   requireApproval: z.boolean().optional(),
   emergencyStop: z.boolean().optional(),
 

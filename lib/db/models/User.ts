@@ -53,6 +53,7 @@ const userSchema = new Schema<IUser>(
       type: Number,
       default: 10,
       min: 1,
+      max: 200,
     },
     requireApproval: {
       type: Boolean,
