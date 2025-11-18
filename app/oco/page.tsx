@@ -307,7 +307,7 @@ export default function OCOOrdersPage() {
     }
   }, [orders]);
 
-  // OPTIMIZATION: Auto-refresh prices every 30 seconds (reduced from 10s)
+  // OPTIMIZATION: Auto-refresh prices every 30 seconds
   // H3: FIX - Added AbortController cleanup to prevent race conditions
   useEffect(() => {
     if (ordersRef.current.length === 0) return;
@@ -317,7 +317,7 @@ export default function OCOOrdersPage() {
       if (ordersRef.current.length > 0) {
         refreshPrices(ordersRef.current, controller.signal);
       }
-    }, 30000); // 30 seconds
+    }, AUTO_REFRESH_INTERVAL_MS);
 
     return () => {
       controller.abort();
@@ -472,9 +472,14 @@ export default function OCOOrdersPage() {
               View all your One-Cancels-Other orders with live price tracking (auto-refresh every 30s)
             </p>
           </div>
-          <Button onClick={fetchOrders} disabled={refreshing || refreshingPrices}>
+          <Button
+            onClick={fetchOrders}
+            disabled={loadingOrders || refreshingPrices}
+            aria-label="Refresh OCO orders and prices"
+          >
             <RefreshCw
-              className={`h-4 w-4 mr-2 ${refreshing || refreshingPrices ? "animate-spin" : ""}`}
+              className={`h-4 w-4 mr-2 ${loadingOrders || refreshingPrices ? "animate-spin" : ""}`}
+              aria-hidden="true"
             />
             Refresh
           </Button>
@@ -622,8 +627,9 @@ export default function OCOOrdersPage() {
                             onClick={() =>
                               router.push(`/oco/${order.orderListId}`)
                             }
+                            aria-label={`View details for OCO order ${order.orderListId} for ${order.symbol}`}
                           >
-                            <Eye className="h-4 w-4 mr-2" />
+                            <Eye className="h-4 w-4 mr-2" aria-hidden="true" />
                             Details
                           </Button>
                         </TableCell>
