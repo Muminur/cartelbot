@@ -47,7 +47,7 @@ export class BinanceClient {
 
     this.axios = axios.create({
       baseURL: this.baseURL,
-      timeout: 30000,
+      timeout: 10000, // Reduced from 30s to 10s for faster failure detection
       headers: {
         "X-MBX-APIKEY": this.apiKey,
         "Content-Type": "application/json",
@@ -94,6 +94,34 @@ export class BinanceClient {
     }
   }
 
+  /**
+   * Check if an error is a network error that should be retried
+   */
+  private isNetworkError(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+
+    const networkErrorCodes = [
+      'ECONNRESET',
+      'ETIMEDOUT',
+      'ENOTFOUND',
+      'ECONNREFUSED',
+      'EHOSTUNREACH',
+      'ENETUNREACH',
+      'EAI_AGAIN'
+    ];
+
+    // Check error code
+    if ('code' in error && typeof error.code === 'string') {
+      if (networkErrorCodes.includes(error.code)) return true;
+    }
+
+    // Check error message for network-related keywords
+    const errorMessage = error.message?.toLowerCase() || '';
+    return networkErrorCodes.some(code =>
+      errorMessage.includes(code.toLowerCase())
+    );
+  }
+
   private async retryWithBackoff<T>(
     fn: () => Promise<T>,
     maxRetries: number = 3,
@@ -110,6 +138,7 @@ export class BinanceClient {
           ? error
           : new Error(String(error));
 
+        // Handle Binance API errors
         if (error instanceof BinanceAPIError && error.binanceCode !== undefined) {
           if (skipRetryOnCodes.includes(error.binanceCode)) {
             throw error;
@@ -118,17 +147,40 @@ export class BinanceClient {
           if (error.binanceCode === -1021) {
             await this.syncServerTime();
             const delay = initialDelay * Math.pow(2, attempt);
+            console.warn(`[Binance] Timestamp sync issue, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
             await new Promise((resolve) => setTimeout(resolve, delay));
             continue;
           }
 
           if (error.binanceCode === 429) {
             const delay = initialDelay * Math.pow(2, attempt + 1);
+            console.warn(`[Binance] Rate limit hit, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
             await new Promise((resolve) => setTimeout(resolve, delay));
             continue;
           }
         }
 
+        // Handle network errors (ECONNRESET, ETIMEDOUT, etc.)
+        if (this.isNetworkError(error)) {
+          if (attempt < maxRetries) {
+            const delay = initialDelay * Math.pow(2, attempt);
+            const errorCode = (error as Error & { code?: string }).code || 'NETWORK_ERROR';
+            console.warn(
+              `[Binance] Network error (${errorCode}), retrying in ${delay}ms ` +
+              `(attempt ${attempt + 1}/${maxRetries + 1})`
+            );
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            continue;
+          } else {
+            // After all retries exhausted, throw a user-friendly error
+            throw new Error(
+              `Network connection to Binance failed after ${maxRetries + 1} attempts. ` +
+              `Please check your internet connection and try again.`
+            );
+          }
+        }
+
+        // For other errors, retry without specific logging
         if (attempt < maxRetries) {
           const delay = initialDelay * Math.pow(2, attempt);
           await new Promise((resolve) => setTimeout(resolve, delay));
@@ -255,10 +307,19 @@ export class BinanceClient {
   async getBatch24hrTicker(symbols: string[]): Promise<BinanceTicker24hr[]> {
     // Binance API accepts symbols as JSON array: ["BTCUSDT","ETHUSDT"]
     const encodedSymbols = encodeURIComponent(JSON.stringify(symbols));
-    const response = await this.axios.get<BinanceTicker24hr[]>(
-      `/api/v3/ticker/24hr?symbols=${encodedSymbols}`
+
+    // Use retry logic with exponential backoff for network errors
+    return this.retryWithBackoff(
+      async () => {
+        const response = await this.axios.get<BinanceTicker24hr[]>(
+          `/api/v3/ticker/24hr?symbols=${encodedSymbols}`
+        );
+        return response.data;
+      },
+      3, // maxRetries: 3 attempts (total 4 tries including first attempt)
+      1000, // initialDelay: 1s, then 2s, then 4s
+      [] // Don't skip retry on any Binance error codes for public endpoint
     );
-    return response.data;
   }
 
   async getAll24hrTickers(): Promise<BinanceTicker24hr[]> {
@@ -319,6 +380,7 @@ export class BinanceClient {
     // Format quantity with correct precision
     const formattedQuantity = quantity.toFixed(quantityPrecision);
 
+    // eslint-disable-next-line no-console
     console.log("Market Sell Order Parameters:", {
       symbol,
       quantity: formattedQuantity,
@@ -382,6 +444,7 @@ export class BinanceClient {
     const formattedStopPrice = stopPrice.toFixed(pricePrecision);
     const formattedStopLimitPrice = stopLimitPrice.toFixed(pricePrecision);
 
+    // eslint-disable-next-line no-console
     console.log("OCO Order Parameters (New API):", {
       symbol,
       quantity: formattedQuantity,

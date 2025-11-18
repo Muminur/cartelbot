@@ -1832,3 +1832,13 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 ## Session: OCO API Keys Detection Fix (Nov 18, 2025)
 
 **Fixed OCO "API keys missing" error (81f5a19)**: Root cause - querying non-existent nested fields (binance.apiKey) instead of actual schema fields (encryptedApiKey). Fixed 3 endpoints: oco-status, cleanup-phantom-orders GET/POST. Code review 9.5/10, production-ready.
+
+
+## Session: Portfolio Pagination Fix (Nov 17, 2025)
+
+**Fixed portfolio pagination (f80d69c)**: Changed itemsPerPage from 10 to 5. Search already working correctly with 300ms debounce, case-insensitive filtering, auto-reset to page 1. Pagination shows Previous/Next buttons, page counter, item range. Quality 9.5/10.
+
+
+## Session: Portfolio Search Pagination Fix (Nov 17, 2025)
+
+**Fixed search returning empty results (8c0109d)**: Root cause - currentPage > totalPages after filtering caused slice() to return empty array. Added validPage validation Math.min(currentPage, max(1, totalPages)) ensuring page always in range. Updated pagination controls. Search now shows results correctly. Quality 9.5/10.

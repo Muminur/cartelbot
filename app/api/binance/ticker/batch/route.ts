@@ -11,6 +11,9 @@ export async function GET(request: NextRequest) {
   const symbolsParam = searchParams.get("symbols");
   const testnetParam = searchParams.get("testnet");
 
+  // Declare symbols at function scope for error logging
+  let symbols: string[] = [];
+
   try {
     if (!symbolsParam) {
       return NextResponse.json(
@@ -23,7 +26,6 @@ export async function GET(request: NextRequest) {
     }
 
     // Parse symbols array from JSON string
-    let symbols: string[];
     try {
       symbols = JSON.parse(symbolsParam);
 
@@ -68,7 +70,7 @@ export async function GET(request: NextRequest) {
           { status: 400 }
         );
       }
-    } catch (parseError) {
+    } catch {
       return NextResponse.json(
         {
           success: false,
@@ -154,6 +156,31 @@ export async function GET(request: NextRequest) {
         },
         { status: 404 }
       );
+    }
+
+    // Handle network errors with specific messaging
+    if (error instanceof Error) {
+      const isNetworkError = error.message.includes('Network connection to Binance failed');
+      if (isNetworkError) {
+        console.error("GET /api/binance/ticker/batch - Network error after retries:", {
+          message: error.message,
+          timestamp: new Date().toISOString(),
+          symbolCount: symbols?.length || 0,
+        });
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: "NETWORK_ERROR",
+              message: error.message,
+              statusCode: 503,
+              retry: true, // Indicate to frontend that retry is recommended
+            },
+          },
+          { status: 503 }
+        );
+      }
     }
 
     console.error("GET /api/binance/ticker/batch error:", error);
