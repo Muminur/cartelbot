@@ -1841,6 +1841,8 @@ if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
 
 **Rewrote OCO API to fetch from Binance (bce8be2)**: Complete rewrite - fetches OCO orders from Binance API (mainnet+testnet) instead of database. Added 10s cache, input validation, error sanitization. Quality 9.2/10.
 
+**Fixed targets hit counter (ed8c64f)**: OCO detail "X/Y Hit" now correct. 3-layer fix: Binance price fallback for NULL DB prices, 0.1% tolerance matching, sequential count fallback. Quality 9.0/10.
+
 
 ## Session: Portfolio Pagination Fix (Nov 17, 2025)
 
