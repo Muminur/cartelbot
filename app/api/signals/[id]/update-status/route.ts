@@ -119,7 +119,8 @@ export async function POST(
         await signal.save();
 
         trade.status = "closed";
-        trade.closeReason = "No Orders Filled";
+        trade.closeReason = "cancelled";
+        trade.closeReasonDetail = "No Orders Filled";
         await trade.save();
 
         console.warn("[Signal Status Update] Trade closed with no filled orders:", {
@@ -152,26 +153,33 @@ export async function POST(
         // Update trade status
         trade.status = "closed";
 
-        // Determine specific close reason based on which targets were filled
-        let closeReason: string;
+        // Determine close reason (enum value) and detail (human-readable)
+        let closeReason: "target" | "stop_loss";
+        let closeReasonDetail: string;
+
         if (stopLossTriggered) {
-          closeReason = "Stop Loss Hit";
+          closeReason = "stop_loss";
+          closeReasonDetail = "Stop Loss Hit";
         } else if (filledTargetNumbers && Array.isArray(filledTargetNumbers) && filledTargetNumbers.length > 0) {
           // FIX BUG 1 (API side): Remove duplicates from filledTargetNumbers before joining
           const uniqueTargets = Array.from(new Set(filledTargetNumbers)).sort((a, b) => a - b);
 
+          closeReason = "target";
+
           // Multiple targets filled
           if (uniqueTargets.length === 1) {
-            closeReason = `Target ${uniqueTargets[0]} Hit`;
+            closeReasonDetail = `Target ${uniqueTargets[0]} Hit`;
           } else {
-            closeReason = `Targets ${uniqueTargets.join(', ')} Hit`;
+            closeReasonDetail = `Targets ${uniqueTargets.join(', ')} Hit`;
           }
         } else {
           // Fallback if no target numbers provided
           closeReason = "target";
+          closeReasonDetail = "Target Hit";
         }
 
         trade.closeReason = closeReason;
+        trade.closeReasonDetail = closeReasonDetail;
 
         if (exitPrice !== undefined) {
           trade.exitPrice = exitPrice;

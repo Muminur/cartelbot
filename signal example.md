@@ -84,3 +84,13 @@ Targets:
 0.01917
 0.01918
 SL: 0.01885
+
+
+$MINA Buying Now
+Entry: 0.768
+Targets:
+0.78
+0.785
+0.795
+1
+SL: 0.75

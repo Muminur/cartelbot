@@ -1687,11 +1687,11 @@ export default function SignalDetailModal({
                             </div>
                           );
                         })()}
-                        {trade.closeReason && (
+                        {(trade.closeReasonDetail || trade.closeReason) && (
                           <div>
                             <span className="text-gray-600">Close Reason:</span>
                             <Badge className="ml-2" variant={trade.closeReason === "stop_loss" ? "destructive" : "default"}>
-                              {trade.closeReason.replace("_", " ").toUpperCase()}
+                              {trade.closeReasonDetail || trade.closeReason?.replace("_", " ").toUpperCase()}
                             </Badge>
                           </div>
                         )}

@@ -97,6 +97,7 @@ export interface ITrade extends Document {
   unrealizedPnL?: number;
   status: "pending_approval" | "open" | "partial" | "closed" | "cancelled";
   closeReason?: "target" | "stop_loss" | "manual" | "cancelled";
+  closeReasonDetail?: string;
   approvalStatus?: "pending" | "approved" | "rejected" | "not_required";
   approvedAt?: Date;
   approvedBy?: string;

@@ -173,6 +173,7 @@ export async function POST(
     trade.realizedPnL = realizedPnL;
     trade.status = "closed";
     trade.closeReason = "manual";
+    trade.closeReasonDetail = "Manual Close";
 
     // Update signal status when trade is manually closed
     if (trade.signalId) {

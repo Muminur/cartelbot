@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
       trade.approvedAt = new Date();
       trade.approvedBy = (user._id as Types.ObjectId).toString();
       trade.closeReason = "cancelled";
+      trade.closeReasonDetail = "Trade Rejected by User";
       await trade.save();
 
       await Signal.findByIdAndUpdate(trade.signalId, { status: "cancelled" });

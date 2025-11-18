@@ -142,9 +142,10 @@ export function TradeHistoryTable({ trades, onTradeUpdated }: TradeHistoryTableP
       header: "Close Reason",
       cell: ({ row }) => {
         const reason = row.original.closeReason;
-        return reason ? (
-          <Badge className={getCloseReasonColor(reason)}>
-            {reason}
+        const detail = row.original.closeReasonDetail;
+        return reason || detail ? (
+          <Badge className={getCloseReasonColor(reason || "")}>
+            {detail || reason}
           </Badge>
         ) : (
           <span className="text-gray-400">-</span>

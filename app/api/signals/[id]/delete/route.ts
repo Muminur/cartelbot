@@ -245,6 +245,7 @@ export async function DELETE(
         // Update trade status
         trade.status = "closed";
         trade.closeReason = "manual";
+        trade.closeReasonDetail = "Manual Close - Signal Deleted";
         trade.exitPrice = parseFloat(sellOrderResponse.fills?.[0]?.price || "0");
 
         // Calculate realized P&L
@@ -329,7 +330,8 @@ export async function DELETE(
 
         // Update trade status
         trade.status = "cancelled";
-        trade.closeReason = "manual";
+        trade.closeReason = "cancelled";
+        trade.closeReasonDetail = "Signal Deleted - Market Sell Failed";
         await trade.save();
 
         // Update signal status
@@ -405,7 +407,8 @@ export async function DELETE(
 
         // Update trade status
         trade.status = "cancelled";
-        trade.closeReason = "manual";
+        trade.closeReason = "cancelled";
+        trade.closeReasonDetail = "Signal Deleted - Coins Saved";
         await trade.save();
 
         // Update signal status
@@ -424,7 +427,8 @@ export async function DELETE(
       } else {
         // No remaining quantity
         trade.status = "closed";
-        trade.closeReason = "manual";
+        trade.closeReason = "cancelled";
+        trade.closeReasonDetail = "Signal Deleted - No Remaining Coins";
         await trade.save();
 
         signal.status = "cancelled";

@@ -129,6 +129,11 @@ const tradeSchema = new Schema<ITrade>(
         message: "Invalid close reason",
       },
     },
+    closeReasonDetail: {
+      type: String,
+      maxlength: [200, "Close reason detail cannot exceed 200 characters"],
+      // Human-readable close reason (e.g., "Targets 1, 2, 3 Hit", "Stop Loss Hit", "Manual Close")
+    },
     approvalStatus: {
       type: String,
       enum: {

@@ -114,6 +114,7 @@ export async function handleExecutionReport(event: BinanceWebSocketEvent): Promi
           if (totalExecutedQty >= trade.quantity * 0.99) {
             trade.status = "closed";
             trade.closeReason = "target";
+            trade.closeReasonDetail = "Target Hit";
 
             // Get actual buy cost from Binance (what was actually spent)
             const buyCost = trade.buyOrder.cummulativeQuoteQty;
@@ -214,8 +215,10 @@ export async function handleListStatus(event: BinanceWebSocketEvent): Promise<vo
 
               if (data.r === "STOP_LOSS_LIMIT") {
                 trade.closeReason = "stop_loss";
+                trade.closeReasonDetail = "Stop Loss Hit";
               } else {
                 trade.closeReason = "target";
+                trade.closeReasonDetail = "Target Hit";
               }
 
               await trade.save();
