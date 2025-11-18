@@ -18,7 +18,8 @@ export async function getCurrentUser(): Promise<IUser | null> {
     const payload = verifySessionToken(token);
     await connectDB();
 
-    const user = await User.findById(payload.userId);
+    // Select encrypted API key fields to check if user has configured keys
+    const user = await User.findById(payload.userId).select("+encryptedApiKey +encryptedApiSecret");
     if (!user) {
       console.warn(`getCurrentUser: User not found for ID: ${payload.userId}`);
       return null;
