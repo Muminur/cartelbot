@@ -45,9 +45,14 @@ const getStatusBadgeVariant = (status: string) => {
   }
 };
 
-function SignalHistoryPageContent() {
-  const router = useRouter();
+// Wrapper component that uses useSearchParams and must be in Suspense
+function SignalHistoryWithParams() {
   const searchParams = useSearchParams();
+  return <SignalHistoryPageContent searchParams={searchParams} />;
+}
+
+function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<typeof useSearchParams> }) {
+  const router = useRouter();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [signals, setSignals] = useState<ISignal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -517,7 +522,7 @@ function SignalHistoryPageContent() {
 export default function SignalHistoryPage() {
   return (
     <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
-      <SignalHistoryPageContent />
+      <SignalHistoryWithParams />
     </Suspense>
   );
 }

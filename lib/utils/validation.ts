@@ -1,4 +1,29 @@
 import { BinanceSymbolInfo } from "@/types";
+import { Types } from "mongoose";
+
+/**
+ * Sanitize input for MongoDB regex queries to prevent NoSQL injection
+ * Escapes special regex characters: . * + ? ^ $ { } ( ) | [ ] \
+ */
+export function escapeRegex(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Validate MongoDB ObjectId format
+ */
+export function isValidObjectId(id: string): boolean {
+  return Types.ObjectId.isValid(id);
+}
+
+/**
+ * Validate pagination parameters
+ */
+export function validatePagination(page: number, limit: number): { page: number; limit: number } {
+  const validPage = Math.max(1, Math.min(page, 10000));
+  const validLimit = Math.max(1, Math.min(limit, 100));
+  return { page: validPage, limit: validLimit };
+}
 
 export function validateQuantity(quantity: number, symbolInfo: BinanceSymbolInfo): string | null {
   const lotSizeFilter = symbolInfo.filters.find((f) => f.filterType === "LOT_SIZE");
