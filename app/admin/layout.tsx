@@ -81,7 +81,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         {/* Admin Sidebar */}
         <div className="w-64 bg-white dark:bg-card border-r dark:border-border min-h-screen transition-colors">
           <div className="p-6 border-b dark:border-border">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Admin Panel</h2>
+            <h2 className="text-lg font-bold text-foreground dark:text-white">Admin Panel</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">CartelBot Management</p>
           </div>
           <nav className="p-4 space-y-1">
@@ -95,7 +95,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                     "w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
                     isActive
                       ? "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-accent"
+                      : "text-muted-foreground dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-accent"
                   )}
                 >
                   <item.icon className="w-5 h-5" />
@@ -107,7 +107,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           <div className="p-4 border-t dark:border-border mt-auto">
             <button
               onClick={() => router.push("/dashboard")}
-              className="w-full px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+              className="w-full px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               ← Back to Dashboard
             </button>

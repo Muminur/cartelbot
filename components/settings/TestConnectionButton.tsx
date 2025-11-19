@@ -111,11 +111,11 @@ export function TestConnectionButton({ hasApiKeys }: TestConnectionButtonProps) 
                 </div>
                 <div className="space-y-2 rounded-lg bg-green-50 p-4">
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">USDT Balance:</span>
+                    <span className="text-sm text-muted-foreground">USDT Balance:</span>
                     <span className="font-semibold">{testResult.balance} USDT</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Can Trade:</span>
+                    <span className="text-sm text-muted-foreground">Can Trade:</span>
                     <span className="font-semibold">
                       {testResult.canTrade ? "Yes" : "No"}
                     </span>
@@ -133,7 +133,7 @@ export function TestConnectionButton({ hasApiKeys }: TestConnectionButtonProps) 
                 <div className="rounded-lg bg-red-50 p-4">
                   <p className="text-sm text-red-900">{testResult.error}</p>
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-muted-foreground">
                   <p className="font-semibold mb-2">Common issues:</p>
                   <ul className="list-disc list-inside space-y-1">
                     <li>Invalid API key or secret</li>

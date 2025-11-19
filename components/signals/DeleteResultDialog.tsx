@@ -87,10 +87,10 @@ export default function DeleteResultDialog({
 
               {/* Title */}
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                <h2 className="text-2xl font-bold text-foreground mb-2">
                   {isSellChoice ? "Signal Deleted & Sold" : "Signal Deleted"}
                 </h2>
-                <p className="text-sm text-gray-600 font-normal">
+                <p className="text-sm text-muted-foreground font-normal">
                   {isSellChoice
                     ? "Your remaining coins have been sold at market price"
                     : "Your coins are safely stored as orphaned assets"}
@@ -106,14 +106,14 @@ export default function DeleteResultDialog({
           {parsedData && (
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
               <div className="flex items-baseline justify-center gap-2">
-                <span className="text-4xl font-bold text-gray-900">
+                <span className="text-4xl font-bold text-foreground">
                   {parsedData.quantity}
                 </span>
-                <span className="text-xl font-semibold text-gray-600">
+                <span className="text-xl font-semibold text-muted-foreground">
                   {parsedData.symbol}
                 </span>
               </div>
-              <p className="text-center text-sm text-gray-600 mt-2">
+              <p className="text-center text-sm text-muted-foreground mt-2">
                 {isSellChoice ? "Sold at market price" : "Saved to wallet"}
               </p>
             </div>
@@ -124,10 +124,10 @@ export default function DeleteResultDialog({
             {/* OCO Orders Cancelled */}
             {ocoCount > 0 && (
               <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-muted-foreground">
                   OCO Orders Cancelled
                 </span>
-                <span className="text-sm font-semibold text-gray-900">
+                <span className="text-sm font-semibold text-foreground">
                   {ocoCount} {ocoCount === 1 ? "order" : "orders"}
                 </span>
               </div>
@@ -136,8 +136,8 @@ export default function DeleteResultDialog({
             {/* Sell Order ID (for sell choice) */}
             {isSellChoice && result.sellOrderId && (
               <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                <span className="text-sm text-gray-600">Sell Order ID</span>
-                <span className="text-sm font-mono font-semibold text-gray-900">
+                <span className="text-sm text-muted-foreground">Sell Order ID</span>
+                <span className="text-sm font-mono font-semibold text-foreground">
                   {result.sellOrderId}
                 </span>
               </div>
@@ -146,8 +146,8 @@ export default function DeleteResultDialog({
             {/* Orphaned Coin ID (for keep choice) */}
             {isKeepChoice && result.orphanedCoinId && (
               <div className="flex items-center justify-between py-2">
-                <span className="text-sm text-gray-600">Asset ID</span>
-                <span className="text-sm font-mono text-gray-900 truncate max-w-[200px]">
+                <span className="text-sm text-muted-foreground">Asset ID</span>
+                <span className="text-sm font-mono text-foreground truncate max-w-[200px]">
                   {result.orphanedCoinId.slice(0, 8)}...
                   {result.orphanedCoinId.slice(-6)}
                 </span>

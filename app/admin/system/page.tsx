@@ -129,8 +129,8 @@ export default function AdminSystemPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">System Monitoring</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
+          <h1 className="text-3xl font-bold text-foreground dark:text-white">System Monitoring</h1>
+          <p className="text-muted-foreground dark:text-gray-400 mt-2">
             Real-time system health and performance metrics
           </p>
         </div>
@@ -144,7 +144,7 @@ export default function AdminSystemPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+            <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
               Database
             </CardTitle>
             <Database className="h-4 w-4 text-gray-400" />
@@ -160,7 +160,7 @@ export default function AdminSystemPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+            <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
               WebSocket
             </CardTitle>
             <Wifi className="h-4 w-4 text-gray-400" />
@@ -180,7 +180,7 @@ export default function AdminSystemPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+            <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
               Error Rate
             </CardTitle>
             <Activity className="h-4 w-4 text-gray-400" />
@@ -199,7 +199,7 @@ export default function AdminSystemPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+            <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
               Uptime
             </CardTitle>
             <Clock className="h-4 w-4 text-gray-400" />
@@ -222,7 +222,7 @@ export default function AdminSystemPage() {
         <CardContent>
           <div className="grid gap-4 md:grid-cols-3">
             <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <span className="text-sm font-medium text-muted-foreground dark:text-gray-400">
                 Signals Submitted
               </span>
               <Badge variant="outline" className="text-lg">
@@ -230,7 +230,7 @@ export default function AdminSystemPage() {
               </Badge>
             </div>
             <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <span className="text-sm font-medium text-muted-foreground dark:text-gray-400">
                 Trades Executed
               </span>
               <Badge variant="outline" className="text-lg">
@@ -238,7 +238,7 @@ export default function AdminSystemPage() {
               </Badge>
             </div>
             <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <span className="text-sm font-medium text-muted-foreground dark:text-gray-400">
                 Failed Signals
               </span>
               <Badge
@@ -266,7 +266,7 @@ export default function AdminSystemPage() {
           <div className="space-y-4">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                <span className="text-sm font-medium text-muted-foreground dark:text-gray-400">
                   Heap Used
                 </span>
                 <span className="text-sm font-semibold">

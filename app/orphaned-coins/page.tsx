@@ -141,8 +141,8 @@ export default function OrphanedCoinsPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Orphaned Coins</h1>
-            <p className="text-gray-600 mt-1">
+            <h1 className="text-3xl font-bold text-foreground">Orphaned Coins</h1>
+            <p className="text-muted-foreground mt-1">
               Manage coins from deleted signals with cancelled OCO orders
             </p>
           </div>
@@ -161,11 +161,11 @@ export default function OrphanedCoinsPage() {
             <CardContent className="py-12">
               <div className="text-center">
                 <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No orphaned coins</h3>
-                <p className="text-gray-600 mb-4">
+                <h3 className="text-lg font-semibold text-foreground mb-2">No orphaned coins</h3>
+                <p className="text-muted-foreground mb-4">
                   You don&apos;t have any orphaned coins from deleted signals.
                 </p>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-muted-foreground/70">
                   When you delete a signal and choose to keep the coins, they will appear here.
                 </p>
               </div>

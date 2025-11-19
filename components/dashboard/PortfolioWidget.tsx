@@ -610,7 +610,7 @@ export function PortfolioWidget() {
         <CardContent>
           <div className="text-center py-4">
             <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
-            <p className="text-sm text-gray-700 mb-4">{error.message}</p>
+            <p className="text-sm text-foreground mb-4">{error.message}</p>
             <Link href="/settings">
               <Button variant="default" size="sm" className="gap-2">
                 <Settings className="w-4 h-4" />
@@ -679,7 +679,7 @@ export function PortfolioWidget() {
           <div className="space-y-4">
             {/* Total Portfolio Value */}
             <div className="p-4 rounded-lg bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-100">
-              <p className="text-sm text-gray-600 mb-1">Total Portfolio Value</p>
+              <p className="text-sm text-muted-foreground mb-1">Total Portfolio Value</p>
               <p className="text-2xl font-bold text-purple-900">
                 {formatCurrency(portfolio.totalValueUSDT)} USDT
               </p>
@@ -781,7 +781,7 @@ export function PortfolioWidget() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="font-semibold text-gray-900">
+                            <p className="font-semibold text-foreground">
                               {formatCurrency(asset.valueUSDT)}
                             </p>
                             <p className="text-xs text-gray-500">USDT</p>
@@ -793,7 +793,7 @@ export function PortfolioWidget() {
                     {/* Pagination Controls */}
                     {totalPages > 1 && (
                       <div className="flex items-center justify-between pt-4 border-t">
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-muted-foreground">
                           Showing {startIndex + 1}-{Math.min(endIndex, filteredAssets.length)} of {filteredAssets.length} assets
                         </p>
                         <div className="flex items-center gap-2">
@@ -806,7 +806,7 @@ export function PortfolioWidget() {
                           >
                             <ChevronLeft className="w-4 h-4" />
                           </Button>
-                          <span className="text-sm text-gray-600">
+                          <span className="text-sm text-muted-foreground">
                             Page {validPage} of {totalPages}
                           </span>
                           <Button

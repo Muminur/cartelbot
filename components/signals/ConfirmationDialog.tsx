@@ -45,7 +45,7 @@ export default function ConfirmationDialog({
 
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700">Confidence Score</span>
+            <span className="text-sm font-medium text-foreground">Confidence Score</span>
             <Badge
               variant={hasLowConfidence ? "destructive" : "default"}
               className={hasLowConfidence ? "bg-yellow-500" : "bg-green-500"}
@@ -72,7 +72,7 @@ export default function ConfirmationDialog({
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-gray-500" />
-              <span className="text-sm font-medium text-gray-700">Symbol</span>
+              <span className="text-sm font-medium text-foreground">Symbol</span>
             </div>
             <p className="text-xl font-bold ml-6">{parsedSignal.symbol || "N/A"}</p>
           </div>
@@ -80,7 +80,7 @@ export default function ConfirmationDialog({
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Target className="h-4 w-4 text-gray-500" />
-              <span className="text-sm font-medium text-gray-700">Entry Prices</span>
+              <span className="text-sm font-medium text-foreground">Entry Prices</span>
             </div>
             <div className="flex flex-wrap gap-2 ml-6">
               {parsedSignal.entries.length > 0 ? (
@@ -98,7 +98,7 @@ export default function ConfirmationDialog({
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <CheckCircle className="h-4 w-4 text-gray-500" />
-              <span className="text-sm font-medium text-gray-700">Target Prices</span>
+              <span className="text-sm font-medium text-foreground">Target Prices</span>
             </div>
             <div className="flex flex-wrap gap-2 ml-6">
               {parsedSignal.targets.length > 0 ? (
@@ -116,7 +116,7 @@ export default function ConfirmationDialog({
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-gray-500" />
-              <span className="text-sm font-medium text-gray-700">Stop Loss</span>
+              <span className="text-sm font-medium text-foreground">Stop Loss</span>
             </div>
             <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 ml-6">
               {parsedSignal.stopLoss ? formatPrice(parsedSignal.stopLoss) : "N/A"}
@@ -127,7 +127,7 @@ export default function ConfirmationDialog({
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">Current Market Price</span>
+                <span className="text-sm font-medium text-foreground">Current Market Price</span>
               </div>
               <p className="text-lg font-semibold text-blue-600 ml-6">
                 {formatPrice(parsedSignal.currentMarketPrice)}

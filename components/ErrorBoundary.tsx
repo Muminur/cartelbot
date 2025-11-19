@@ -53,10 +53,10 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                 />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">
+            <h2 className="text-2xl font-bold text-foreground text-center mb-2">
               Something went wrong
             </h2>
-            <p className="text-gray-600 text-center mb-6">
+            <p className="text-muted-foreground text-center mb-6">
               We encountered an unexpected error. Please try refreshing the page.
             </p>
             {process.env.NODE_ENV === "development" && this.state.error && (

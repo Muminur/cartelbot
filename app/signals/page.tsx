@@ -301,8 +301,8 @@ export default function SignalsPage() {
         <div className="mb-8">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Submit Trading Signal</h1>
-              <p className="text-gray-600 mt-2">Parse and submit signals from text or images</p>
+              <h1 className="text-3xl font-bold text-foreground">Submit Trading Signal</h1>
+              <p className="text-muted-foreground mt-2">Parse and submit signals from text or images</p>
             </div>
             <Button variant="outline" onClick={() => router.push("/signals/history")} className="h-12 md:h-10 text-base md:text-sm">
               <History className="mr-2 h-4 w-4" />
@@ -319,7 +319,7 @@ export default function SignalsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Text Signal
                 </label>
                 <textarea
@@ -338,7 +338,7 @@ export default function SignalsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Image Upload
                 </label>
                 <Input
@@ -399,11 +399,11 @@ export default function SignalsPage() {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Symbol</label>
+                    <label className="text-sm font-medium text-foreground">Symbol</label>
                     <p className="text-lg font-semibold">{parsedSignal.symbol || "N/A"}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Stop Loss</label>
+                    <label className="text-sm font-medium text-foreground">Stop Loss</label>
                     <p className="text-lg font-semibold text-red-600">
                       {parsedSignal.stopLoss || "N/A"}
                     </p>
@@ -411,7 +411,7 @@ export default function SignalsPage() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Entry Prices</label>
+                  <label className="text-sm font-medium text-foreground">Entry Prices</label>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {parsedSignal.entries.length > 0 ? (
                       parsedSignal.entries.map((entry, i) => (
@@ -429,7 +429,7 @@ export default function SignalsPage() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Targets</label>
+                  <label className="text-sm font-medium text-foreground">Targets</label>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {parsedSignal.targets.length > 0 ? (
                       parsedSignal.targets.map((target, i) => (
@@ -448,14 +448,14 @@ export default function SignalsPage() {
 
                 {parsedSignal.currentMarketPrice && (
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Current Market Price</label>
+                    <label className="text-sm font-medium text-foreground">Current Market Price</label>
                     <p className="text-lg font-semibold">{parsedSignal.currentMarketPrice}</p>
                   </div>
                 )}
 
                 {parsedSignal.errors.length > 0 && (
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Parsing Issues</label>
+                    <label className="text-sm font-medium text-foreground">Parsing Issues</label>
                     <ul className="mt-1 space-y-1">
                       {parsedSignal.errors.map((err, i) => (
                         <li key={i} className="text-sm text-red-600">

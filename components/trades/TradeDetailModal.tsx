@@ -11,8 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, ExternalLink, TrendingUp, TrendingDown, RefreshCw, Radio } from "lucide-react";
-import { formatCurrency, formatNumber, formatSymbol, formatDate } from "@/lib/utils/format";
+import { Loader2, ExternalLink, TrendingUp, TrendingDown, RefreshCw, Radio, CheckCircle2, AlertTriangle } from "lucide-react";
+import { formatCurrency, formatNumber, formatSymbol, formatDate, formatPrice } from "@/lib/utils/format";
 import { ITrade, IOrder } from "@/types";
 import { useRouter } from "next/navigation";
 import { ClosePositionDialog } from "./ClosePositionDialog";
@@ -39,6 +39,8 @@ export function TradeDetailModal({
   const [fetchingOrderStatus, setFetchingOrderStatus] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
+  const [fetchingPrice, setFetchingPrice] = useState(false);
 
   useEffect(() => {
     if (open && tradeId) {
@@ -54,6 +56,10 @@ export function TradeDetailModal({
 
       if (data.success && data.data) {
         setTrade(data.data);
+        // Fetch current price when trade is loaded
+        if (data.data.symbol) {
+          fetchCurrentPrice(data.data.symbol);
+        }
       }
     } catch (error) {
       console.error("Error fetching trade details:", error);
@@ -61,6 +67,23 @@ export function TradeDetailModal({
       setLoading(false);
     }
   };
+
+  // Fetch current market price from Binance
+  const fetchCurrentPrice = useCallback(async (symbol: string) => {
+    setFetchingPrice(true);
+    try {
+      const response = await fetch(`/api/binance/ticker?symbol=${symbol}`);
+      const data = await response.json();
+
+      if (data.success && data.data?.lastPrice) {
+        setCurrentPrice(parseFloat(data.data.lastPrice));
+      }
+    } catch (error) {
+      console.error("Error fetching current price:", error);
+    } finally {
+      setFetchingPrice(false);
+    }
+  }, []);
 
   // Fetch real-time order statuses from Binance API (NOT database)
   const fetchOrderStatuses = useCallback(async () => {
@@ -147,7 +170,7 @@ export function TradeDetailModal({
 
   const handleViewSignal = () => {
     if (trade?.signalId) {
-      router.push(`/signals?id=${trade.signalId}`);
+      router.push(`/signals/history?signalId=${trade.signalId}&openModal=true`);
       onOpenChange(false);
     }
   };
@@ -230,8 +253,35 @@ export function TradeDetailModal({
     return null;
   }
 
-  const pnl = trade.realizedPnL || trade.unrealizedPnL || 0;
-  const pnlPercentage = trade.investedAmount > 0 ? (pnl / trade.investedAmount) * 100 : 0;
+  // Calculate unrealized P&L for open/partial trades
+  let unrealizedPnL = 0;
+  let unrealizedPnLPercentage = 0;
+
+  if ((trade.status === "open" || trade.status === "partial") && currentPrice && trade.buyOrder) {
+    // Calculate remaining quantity (total bought - total sold)
+    const totalBought = trade.buyOrder.executedQty || trade.quantity;
+    const totalSold = trade.sellOrders?.reduce((sum, order) => {
+      return sum + (order.executedQty || 0);
+    }, 0) || 0;
+    const remainingQty = totalBought - totalSold;
+
+    // Calculate entry price from buy order
+    const entryPrice = trade.entryPrice || (trade.buyOrder.price || 0);
+
+    // Calculate unrealized P&L
+    if (remainingQty > 0 && entryPrice > 0) {
+      unrealizedPnL = (currentPrice - entryPrice) * remainingQty;
+
+      // Calculate proportional cost for percentage
+      const proportionalCost = trade.investedAmount * (remainingQty / totalBought);
+      unrealizedPnLPercentage = proportionalCost > 0 ? (unrealizedPnL / proportionalCost) * 100 : 0;
+    }
+  }
+
+  const pnl = trade.status === "closed" ? (trade.realizedPnL || 0) : unrealizedPnL;
+  const pnlPercentage = trade.status === "closed"
+    ? (trade.investedAmount > 0 ? ((trade.realizedPnL || 0) / trade.investedAmount) * 100 : 0)
+    : unrealizedPnLPercentage;
 
   return (
     <>
@@ -264,11 +314,11 @@ export function TradeDetailModal({
             {/* Main Trade Information */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Symbol</p>
+                <p className="text-sm text-muted-foreground mb-1">Symbol</p>
                 <p className="text-xl font-bold">{formatSymbol(trade.symbol)}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600 mb-1">Status</p>
+                <p className="text-sm text-muted-foreground mb-1">Status</p>
                 <Badge className={getStatusColor(trade.status)}>{trade.status}</Badge>
               </div>
             </div>
@@ -280,19 +330,19 @@ export function TradeDetailModal({
               <h3 className="font-semibold mb-3">Entry Details</h3>
               <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
                 <div>
-                  <p className="text-sm text-gray-600">Entry Price</p>
+                  <p className="text-sm text-muted-foreground">Entry Price</p>
                   <p className="font-medium">{formatCurrency(trade.entryPrice)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Quantity</p>
+                  <p className="text-sm text-muted-foreground">Quantity</p>
                   <p className="font-medium">{formatNumber(trade.quantity, 8)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Amount Invested</p>
+                  <p className="text-sm text-muted-foreground">Amount Invested</p>
                   <p className="font-medium">{formatCurrency(trade.investedAmount)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Entry Time</p>
+                  <p className="text-sm text-muted-foreground">Entry Time</p>
                   <p className="font-medium text-sm">{formatDate(trade.createdAt)}</p>
                 </div>
               </div>
@@ -304,23 +354,23 @@ export function TradeDetailModal({
                 <h3 className="font-semibold mb-3">Exit Details</h3>
                 <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
                   <div>
-                    <p className="text-sm text-gray-600">Exit Price</p>
+                    <p className="text-sm text-muted-foreground">Exit Price</p>
                     <p className="font-medium">{formatCurrency(trade.exitPrice)}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Total Received</p>
+                    <p className="text-sm text-muted-foreground">Total Received</p>
                     <p className="font-medium">
                       {formatCurrency(trade.exitPrice * trade.quantity)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Close Reason</p>
+                    <p className="text-sm text-muted-foreground">Close Reason</p>
                     <Badge className={getCloseReasonColor(trade.closeReason)}>
                       {trade.closeReason || "N/A"}
                     </Badge>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Close Time</p>
+                    <p className="text-sm text-muted-foreground">Close Time</p>
                     <p className="font-medium text-sm">{formatDate(trade.updatedAt)}</p>
                   </div>
                 </div>
@@ -329,10 +379,42 @@ export function TradeDetailModal({
 
             {/* P&L Breakdown */}
             <div>
-              <h3 className="font-semibold mb-3">P&L Breakdown</h3>
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold">P&L Breakdown</h3>
+                {(trade.status === "open" || trade.status === "partial") && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => trade.symbol && fetchCurrentPrice(trade.symbol)}
+                    disabled={fetchingPrice}
+                    className="h-8"
+                  >
+                    {fetchingPrice ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Refresh Price
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                {(trade.status === "open" || trade.status === "partial") && currentPrice && (
+                  <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                    <span className="text-sm text-muted-foreground">Current Market Price</span>
+                    <div className="text-right">
+                      <div className="font-medium">{formatCurrency(currentPrice)}</div>
+                      <div className="text-xs text-muted-foreground">Live from Binance</div>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
                     {trade.status === "closed" ? "Realized P&L" : "Unrealized P&L"}
                   </span>
                   <div className="text-right">
@@ -353,35 +435,35 @@ export function TradeDetailModal({
               <h3 className="font-semibold mb-3">Buy Order</h3>
               <div className="bg-gray-50 p-4 rounded-lg space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Order ID</span>
+                  <span className="text-sm text-muted-foreground">Order ID</span>
                   <span className="font-mono text-sm">{trade.buyOrder.orderId}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Price</span>
+                  <span className="text-sm text-muted-foreground">Price</span>
                   <span className="font-medium">{formatCurrency(trade.buyOrder.price || 0)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Quantity</span>
+                  <span className="text-sm text-muted-foreground">Quantity</span>
                   <span className="font-medium">{formatNumber(trade.buyOrder.quantity, 8)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Status</span>
+                  <span className="text-sm text-muted-foreground">Status</span>
                   <Badge className={getOrderStatusColor(trade.buyOrder.status)}>
                     {trade.buyOrder.status}
                   </Badge>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Time</span>
+                  <span className="text-sm text-muted-foreground">Time</span>
                   <span className="text-sm">{formatDate(trade.buyOrder.timestamp)}</span>
                 </div>
               </div>
             </div>
 
-            {/* Sell Orders */}
+            {/* OCO Sell Orders */}
             {trade.sellOrders && trade.sellOrders.length > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold">Sell Orders ({trade.sellOrders.length})</h3>
+                  <h3 className="font-semibold">OCO Sell Orders ({trade.sellOrders.length})</h3>
                   <Button
                     variant="outline"
                     size="sm"
@@ -402,37 +484,211 @@ export function TradeDetailModal({
                     )}
                   </Button>
                 </div>
-                <div className="space-y-3">
-                  {trade.sellOrders.map((order, index) => (
-                    <div key={index} className="bg-gray-50 p-4 rounded-lg space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-semibold">Order #{index + 1}</span>
-                        <Badge className={getOrderStatusColor(order.status)}>
-                          {order.status}
-                        </Badge>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <span className="text-gray-600">Order ID:</span>
-                          <span className="font-mono ml-2">{order.orderId}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Price:</span>
-                          <span className="ml-2">{formatCurrency(order.price || 0)}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Quantity:</span>
-                          <span className="ml-2">{formatNumber(order.quantity, 8)}</span>
-                        </div>
-                        {order.stopPrice && (
-                          <div>
-                            <span className="text-gray-600">Stop:</span>
-                            <span className="ml-2">{formatCurrency(order.stopPrice)}</span>
+                <div className="space-y-4">
+                  {(() => {
+                    // Group orders by OCO pairs (orderListId)
+                    const ocoGroups = new Map<number, IOrder[]>();
+                    trade.sellOrders.forEach((order: IOrder) => {
+                      if (order.orderListId) {
+                        const existing = ocoGroups.get(order.orderListId) || [];
+                        existing.push(order);
+                        ocoGroups.set(order.orderListId, existing);
+                      }
+                    });
+
+                    // Process each OCO pair
+                    let tpIndex = 1;
+                    return Array.from(ocoGroups.values()).map((orders) => {
+                      // Identify Take Profit and Stop Loss from the pair
+                      const takeProfit = orders.find(o => o.type === 'LIMIT_MAKER');
+                      const stopLoss = orders.find(o => o.type === 'STOP_LOSS_LIMIT');
+
+                      if (!takeProfit || !stopLoss) {
+                        // Fallback: Display orders individually if pairing failed
+                        return orders.map((order: IOrder) => (
+                          <div key={order.orderId} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-semibold">
+                                Order #{order.orderId}
+                              </span>
+                              <Badge className={getOrderStatusColor(order.status)}>
+                                {order.status}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                              <div>
+                                <span className="text-muted-foreground">Price:</span>
+                                <span className="ml-2">${formatPrice(order.price || 0, 6)}</span>
+                              </div>
+                              {order.stopPrice && (
+                                <div>
+                                  <span className="text-muted-foreground">Stop:</span>
+                                  <span className="ml-2">${formatPrice(order.stopPrice, 6)}</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                        ));
+                      }
+
+                      // Get order statuses
+                      const tpStatus = takeProfit.status;
+                      const slStatus = stopLoss.status;
+                      const tpExecutedQty = takeProfit.executedQty || 0;
+                      const slExecutedQty = stopLoss.executedQty || 0;
+                      const tpFilledValue = takeProfit.cummulativeQuoteQty || 0;
+                      const slFilledValue = stopLoss.cummulativeQuoteQty || 0;
+
+                      // Determine what happened in this OCO pair
+                      const tpTriggered = tpStatus === 'FILLED';
+                      const slTriggered = slStatus === 'FILLED';
+
+                      const currentTpIndex = tpIndex++;
+
+                      return (
+                        <div key={takeProfit.orderListId} className="bg-gray-50 p-4 rounded-lg border-2 border-gray-300 space-y-3">
+                          {/* OCO Pair Header */}
+                          <div className="text-xs font-semibold text-muted-foreground mb-2">
+                            OCO Pair #{currentTpIndex} (Order List ID: {takeProfit.orderListId})
+                          </div>
+
+                          {/* Take Profit Section */}
+                          <div className={`p-3 rounded-lg border-2 ${
+                            tpTriggered
+                              ? 'bg-green-50 border-green-300'
+                              : tpStatus === 'CANCELED' || tpStatus === 'CANCELLED'
+                              ? 'bg-gray-100 border-gray-300'
+                              : 'bg-blue-50 border-blue-200'
+                          }`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-foreground">
+                                  Take Profit #{currentTpIndex}
+                                </span>
+                                {tpTriggered && (
+                                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                )}
+                              </div>
+                              <Badge
+                                className={
+                                  tpTriggered ? "bg-green-500 text-white" :
+                                  tpStatus === "CANCELED" || tpStatus === "CANCELLED" ? "bg-gray-400 text-white" :
+                                  tpStatus === "PARTIALLY_FILLED" ? "bg-blue-500 text-white" :
+                                  "bg-yellow-500 text-white"
+                                }
+                              >
+                                {tpStatus}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-muted-foreground">Target Price:</span>
+                                <span className="ml-2 font-medium text-green-700">
+                                  ${formatPrice(takeProfit.price || 0, 6)}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Quantity:</span>
+                                <span className="ml-2">{formatNumber(takeProfit.quantity, 6)}</span>
+                              </div>
+                              {tpExecutedQty > 0 && (
+                                <>
+                                  <div>
+                                    <span className="text-muted-foreground">Executed:</span>
+                                    <span className="ml-2 font-semibold text-green-600">
+                                      {formatNumber(tpExecutedQty, 6)}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Filled Value:</span>
+                                    <span className="ml-2 font-medium">${tpFilledValue.toFixed(2)}</span>
+                                  </div>
+                                </>
+                              )}
+                              <div className="col-span-2">
+                                <span className="text-muted-foreground">Order ID:</span>
+                                <span className="ml-2 font-mono text-xs">{takeProfit.orderId}</span>
+                              </div>
+                            </div>
+                            {tpTriggered && (slStatus === 'CANCELED' || slStatus === 'CANCELLED') && (
+                              <div className="mt-2 pt-2 border-t border-green-200">
+                                <span className="text-xs text-green-700 font-medium">
+                                  ✓ Take profit executed successfully
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Stop Loss Section */}
+                          <div className={`p-3 rounded-lg border-2 ${
+                            slTriggered
+                              ? 'bg-red-50 border-red-300'
+                              : slStatus === 'CANCELED' || slStatus === 'CANCELLED'
+                              ? 'bg-gray-100 border-gray-300'
+                              : 'bg-orange-50 border-orange-200'
+                          }`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-foreground">
+                                  Stop Loss for TP #{currentTpIndex}
+                                </span>
+                                {slTriggered && (
+                                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                                )}
+                              </div>
+                              <Badge
+                                className={
+                                  slTriggered ? "bg-red-500 text-white" :
+                                  slStatus === "CANCELED" || slStatus === "CANCELLED" ? "bg-gray-400 text-white" :
+                                  slStatus === "PARTIALLY_FILLED" ? "bg-blue-500 text-white" :
+                                  "bg-yellow-500 text-white"
+                                }
+                              >
+                                {slStatus}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-muted-foreground">Stop Price:</span>
+                                <span className="ml-2 font-medium text-red-700">
+                                  ${formatPrice(stopLoss.stopPrice || 0, 6)}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Quantity:</span>
+                                <span className="ml-2">{formatNumber(stopLoss.quantity, 6)}</span>
+                              </div>
+                              {slExecutedQty > 0 && (
+                                <>
+                                  <div>
+                                    <span className="text-muted-foreground">Executed:</span>
+                                    <span className="ml-2 font-semibold text-red-600">
+                                      {formatNumber(slExecutedQty, 6)}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Filled Value:</span>
+                                    <span className="ml-2 font-medium">${slFilledValue.toFixed(2)}</span>
+                                  </div>
+                                </>
+                              )}
+                              <div className="col-span-2">
+                                <span className="text-muted-foreground">Order ID:</span>
+                                <span className="ml-2 font-mono text-xs">{stopLoss.orderId}</span>
+                              </div>
+                            </div>
+                            {slTriggered && (tpStatus === 'CANCELED' || tpStatus === 'CANCELLED') && (
+                              <div className="mt-2 pt-2 border-t border-red-200">
+                                <span className="text-xs text-red-700 font-medium">
+                                  ⚠ Stop loss triggered - position closed at loss
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             )}
@@ -443,7 +699,7 @@ export function TradeDetailModal({
                 <h3 className="font-semibold mb-3">Signal Information</h3>
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Signal ID</span>
+                    <span className="text-sm text-muted-foreground">Signal ID</span>
                     <Button
                       variant="link"
                       size="sm"

@@ -150,10 +150,10 @@ export default function DeleteSignalDialog({
             <div className="flex items-start gap-3">
               <TrendingDown className="h-5 w-5 text-purple-600 mt-0.5" />
               <div className="flex-1 text-left">
-                <h3 className="font-semibold text-gray-900 mb-1">
+                <h3 className="font-semibold text-foreground mb-1">
                   Sell remaining quantity at market price
                 </h3>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   All remaining coins will be sold immediately at the current
                   market price. This will close the trade completely.
                 </p>
@@ -174,10 +174,10 @@ export default function DeleteSignalDialog({
             <div className="flex items-start gap-3">
               <Package className="h-5 w-5 text-blue-600 mt-0.5" />
               <div className="flex-1 text-left">
-                <h3 className="font-semibold text-gray-900 mb-1">
+                <h3 className="font-semibold text-foreground mb-1">
                   Keep coins but cancel OCO orders
                 </h3>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   OCO orders will be cancelled, but coins will remain in your
                   wallet. You can sell them manually later from the &quot;Orphaned
                   Coins&quot; page.

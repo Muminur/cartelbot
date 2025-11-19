@@ -283,7 +283,7 @@ export function SubscriptionSection() {
                   </div>
                   <div className="text-xl font-bold">${TIER_CONFIGS.premium.price}/mo</div>
                 </div>
-                <p className="text-sm text-gray-600 mb-3">{TIER_CONFIGS.premium.description}</p>
+                <p className="text-sm text-muted-foreground mb-3">{TIER_CONFIGS.premium.description}</p>
                 <ul className="text-sm space-y-1">
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -314,7 +314,7 @@ export function SubscriptionSection() {
                   </div>
                   <div className="text-xl font-bold">${TIER_CONFIGS.pro.price}/mo</div>
                 </div>
-                <p className="text-sm text-gray-600 mb-3">{TIER_CONFIGS.pro.description}</p>
+                <p className="text-sm text-muted-foreground mb-3">{TIER_CONFIGS.pro.description}</p>
                 <ul className="text-sm space-y-1">
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -336,7 +336,7 @@ export function SubscriptionSection() {
             <div className="bg-gray-50 rounded-lg p-4 space-y-4">
               <div>
                 <h4 className="font-semibold mb-2">Payment Instructions</h4>
-                <ol className="text-sm space-y-2 list-decimal list-inside text-gray-600">
+                <ol className="text-sm space-y-2 list-decimal list-inside text-muted-foreground">
                   <li>Send {TIER_CONFIGS[selectedTier].price} USDT (TRC20) to the address below</li>
                   <li>Copy the transaction hash and your sender address</li>
                   <li>Submit the payment details for verification</li>

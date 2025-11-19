@@ -132,8 +132,8 @@ export default function AdminSignalsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Signal Monitoring</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">
+        <h1 className="text-3xl font-bold text-foreground dark:text-white">Signal Monitoring</h1>
+        <p className="text-muted-foreground dark:text-gray-400 mt-2">
           Monitor all user signals and parsing metrics
         </p>
       </div>
@@ -143,13 +143,13 @@ export default function AdminSignalsPage() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
                 Active Signals
               </CardTitle>
               <Radio className="h-4 w-4 text-gray-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              <div className="text-2xl font-bold text-foreground dark:text-white">
                 {stats.executing}
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -160,7 +160,7 @@ export default function AdminSignalsPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
                 Success Rate
               </CardTitle>
               <TrendingUp className="h-4 w-4 text-gray-400" />
@@ -175,7 +175,7 @@ export default function AdminSignalsPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
                 Failed Signals
               </CardTitle>
             </CardHeader>
@@ -187,12 +187,12 @@ export default function AdminSignalsPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
                 Total Signals
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              <div className="text-2xl font-bold text-foreground dark:text-white">
                 {Object.values(stats).reduce((a, b) => a + b, 0)}
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">All time</p>
@@ -326,7 +326,7 @@ export default function AdminSignalsPage() {
               {/* Pagination */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-muted-foreground dark:text-gray-400">
                     Page {page} of {totalPages}
                   </p>
                   <div className="flex items-center space-x-2">

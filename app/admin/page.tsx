@@ -89,21 +89,21 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">System overview and statistics</p>
+        <h1 className="text-3xl font-bold text-foreground dark:text-white">Admin Dashboard</h1>
+        <p className="text-muted-foreground dark:text-gray-400 mt-2">System overview and statistics</p>
       </div>
 
       {/* User Stats */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+            <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
               Total Users
             </CardTitle>
             <Users className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.users.total}</div>
+            <div className="text-2xl font-bold text-foreground dark:text-white">{stats.users.total}</div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {stats.users.active} active
             </p>
@@ -112,13 +112,13 @@ export default function AdminDashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+            <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
               With API Keys
             </CardTitle>
             <Activity className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+            <div className="text-2xl font-bold text-foreground dark:text-white">
               {stats.users.withApiKeys}
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -129,13 +129,13 @@ export default function AdminDashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+            <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
               Total Signals
             </CardTitle>
             <Radio className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">{stats.signals.total}</div>
+            <div className="text-2xl font-bold text-foreground dark:text-white">{stats.signals.total}</div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {stats.signals.today} today
             </p>
@@ -144,7 +144,7 @@ export default function AdminDashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
+            <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
               Total P&L
             </CardTitle>
             <TrendingUp className="h-4 w-4 text-gray-400" />
@@ -222,25 +222,25 @@ export default function AdminDashboardPage() {
           <CardContent>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Pending</span>
+                <span className="text-sm text-muted-foreground dark:text-gray-400">Pending</span>
                 <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
                   {stats.signals.pending}
                 </Badge>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Executing</span>
+                <span className="text-sm text-muted-foreground dark:text-gray-400">Executing</span>
                 <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                   {stats.signals.executing}
                 </Badge>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Completed</span>
+                <span className="text-sm text-muted-foreground dark:text-gray-400">Completed</span>
                 <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                   {stats.signals.completed}
                 </Badge>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Failed</span>
+                <span className="text-sm text-muted-foreground dark:text-gray-400">Failed</span>
                 <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
                   {stats.signals.failed}
                 </Badge>
@@ -256,21 +256,21 @@ export default function AdminDashboardPage() {
           <CardContent>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Open Positions</span>
+                <span className="text-sm text-muted-foreground dark:text-gray-400">Open Positions</span>
                 <Badge variant="outline">{stats.trades.open}</Badge>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Total Trades</span>
+                <span className="text-sm text-muted-foreground dark:text-gray-400">Total Trades</span>
                 <Badge variant="outline">{stats.trades.total}</Badge>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Total Volume</span>
+                <span className="text-sm text-muted-foreground dark:text-gray-400">Total Volume</span>
                 <span className="text-sm font-medium">
                   ${stats.trades.totalVolume.toFixed(2)}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">WebSocket Connections</span>
+                <span className="text-sm text-muted-foreground dark:text-gray-400">WebSocket Connections</span>
                 <Badge variant="outline">{stats.system.websocketConnections}</Badge>
               </div>
             </div>

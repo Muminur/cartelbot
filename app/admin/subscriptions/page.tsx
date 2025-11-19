@@ -186,7 +186,7 @@ export default function AdminSubscriptionsPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold">Subscription Management</h1>
-          <p className="text-gray-600 mt-2">Review and approve user subscription payments</p>
+          <p className="text-muted-foreground mt-2">Review and approve user subscription payments</p>
         </div>
 
         {/* Filter Tabs */}

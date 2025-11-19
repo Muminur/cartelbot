@@ -42,7 +42,7 @@ export function MobileSidebar({ onNavigate }: MobileSidebarProps) {
                 "w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
                 isActive
                   ? "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400"
-                  : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-accent active:bg-gray-100 dark:active:bg-accent/80"
+                  : "text-muted-foreground dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-accent active:bg-gray-100 dark:active:bg-accent/80"
               )}
             >
               <item.icon className="w-5 h-5" />

@@ -186,7 +186,7 @@ export default function CleanupPhantomOrdersDialog({
           {loading && (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
-              <span className="ml-3 text-gray-600">Loading orders...</span>
+              <span className="ml-3 text-muted-foreground">Loading orders...</span>
             </div>
           )}
 

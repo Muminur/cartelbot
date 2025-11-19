@@ -90,8 +90,8 @@ export default function DashboardPage() {
       <div className="space-y-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600 mt-2">Welcome back to CartelBot</p>
+            <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+            <p className="text-muted-foreground mt-2">Welcome back to CartelBot</p>
           </div>
           <div className="flex items-center gap-2">
             {isConnected && (

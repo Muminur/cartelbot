@@ -154,8 +154,8 @@ function ExecuteTradeContent() {
             Back
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Execute Trade</h1>
-            <p className="text-gray-600 mt-1">Review signal and confirm execution</p>
+            <h1 className="text-3xl font-bold text-foreground">Execute Trade</h1>
+            <p className="text-muted-foreground mt-1">Review signal and confirm execution</p>
           </div>
         </div>
 
@@ -192,7 +192,7 @@ function ExecuteTradeContent() {
                 <div className="space-y-1">
                   {signal.targets.map((target, index) => (
                     <div key={index} className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Target {index + 1}</span>
+                      <span className="text-muted-foreground">Target {index + 1}</span>
                       <span className="font-medium text-green-600 flex items-center gap-1">
                         <TrendingUp className="w-3 h-3" />
                         ${target.toFixed(4)}
@@ -204,7 +204,7 @@ function ExecuteTradeContent() {
 
               <div className="pt-4 border-t">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Risk/Reward Ratio</span>
+                  <span className="text-muted-foreground">Risk/Reward Ratio</span>
                   <span className="font-bold text-purple-600">1:{riskRewardRatio}</span>
                 </div>
               </div>

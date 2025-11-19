@@ -102,7 +102,7 @@ export function AccountBalanceWidget() {
               </Button>
             </Link>
             {error.binanceCode === -2015 && (
-              <div className="mt-4 text-xs text-gray-600 bg-white p-3 rounded border border-yellow-200">
+              <div className="mt-4 text-xs text-muted-foreground bg-white p-3 rounded border border-yellow-200">
                 <p className="font-semibold mb-1">Common Binance API Error -2015 Causes:</p>
                 <ul className="list-disc text-left pl-5 space-y-1">
                   <li>API key or secret is incorrect</li>

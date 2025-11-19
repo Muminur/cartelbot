@@ -161,7 +161,7 @@ export default function EditSignalModal({
               <Separator />
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">Updated Parsed Data</span>
+                  <span className="text-sm font-medium text-foreground">Updated Parsed Data</span>
                   <Badge
                     variant={parsedData.confidence < 80 ? "destructive" : "default"}
                     className={parsedData.confidence < 80 ? "bg-yellow-500" : "bg-green-500"}

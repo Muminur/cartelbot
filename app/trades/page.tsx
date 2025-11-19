@@ -227,9 +227,9 @@ export default function TradesPage() {
                   </div>
                 ) : activeTrades.length === 0 ? (
                   <div className="text-center py-12">
-                    <Activity className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-600 font-medium">No active trades</p>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <Activity className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                    <p className="text-muted-foreground font-medium">No active trades</p>
+                    <p className="text-sm text-muted-foreground/70 mt-1">
                       Your open positions will appear here
                     </p>
                   </div>
@@ -269,9 +269,9 @@ export default function TradesPage() {
                   </div>
                 ) : historyTrades.length === 0 ? (
                   <div className="text-center py-12">
-                    <History className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-600 font-medium">No trade history</p>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <History className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                    <p className="text-muted-foreground font-medium">No trade history</p>
+                    <p className="text-sm text-muted-foreground/70 mt-1">
                       Closed trades will appear here
                     </p>
                   </div>

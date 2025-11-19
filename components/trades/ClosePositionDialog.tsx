@@ -99,42 +99,42 @@ export function ClosePositionDialog({
           {/* Trade Information */}
           <div className="rounded-lg bg-gray-50 p-4 space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Symbol</span>
+              <span className="text-sm text-muted-foreground">Symbol</span>
               <span className="font-semibold text-lg">{formatSymbol(trade.symbol)}</span>
             </div>
 
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Quantity</span>
+              <span className="text-sm text-muted-foreground">Quantity</span>
               <span className="font-medium">{formatNumber(trade.quantity, 8)}</span>
             </div>
 
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Entry Price</span>
+              <span className="text-sm text-muted-foreground">Entry Price</span>
               <span className="font-medium">{formatCurrency(trade.entryPrice)}</span>
             </div>
 
             {currentPrice && (
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Current Price</span>
+                <span className="text-sm text-muted-foreground">Current Price</span>
                 <span className="font-medium">{formatCurrency(currentPrice)}</span>
               </div>
             )}
 
             <div className="border-t pt-3">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Invested Amount</span>
+                <span className="text-sm text-muted-foreground">Invested Amount</span>
                 <span className="font-medium">{formatCurrency(trade.investedAmount)}</span>
               </div>
 
               {currentPrice && (
                 <>
                   <div className="flex justify-between items-center mt-2">
-                    <span className="text-sm text-gray-600">Estimated Proceeds</span>
+                    <span className="text-sm text-muted-foreground">Estimated Proceeds</span>
                     <span className="font-medium">{formatCurrency(estimatedProceeds)}</span>
                   </div>
 
                   <div className="flex justify-between items-center mt-2">
-                    <span className="text-sm text-gray-600">Estimated P&L</span>
+                    <span className="text-sm text-muted-foreground">Estimated P&L</span>
                     <div className="text-right">
                       <div
                         className={`font-semibold ${

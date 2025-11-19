@@ -156,8 +156,8 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">User Management</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">Manage users, subscriptions, and permissions</p>
+        <h1 className="text-3xl font-bold text-foreground dark:text-white">User Management</h1>
+        <p className="text-muted-foreground dark:text-gray-400 mt-2">Manage users, subscriptions, and permissions</p>
       </div>
 
       {/* Filters */}
@@ -299,7 +299,7 @@ export default function AdminUsersPage() {
               {/* Pagination */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-muted-foreground dark:text-gray-400">
                     Page {page} of {totalPages}
                   </p>
                   <div className="flex items-center space-x-2">

@@ -124,10 +124,10 @@ export default function DeleteResultPage() {
       <DashboardLayout userEmail={userEmail}>
         <div className="flex flex-col items-center justify-center min-h-[400px] px-4">
           <AlertCircle className="h-16 w-16 text-red-500 mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          <h2 className="text-2xl font-bold text-foreground mb-2">
             No Results Found
           </h2>
-          <p className="text-gray-600 text-center mb-6 max-w-md">
+          <p className="text-muted-foreground text-center mb-6 max-w-md">
             {error ||
               "We couldn't find any deletion results. This page is only accessible after deleting a signal."}
           </p>
@@ -168,10 +168,10 @@ export default function DeleteResultPage() {
               </div>
 
               {/* Title */}
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              <h1 className="text-3xl font-bold text-foreground mb-2">
                 {isSellChoice ? "Signal Deleted & Sold" : "Signal Deleted"}
               </h1>
-              <p className="text-base text-gray-600 max-w-md">
+              <p className="text-base text-muted-foreground max-w-md">
                 {isSellChoice
                   ? "Your remaining coins have been sold at market price"
                   : "Your coins are safely stored as orphaned assets"}
@@ -184,31 +184,31 @@ export default function DeleteResultPage() {
             {/* Main stats card */}
             <div className="bg-gray-50 rounded-xl p-6 border-2 border-gray-200 shadow-sm">
               <div className="flex items-baseline justify-center gap-3">
-                <span className="text-5xl font-bold text-gray-900">
+                <span className="text-5xl font-bold text-foreground">
                   {resultData.quantity}
                 </span>
-                <span className="text-2xl font-semibold text-gray-600">
+                <span className="text-2xl font-semibold text-muted-foreground">
                   {resultData.symbol}
                 </span>
               </div>
-              <p className="text-center text-base text-gray-600 mt-3">
+              <p className="text-center text-base text-muted-foreground mt-3">
                 {isSellChoice ? "Sold at market price" : "Saved to wallet"}
               </p>
             </div>
 
             {/* Details grid */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              <h3 className="text-lg font-semibold text-foreground mb-4">
                 Transaction Details
               </h3>
 
               {/* OCO Orders Cancelled */}
               {resultData.ocoCount > 0 && (
                 <div className="flex items-center justify-between py-3 border-b border-gray-200">
-                  <span className="text-sm font-medium text-gray-600">
+                  <span className="text-sm font-medium text-muted-foreground">
                     OCO Orders Cancelled
                   </span>
-                  <span className="text-sm font-bold text-gray-900">
+                  <span className="text-sm font-bold text-foreground">
                     {resultData.ocoCount}{" "}
                     {resultData.ocoCount === 1 ? "order" : "orders"}
                   </span>
@@ -218,10 +218,10 @@ export default function DeleteResultPage() {
               {/* Sell Order ID (for sell choice) */}
               {isSellChoice && resultData.sellOrderId && (
                 <div className="flex items-center justify-between py-3 border-b border-gray-200">
-                  <span className="text-sm font-medium text-gray-600">
+                  <span className="text-sm font-medium text-muted-foreground">
                     Sell Order ID
                   </span>
-                  <span className="text-sm font-mono font-bold text-gray-900 bg-gray-100 px-3 py-1 rounded">
+                  <span className="text-sm font-mono font-bold text-foreground bg-gray-100 px-3 py-1 rounded">
                     {resultData.sellOrderId}
                   </span>
                 </div>
@@ -230,10 +230,10 @@ export default function DeleteResultPage() {
               {/* Orphaned Coin ID (for keep choice) */}
               {isKeepChoice && resultData.orphanedCoinId && (
                 <div className="flex items-center justify-between py-3">
-                  <span className="text-sm font-medium text-gray-600">
+                  <span className="text-sm font-medium text-muted-foreground">
                     Asset ID
                   </span>
-                  <span className="text-sm font-mono text-gray-900 bg-gray-100 px-3 py-1 rounded truncate max-w-[250px]">
+                  <span className="text-sm font-mono text-foreground bg-gray-100 px-3 py-1 rounded truncate max-w-[250px]">
                     {resultData.orphanedCoinId.slice(0, 12)}...
                     {resultData.orphanedCoinId.slice(-8)}
                   </span>

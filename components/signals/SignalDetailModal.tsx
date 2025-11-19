@@ -1113,7 +1113,7 @@ export default function SignalDetailModal({
           <Separator />
 
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
               <Target className="h-4 w-4" />
               Entry Prices
             </div>
@@ -1128,7 +1128,7 @@ export default function SignalDetailModal({
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <TrendingUp className="h-4 w-4" />
                 Target Prices
               </div>
@@ -1145,7 +1145,7 @@ export default function SignalDetailModal({
                       className={`text-xs ${
                         getFilledTargets().size > 0
                           ? 'bg-green-100 text-green-800 border-green-300'
-                          : 'bg-gray-100 text-gray-600 border-gray-300'
+                          : 'bg-gray-100 text-muted-foreground border-gray-300'
                       }`}
                     >
                       {getFilledTargets().size > 0 && <CheckCircle2 className="h-3 w-3 mr-1 inline" />}
@@ -1180,7 +1180,7 @@ export default function SignalDetailModal({
           </div>
 
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
               <AlertTriangle className="h-4 w-4" />
               Stop Loss
             </div>
@@ -1202,7 +1202,7 @@ export default function SignalDetailModal({
           <Separator />
 
           <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
               {signal.isImageSignal ? <ImageIcon className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
               Signal Type: {signal.isImageSignal ? "Image" : "Text"}
             </div>
@@ -1220,7 +1220,7 @@ export default function SignalDetailModal({
             )}
 
             <div className="space-y-2">
-              <p className="text-sm font-medium text-gray-700">Raw Signal:</p>
+              <p className="text-sm font-medium text-foreground">Raw Signal:</p>
               <pre className="bg-gray-50 p-3 rounded-lg text-xs overflow-x-auto border">
                 {signal.rawSignal}
               </pre>
@@ -1252,7 +1252,7 @@ export default function SignalDetailModal({
             <>
               <Separator />
               <div className="space-y-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                   <ListOrdered className="h-4 w-4" />
                   Trade Execution Details
                 </div>
@@ -1303,7 +1303,7 @@ export default function SignalDetailModal({
                             </div>
                             <div className="grid grid-cols-2 gap-3 text-sm">
                               <div>
-                                <span className="text-gray-600 font-medium">Close Reason:</span>
+                                <span className="text-muted-foreground font-medium">Close Reason:</span>
                                 <div className={`mt-1 font-bold ${
                                   closeDetails.closeType === "stop_loss"
                                     ? "text-red-700"
@@ -1317,20 +1317,20 @@ export default function SignalDetailModal({
                                 </div>
                               </div>
                               <div>
-                                <span className="text-gray-600 font-medium">Exit Price:</span>
-                                <div className="mt-1 font-bold text-gray-900">
+                                <span className="text-muted-foreground font-medium">Exit Price:</span>
+                                <div className="mt-1 font-bold text-foreground">
                                   ${closeDetails.exitPrice?.toFixed(6)}
                                 </div>
                               </div>
                               <div>
-                                <span className="text-gray-600 font-medium">Entry Price:</span>
-                                <div className="mt-1 font-medium text-gray-700">
+                                <span className="text-muted-foreground font-medium">Entry Price:</span>
+                                <div className="mt-1 font-medium text-foreground">
                                   ${trade.buyOrder.price?.toFixed(6)}
                                 </div>
                               </div>
                               <div>
-                                <span className="text-gray-600 font-medium">Invested Amount:</span>
-                                <div className="mt-1 font-medium text-gray-700">
+                                <span className="text-muted-foreground font-medium">Invested Amount:</span>
+                                <div className="mt-1 font-medium text-foreground">
                                   ${trade.investedAmount.toFixed(2)} USDT
                                 </div>
                               </div>
@@ -1346,21 +1346,21 @@ export default function SignalDetailModal({
                       <div className="text-xs font-semibold text-blue-900 mb-2">BUY ORDER</div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div>
-                          <span className="text-gray-600">Order ID:</span>
+                          <span className="text-muted-foreground">Order ID:</span>
                           <span className="ml-2 font-mono text-blue-700">{trade.buyOrder.orderId}</span>
                         </div>
                         <div>
-                          <span className="text-gray-600">Status:</span>
+                          <span className="text-muted-foreground">Status:</span>
                           <Badge className="ml-2" variant={trade.buyOrder.status === "FILLED" ? "default" : "secondary"}>
                             {trade.buyOrder.status}
                           </Badge>
                         </div>
                         <div>
-                          <span className="text-gray-600">Quantity:</span>
+                          <span className="text-muted-foreground">Quantity:</span>
                           <span className="ml-2 font-medium">{trade.buyOrder.quantity.toFixed(6)}</span>
                         </div>
                         <div>
-                          <span className="text-gray-600">Invested:</span>
+                          <span className="text-muted-foreground">Invested:</span>
                           <span className="ml-2 font-medium">${trade.investedAmount.toFixed(2)}</span>
                         </div>
                       </div>
@@ -1388,7 +1388,7 @@ export default function SignalDetailModal({
                     ) : trade?.sellOrders && trade.sellOrders.length > 0 ? (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <div className="text-xs font-semibold text-gray-700">
+                          <div className="text-xs font-semibold text-foreground">
                             OCO SELL ORDERS (Take Profit & Stop Loss)
                           </div>
                           {fetchingOcoStatus && (
@@ -1425,7 +1425,7 @@ export default function SignalDetailModal({
                                 return (
                                   <div key={order.orderId} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
                                     <div className="flex items-center justify-between mb-2">
-                                      <span className="text-xs font-semibold text-gray-700">
+                                      <span className="text-xs font-semibold text-foreground">
                                         Order #{order.orderId}
                                       </span>
                                       <Badge variant="outline">{displayStatus}</Badge>
@@ -1479,7 +1479,7 @@ export default function SignalDetailModal({
                                 }`}>
                                   <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-xs font-bold text-gray-800">
+                                      <span className="text-xs font-bold text-foreground">
                                         Take Profit #{currentTpIndex}
                                       </span>
                                       {tpTriggered && (
@@ -1506,31 +1506,31 @@ export default function SignalDetailModal({
                                   </div>
                                   <div className="grid grid-cols-2 gap-2 text-xs">
                                     <div>
-                                      <span className="text-gray-600">Target Price:</span>
+                                      <span className="text-muted-foreground">Target Price:</span>
                                       <span className="ml-2 font-medium text-green-700">
                                         ${formatPrice(takeProfit.price || 0)}
                                       </span>
                                     </div>
                                     <div>
-                                      <span className="text-gray-600">Quantity:</span>
+                                      <span className="text-muted-foreground">Quantity:</span>
                                       <span className="ml-2">{takeProfit.quantity.toFixed(6)}</span>
                                     </div>
                                     {tpExecutedQty > 0 && (
                                       <>
                                         <div>
-                                          <span className="text-gray-600">Executed:</span>
+                                          <span className="text-muted-foreground">Executed:</span>
                                           <span className="ml-2 font-semibold text-green-600">
                                             {tpExecutedQty.toFixed(6)}
                                           </span>
                                         </div>
                                         <div>
-                                          <span className="text-gray-600">Filled Value:</span>
+                                          <span className="text-muted-foreground">Filled Value:</span>
                                           <span className="ml-2 font-medium">${tpFilledValue.toFixed(2)}</span>
                                         </div>
                                       </>
                                     )}
                                     <div className="col-span-2">
-                                      <span className="text-gray-600">Order ID:</span>
+                                      <span className="text-muted-foreground">Order ID:</span>
                                       <span className="ml-2 font-mono text-xs">{takeProfit.orderId}</span>
                                     </div>
                                   </div>
@@ -1553,7 +1553,7 @@ export default function SignalDetailModal({
                                 }`}>
                                   <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-xs font-bold text-gray-800">
+                                      <span className="text-xs font-bold text-foreground">
                                         Stop Loss for TP #{currentTpIndex}
                                       </span>
                                       {slTriggered && (
@@ -1573,31 +1573,31 @@ export default function SignalDetailModal({
                                   </div>
                                   <div className="grid grid-cols-2 gap-2 text-xs">
                                     <div>
-                                      <span className="text-gray-600">Stop Price:</span>
+                                      <span className="text-muted-foreground">Stop Price:</span>
                                       <span className="ml-2 font-medium text-red-700">
                                         ${formatPrice(stopLoss.stopPrice || 0)}
                                       </span>
                                     </div>
                                     <div>
-                                      <span className="text-gray-600">Quantity:</span>
+                                      <span className="text-muted-foreground">Quantity:</span>
                                       <span className="ml-2">{stopLoss.quantity.toFixed(6)}</span>
                                     </div>
                                     {slExecutedQty > 0 && (
                                       <>
                                         <div>
-                                          <span className="text-gray-600">Executed:</span>
+                                          <span className="text-muted-foreground">Executed:</span>
                                           <span className="ml-2 font-semibold text-red-600">
                                             {slExecutedQty.toFixed(6)}
                                           </span>
                                         </div>
                                         <div>
-                                          <span className="text-gray-600">Filled Value:</span>
+                                          <span className="text-muted-foreground">Filled Value:</span>
                                           <span className="ml-2 font-medium">${slFilledValue.toFixed(2)}</span>
                                         </div>
                                       </>
                                     )}
                                     <div className="col-span-2">
-                                      <span className="text-gray-600">Order ID:</span>
+                                      <span className="text-muted-foreground">Order ID:</span>
                                       <span className="ml-2 font-mono text-xs">{stopLoss.orderId}</span>
                                     </div>
                                   </div>
@@ -1610,7 +1610,7 @@ export default function SignalDetailModal({
                                   )}
                                   {slStatus === 'CANCELED' && tpTriggered && (
                                     <div className="mt-2 pt-2 border-t border-gray-300">
-                                      <span className="text-xs text-gray-600">
+                                      <span className="text-xs text-muted-foreground">
                                         Auto-cancelled when take profit filled
                                       </span>
                                     </div>
@@ -1672,18 +1672,18 @@ export default function SignalDetailModal({
                       <div className="text-xs font-semibold text-purple-900 mb-2">TRADE SUMMARY</div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div>
-                          <span className="text-gray-600">Trade Status:</span>
+                          <span className="text-muted-foreground">Trade Status:</span>
                           <Badge className="ml-2" variant="default">
                             {trade.status.toUpperCase()}
                           </Badge>
                         </div>
                         <div>
-                          <span className="text-gray-600">Entry Price:</span>
+                          <span className="text-muted-foreground">Entry Price:</span>
                           <span className="ml-2 font-medium">${formatPrice(trade.entryPrice)}</span>
                         </div>
                         {trade.exitPrice && (
                           <div>
-                            <span className="text-gray-600">Exit Price:</span>
+                            <span className="text-muted-foreground">Exit Price:</span>
                             <span className="ml-2 font-medium">${formatPrice(trade.exitPrice)}</span>
                           </div>
                         )}
@@ -1714,7 +1714,7 @@ export default function SignalDetailModal({
 
                           return (
                             <div>
-                              <span className="text-gray-600">Realized P&L:</span>
+                              <span className="text-muted-foreground">Realized P&L:</span>
                               <span className={`ml-2 font-bold ${displayPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
                                 ${displayPnL.toFixed(2)} ({displayPercentage.toFixed(2)}%)
                               </span>
@@ -1728,7 +1728,7 @@ export default function SignalDetailModal({
                         })()}
                         {(trade.closeReasonDetail || trade.closeReason) && (
                           <div>
-                            <span className="text-gray-600">Close Reason:</span>
+                            <span className="text-muted-foreground">Close Reason:</span>
                             <Badge className="ml-2" variant={trade.closeReason === "stop_loss" ? "destructive" : "default"}>
                               {trade.closeReasonDetail || trade.closeReason?.replace("_", " ").toUpperCase()}
                             </Badge>
