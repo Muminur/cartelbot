@@ -129,6 +129,7 @@ export function TradeDetailModal({
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+          <DialogTitle className="sr-only">Loading Trade Details</DialogTitle>
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
           </div>
