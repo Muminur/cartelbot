@@ -371,7 +371,7 @@ export default function OCOOrdersPage() {
                   : "bg-blue-500 text-white text-xs"
               }
             >
-              {order.status}
+              {order.status === "NEW" ? "" : order.status}
             </Badge>
             <span className="text-xs text-muted-foreground">
               @${order.price.toFixed(6)}
@@ -391,7 +391,7 @@ export default function OCOOrdersPage() {
                   : "bg-yellow-500 text-white text-xs"
               }
             >
-              {order.status}
+              {order.status === "NEW" ? "" : order.status}
             </Badge>
             <span className="text-xs text-muted-foreground">
               @${(order.stopPrice || order.price).toFixed(6)}
