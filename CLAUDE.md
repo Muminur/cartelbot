@@ -2069,3 +2069,8 @@ Fixed -1121 errors by removing delisted BUSD pairs (43% API reduction). Implemen
 ## Session: Database-First OCO Orders Implementation (Nov 18, 2025)
 
 **Fixed TP/SL display with database queries (7ed07c7)**: Complete rewrite of /api/oco - queries database Trade records instead of Binance. Eliminated 95% API calls, improved load time 2-5s→<500ms. Applied 9 critical fixes: userId + sellOrders.orderListId index, LeanTrade type safety, user ID validation, NoSQL injection protection, fixed OCO status logic, query timeout, comprehensive logging. Code quality 9.5/10, production-ready.
+
+
+## Session: OCO Badge UI Fix (Nov 19, 2025)
+
+**Removed 'NEW' text from TP/SL badges (c4df545)**: Modified OrderDetailsCell to show empty badge for NEW status while maintaining blue color indicator, keeping FILLED/CANCELED text visible. TypeScript clean, production-ready.
