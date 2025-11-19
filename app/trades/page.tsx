@@ -8,13 +8,16 @@ import { TradeStats } from "@/components/trades/TradeStats";
 import { ActiveTradesTable } from "@/components/trades/ActiveTradesTable";
 import { TradeHistoryTable } from "@/components/trades/TradeHistoryTable";
 import { TradeFilters, TradeFilterValues } from "@/components/trades/TradeFilters";
-import { Loader2, Activity, History } from "lucide-react";
+import { Loader2, Activity, History, RefreshCw } from "lucide-react";
 import { ITrade } from "@/types";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export default function TradesPage() {
   const [activeTrades, setActiveTrades] = useState<ITrade[]>([]);
   const [historyTrades, setHistoryTrades] = useState<ITrade[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [activeFilters, setActiveFilters] = useState<TradeFilterValues>({});
   const [historyFilters, setHistoryFilters] = useState<TradeFilterValues>({});
 
@@ -116,15 +119,58 @@ export default function TradesPage() {
     setHistoryFilters(filters);
   };
 
+  const handleSyncStatus = async () => {
+    setSyncing(true);
+    try {
+      const response = await fetch("/api/trades/sync-status", {
+        method: "POST",
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error?.message || "Failed to sync trade statuses");
+      }
+
+      toast.success(
+        data.data.updatedCount > 0
+          ? `${data.data.updatedCount} trade(s) status updated`
+          : "All trade statuses are up to date"
+      );
+
+      // Refresh trades after sync
+      await fetchTrades();
+    } catch (error) {
+      console.error("Error syncing trade statuses:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to sync trade statuses"
+      );
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
         {/* Page Header */}
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Trades</h1>
-          <p className="text-gray-600 mt-1">
-            Manage your active positions and view trade history
-          </p>
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Trades</h1>
+            <p className="text-gray-600 mt-1">
+              Manage your active positions and view trade history
+            </p>
+          </div>
+          <Button
+            onClick={handleSyncStatus}
+            disabled={syncing}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Syncing..." : "Sync Status"}
+          </Button>
         </div>
 
         {/* Trade Statistics */}

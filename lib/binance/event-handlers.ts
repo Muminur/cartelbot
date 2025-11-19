@@ -1,6 +1,11 @@
 import { Trade, Signal } from "@/lib/db/models";
 import { BinanceWebSocketEvent } from "./websocket-manager";
 import { markSignalCompleted } from "./signal-status-manager";
+import {
+  sendTradeExecutedNotification,
+  sendTargetHitNotification,
+  sendStopLossHitNotification,
+} from "@/lib/email/notifications";
 
 interface ExecutionReportEvent {
   e: "executionReport";
@@ -94,6 +99,21 @@ export async function handleExecutionReport(event: BinanceWebSocketEvent): Promi
       if (orderStatus === "FILLED") {
         const avgPrice = cummulativeQuoteQty / executedQty;
         trade.entryPrice = avgPrice;
+
+        // Send trade executed notification for BUY orders
+        sendTradeExecutedNotification({
+          userId: trade.userId,
+          tradeId: trade._id,
+          symbol: data.s,
+          side: "BUY",
+          quantity: executedQty,
+          price: avgPrice,
+          totalAmount: cummulativeQuoteQty,
+          timestamp: new Date(data.T),
+          orderId: data.i,
+        }).catch((error) => {
+          console.error("[Notification] Failed to send trade executed email:", error);
+        });
       }
     } else {
       const sellOrderIndex = trade.sellOrders.findIndex(
@@ -106,6 +126,51 @@ export async function handleExecutionReport(event: BinanceWebSocketEvent): Promi
         trade.sellOrders[sellOrderIndex].cummulativeQuoteQty = cummulativeQuoteQty;
 
         if (orderStatus === "FILLED") {
+          const currentOrder = trade.sellOrders[sellOrderIndex];
+          const isStopLoss = currentOrder.type === "STOP_LOSS_LIMIT";
+
+          // Send notification based on order type
+          if (isStopLoss) {
+            // Stop Loss Hit
+            const buyCost = trade.buyOrder.cummulativeQuoteQty;
+            const loss = cummulativeQuoteQty - buyCost;
+
+            sendStopLossHitNotification({
+              userId: trade.userId,
+              tradeId: trade._id,
+              symbol: data.s,
+              stopLossPrice: currentOrder.stopPrice || currentOrder.price,
+              executedQuantity: executedQty,
+              loss: loss,
+              timestamp: new Date(data.T),
+              orderId: data.i,
+            }).catch((error) => {
+              console.error("[Notification] Failed to send stop loss email:", error);
+            });
+          } else {
+            // Target Hit (Take Profit)
+            const targetNumber = sellOrderIndex + 1; // TP #1, TP #2, etc.
+            const remainingTargets = trade.sellOrders.filter(
+              (order: { status: string; type: string }) =>
+                order.status !== "FILLED" && order.type !== "STOP_LOSS_LIMIT"
+            ).length;
+
+            sendTargetHitNotification({
+              userId: trade.userId,
+              tradeId: trade._id,
+              symbol: data.s,
+              targetNumber: targetNumber,
+              targetPrice: currentOrder.price,
+              executedQuantity: executedQty,
+              revenue: cummulativeQuoteQty,
+              timestamp: new Date(data.T),
+              orderId: data.i,
+              remainingTargets: remainingTargets,
+            }).catch((error) => {
+              console.error("[Notification] Failed to send target hit email:", error);
+            });
+          }
+
           const totalExecutedQty = trade.sellOrders.reduce(
             (sum: number, order: { executedQty: number }) => sum + order.executedQty,
             0
@@ -113,8 +178,8 @@ export async function handleExecutionReport(event: BinanceWebSocketEvent): Promi
 
           if (totalExecutedQty >= trade.quantity * 0.99) {
             trade.status = "closed";
-            trade.closeReason = "target";
-            trade.closeReasonDetail = "Target Hit";
+            trade.closeReason = isStopLoss ? "stop_loss" : "target";
+            trade.closeReasonDetail = isStopLoss ? "Stop Loss Hit" : "Target Hit";
 
             // Get actual buy cost from Binance (what was actually spent)
             const buyCost = trade.buyOrder.cummulativeQuoteQty;
@@ -132,7 +197,11 @@ export async function handleExecutionReport(event: BinanceWebSocketEvent): Promi
 
             // Update signal status when trade closes
             if (trade.signalId) {
-              await markSignalCompleted(trade.signalId, trade._id, "target");
+              await markSignalCompleted(
+                trade.signalId,
+                trade._id,
+                isStopLoss ? "stop_loss" : "target"
+              );
             }
           } else {
             trade.status = "partial";
@@ -213,19 +282,59 @@ export async function handleListStatus(event: BinanceWebSocketEvent): Promise<vo
               trade.realizedPnL = sellRevenue - buyCost;
               trade.status = "closed";
 
-              if (data.r === "STOP_LOSS_LIMIT") {
+              const isStopLoss = data.r === "STOP_LOSS_LIMIT";
+
+              if (isStopLoss) {
                 trade.closeReason = "stop_loss";
                 trade.closeReasonDetail = "Stop Loss Hit";
+
+                // Send stop loss notification (OCO complete)
+                const stopLossOrder = filledOrders.find(
+                  (order: { type: string }) => order.type === "STOP_LOSS_LIMIT"
+                );
+                if (stopLossOrder) {
+                  sendStopLossHitNotification({
+                    userId: trade.userId,
+                    tradeId: trade._id,
+                    symbol: trade.symbol,
+                    stopLossPrice: stopLossOrder.stopPrice || stopLossOrder.price,
+                    executedQuantity: totalExecutedQty,
+                    loss: trade.realizedPnL,
+                    timestamp: new Date(data.T),
+                    orderId: stopLossOrder.orderId,
+                  }).catch((error) => {
+                    console.error("[Notification] Failed to send stop loss email:", error);
+                  });
+                }
               } else {
                 trade.closeReason = "target";
                 trade.closeReasonDetail = "Target Hit";
+
+                // Send final target hit notification (OCO complete - all targets hit)
+                const lastTarget = filledOrders.filter(
+                  (order: { type: string }) => order.type !== "STOP_LOSS_LIMIT"
+                ).length;
+                sendTargetHitNotification({
+                  userId: trade.userId,
+                  tradeId: trade._id,
+                  symbol: trade.symbol,
+                  targetNumber: lastTarget,
+                  targetPrice: trade.exitPrice,
+                  executedQuantity: totalExecutedQty,
+                  revenue: sellRevenue,
+                  timestamp: new Date(data.T),
+                  orderId: filledOrders[filledOrders.length - 1].orderId,
+                  remainingTargets: 0,
+                }).catch((error) => {
+                  console.error("[Notification] Failed to send target hit email:", error);
+                });
               }
 
               await trade.save();
 
               // Update signal status when trade closes (via OCO list status)
               if (trade.signalId) {
-                const reason = data.r === "STOP_LOSS_LIMIT" ? "stop_loss" : "target";
+                const reason = isStopLoss ? "stop_loss" : "target";
                 await markSignalCompleted(trade.signalId, trade._id, reason);
               }
             }
