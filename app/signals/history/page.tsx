@@ -323,8 +323,8 @@ function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<t
               Back
             </Button>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Signal History</h1>
-              <p className="text-gray-600 mt-1">View and manage all your submitted signals</p>
+              <h1 className="text-3xl font-bold text-foreground">Signal History</h1>
+              <p className="text-muted-foreground mt-1">View and manage all your submitted signals</p>
             </div>
           </div>
           <Button onClick={handleRefresh} disabled={refreshing} variant="outline">
@@ -444,7 +444,7 @@ function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<t
 
                   {totalPages > 1 && (
                     <div className="flex items-center justify-between mt-4">
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-muted-foreground">
                         Page {page} of {totalPages}
                       </p>
                       <div className="flex items-center space-x-2">

@@ -157,7 +157,7 @@ export default function TradesPage() {
         <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Trades</h1>
-            <p className="text-gray-600 mt-1">
+            <p className="text-muted-foreground mt-1">
               Manage your active positions and view trade history
             </p>
           </div>
@@ -192,7 +192,7 @@ export default function TradesPage() {
               <History className="h-4 w-4" />
               Trade History
               {historyTrades.length > 0 && (
-                <span className="ml-1 px-2 py-0.5 text-xs bg-gray-100 text-gray-800 rounded-full">
+                <span className="ml-1 px-2 py-0.5 text-xs bg-muted text-foreground rounded-full">
                   {historyTrades.length}
                 </span>
               )}

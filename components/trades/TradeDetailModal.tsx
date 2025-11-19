@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,9 +11,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, ExternalLink, TrendingUp, TrendingDown } from "lucide-react";
+import { Loader2, ExternalLink, TrendingUp, TrendingDown, RefreshCw, Radio } from "lucide-react";
 import { formatCurrency, formatNumber, formatSymbol, formatDate } from "@/lib/utils/format";
-import { ITrade } from "@/types";
+import { ITrade, IOrder } from "@/types";
 import { useRouter } from "next/navigation";
 import { ClosePositionDialog } from "./ClosePositionDialog";
 
@@ -24,6 +24,9 @@ interface TradeDetailModalProps {
   onTradeUpdated?: () => void;
 }
 
+// Constants for refresh intervals
+const ORDER_STATUS_REFRESH_INTERVAL_MS = 10000; // 10 seconds
+
 export function TradeDetailModal({
   open,
   onOpenChange,
@@ -33,7 +36,9 @@ export function TradeDetailModal({
   const router = useRouter();
   const [trade, setTrade] = useState<ITrade | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchingOrderStatus, setFetchingOrderStatus] = useState(false);
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
 
   useEffect(() => {
     if (open && tradeId) {
@@ -56,6 +61,89 @@ export function TradeDetailModal({
       setLoading(false);
     }
   };
+
+  // Fetch real-time order statuses from Binance API (NOT database)
+  const fetchOrderStatuses = useCallback(async () => {
+    if (!trade || !trade.sellOrders || trade.sellOrders.length === 0) return;
+
+    // Only fetch if we have order IDs
+    const ordersToCheck = trade.sellOrders
+      .filter((order: IOrder) => order.orderListId !== undefined)
+      .map((order: IOrder) => ({
+        symbol: trade.symbol,
+        orderId: order.orderId,
+        orderListId: order.orderListId!,
+      }));
+
+    if (ordersToCheck.length === 0) return;
+
+    setFetchingOrderStatus(true);
+
+    try {
+      const orderStatusResponse = await fetch("/api/trades/orders/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orders: ordersToCheck }),
+      });
+
+      const orderStatusData = await orderStatusResponse.json();
+
+      if (orderStatusData.success && orderStatusData.data?.orders) {
+        // Update trade.sellOrders with real-time statuses from Binance
+        const updatedSellOrders = trade.sellOrders.map((order: IOrder) => {
+          const liveStatus = orderStatusData.data.orders.find(
+            (o: any) => o.orderId === order.orderId
+          );
+
+          if (liveStatus && liveStatus.status !== "NOT_FOUND" && liveStatus.status !== "ERROR") {
+            return {
+              ...order,
+              status: liveStatus.status, // Update with real FILLED/CANCELED status from Binance
+              executedQty: parseFloat(liveStatus.executedQty || "0"),
+              cummulativeQuoteQty: parseFloat(liveStatus.cummulativeQuoteQty || "0"),
+            };
+          }
+
+          return order;
+        });
+
+        // Update trade state with live order statuses
+        setTrade((prevTrade) => {
+          if (!prevTrade) return prevTrade;
+          return {
+            ...prevTrade,
+            sellOrders: updatedSellOrders,
+          } as ITrade;
+        });
+
+        // Update last sync time
+        setLastSyncTime(new Date());
+      }
+    } catch (error) {
+      console.error("Error fetching order statuses:", error);
+    } finally {
+      setFetchingOrderStatus(false);
+    }
+  }, [trade]);
+
+  // Fetch order statuses when trade is loaded
+  useEffect(() => {
+    if (trade && open) {
+      fetchOrderStatuses();
+    }
+  }, [trade?._id, open, fetchOrderStatuses]);
+
+  // Auto-refresh order statuses every 10 seconds for open trades
+  useEffect(() => {
+    if (!trade || !open) return;
+    if (trade.status !== "open" && trade.status !== "partial") return;
+
+    const intervalId = setInterval(() => {
+      fetchOrderStatuses();
+    }, ORDER_STATUS_REFRESH_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [trade?.status, open, fetchOrderStatuses]);
 
   const handleViewSignal = () => {
     if (trade?.signalId) {
@@ -161,8 +249,14 @@ export function TradeDetailModal({
                 )}
               </div>
             </div>
-            <DialogDescription>
-              Trade ID: {String(trade._id)}
+            <DialogDescription className="flex items-center justify-between">
+              <span>Trade ID: {String(trade._id)}</span>
+              {lastSyncTime && (
+                <span className="flex items-center gap-1 text-xs text-green-600">
+                  <Radio className="h-3 w-3 animate-pulse" />
+                  Live data from Binance (synced {lastSyncTime.toLocaleTimeString()})
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -286,7 +380,28 @@ export function TradeDetailModal({
             {/* Sell Orders */}
             {trade.sellOrders && trade.sellOrders.length > 0 && (
               <div>
-                <h3 className="font-semibold mb-3">Sell Orders ({trade.sellOrders.length})</h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold">Sell Orders ({trade.sellOrders.length})</h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fetchOrderStatuses}
+                    disabled={fetchingOrderStatus}
+                    className="h-8"
+                  >
+                    {fetchingOrderStatus ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        Syncing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Refresh Status
+                      </>
+                    )}
+                  </Button>
+                </div>
                 <div className="space-y-3">
                   {trade.sellOrders.map((order, index) => (
                     <div key={index} className="bg-gray-50 p-4 rounded-lg space-y-2">
