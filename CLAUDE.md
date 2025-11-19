@@ -422,6 +422,10 @@ UserSchema.index({ email: 1 }, { unique: true });
 
 **Milestone 9 Completed**: Built production-ready admin interface (10 files, 1,888 LOC) with user management (search/suspend/tier override), system monitoring (DB/WS health, memory, uptime), signal monitoring (success metrics, status filters). Fixed critical NoSQL injection via regex sanitization, type safety violations (replaced all `any`), client-side auth verification, memory leaks (AbortController). Production build: 44s, 50 routes, TypeScript clean. Code quality 9.0/10 (Security 9.5/10, Type Safety 10/10).
 
+## Session: Trade Status Sync Fix (Nov 19, 2025)
+
+**Fixed trade status display (commit 1489063)**: Created POST /api/trades/sync-status querying Binance for real-time order status. Fixed target calculation showing actual positions (1,3,4 not 1,2,3), added 50-trade limit + API weight tracking. Syncs stale trades to "closed" when all orders filled/canceled. Added "Sync Status" button with spinner. Code quality 9.0/10.
+
 ---
 
 ## Session: OCO Order Network Configuration Fix (Nov 17, 2025)
