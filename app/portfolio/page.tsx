@@ -1,5 +1,15 @@
 "use client";
 
+/**
+ * Portfolio Page - Container Component
+ *
+ * Responsibilities:
+ * - Session management
+ * - WebSocket connection with debouncing
+ * - Refresh orchestration
+ * - Layout structure
+ */
+
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -14,17 +24,21 @@ export default function PortfolioPage() {
   const router = useRouter();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [needsRefresh, setNeedsRefresh] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // WebSocket connection for real-time updates
   const { isConnected } = useWebSocketStream({
     autoConnect: true,
     onEvent: (event) => {
+      // Set flag instead of immediate refresh (debouncing pattern)
       if (event.type === "executionReport" || event.type === "outboundAccountPosition") {
-        setRefreshKey((prev) => prev + 1);
+        setNeedsRefresh(true);
       }
     },
   });
 
+  // Fetch user session
   useEffect(() => {
     const fetchSession = async () => {
       try {
@@ -47,10 +61,25 @@ export default function PortfolioPage() {
     fetchSession();
   }, [router]);
 
+  // Debounced refresh: Wait 2 seconds after last WebSocket event
+  // This prevents rapid refresh cascades from multiple events
+  useEffect(() => {
+    if (!needsRefresh) return;
+
+    const timeout = setTimeout(() => {
+      setRefreshKey(prev => prev + 1);
+      setNeedsRefresh(false);
+    }, 2000);
+
+    return () => clearTimeout(timeout);
+  }, [needsRefresh]);
+
+  // Manual refresh handler
   const handleRefresh = () => {
-    setRefreshKey((prev) => prev + 1);
+    setRefreshKey(prev => prev + 1);
   };
 
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -59,6 +88,7 @@ export default function PortfolioPage() {
     );
   }
 
+  // Unauthorized state
   if (!user) {
     return null;
   }
@@ -69,14 +99,16 @@ export default function PortfolioPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Portfolio</h1>
-            <p className="text-muted-foreground mt-2">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+              Portfolio
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-2">
               View your complete Binance portfolio with real-time prices
             </p>
           </div>
           <div className="flex items-center gap-3">
             {isConnected && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-sm">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-sm">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 Live
               </div>
@@ -86,6 +118,7 @@ export default function PortfolioPage() {
               variant="outline"
               size="sm"
               className="flex items-center gap-2"
+              aria-label="Refresh portfolio"
             >
               <RefreshCw className="w-4 h-4" />
               Refresh
@@ -94,7 +127,8 @@ export default function PortfolioPage() {
         </div>
 
         {/* Portfolio Widget */}
-        <PortfolioWidget key={`portfolio-${refreshKey}`} />
+        {/* Key prop removed - usePortfolioData hook handles refreshing internally */}
+        <PortfolioWidget onRefresh={handleRefresh} />
       </div>
     </DashboardLayout>
   );
