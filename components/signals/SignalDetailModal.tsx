@@ -108,20 +108,39 @@ const calculatePnLFromOrders = (trade: ITrade | null): { pnl: number; percentage
   }
 
   // Calculate P&L using cummulativeQuoteQty (actual USDT spent/received from Binance)
-  const buyCost = trade.buyOrder.cummulativeQuoteQty || 0;
+  const totalBuyCost = trade.buyOrder.cummulativeQuoteQty || 0;
+  const totalBoughtQuantity = trade.buyOrder.executedQty || 0;
+
   const sellRevenue = filledOrders.reduce(
     (sum: number, order: IOrder) => sum + (order.cummulativeQuoteQty || 0),
     0
   );
 
-  if (buyCost === 0) {
+  const soldQuantity = filledOrders.reduce(
+    (sum: number, order: IOrder) => sum + (order.executedQty || 0),
+    0
+  );
+
+  if (totalBuyCost === 0 || totalBoughtQuantity === 0) {
     return null; // Avoid division by zero
   }
 
-  const pnl = sellRevenue - buyCost;
-  // CRITICAL FIX #1: Division by Zero Protection
-  const percentage = trade.investedAmount > 0
-    ? (pnl / trade.investedAmount) * 100
+  // CRITICAL FIX: For partial fills (OPEN trades), use proportional buy cost
+  // For closed trades (ALL targets filled or SL hit), use total buy cost
+  let proportionalBuyCost: number;
+
+  if (trade.status === "open" && soldQuantity < totalBoughtQuantity) {
+    // OPEN trade with partial fills: only count cost of sold portion
+    // Formula: buyCost × (soldQuantity / totalBoughtQuantity)
+    proportionalBuyCost = totalBuyCost * (soldQuantity / totalBoughtQuantity);
+  } else {
+    // CLOSED trade or all quantity sold: use total buy cost
+    proportionalBuyCost = totalBuyCost;
+  }
+
+  const pnl = sellRevenue - proportionalBuyCost;
+  const percentage = proportionalBuyCost > 0
+    ? (pnl / proportionalBuyCost) * 100
     : 0;
 
   return { pnl, percentage };
@@ -892,23 +911,43 @@ export default function SignalDetailModal({
 
     // CRITICAL FIX #2: Use actual Binance execution prices instead of order prices for P&L
     // Add null coalescing to prevent division by zero
-    const buyCost = trade.buyOrder.cummulativeQuoteQty || 0;
-    const sellRevenue = trade.sellOrders
-      .filter((order: IOrder) => {
-        const ocoStatus = order.orderListId ? ocoStatuses.get(order.orderListId) : null;
-        const realOrderStatus = ocoStatus?.orderReports?.find(
-          (report: BinanceOCOOrderReport) => report.orderId === order.orderId
-        );
-        const displayStatus = realOrderStatus?.status || order.status;
-        return displayStatus === "FILLED";
-      })
-      .reduce((sum: number, order: IOrder) => sum + (order.cummulativeQuoteQty || 0), 0);
+    const totalBuyCost = trade.buyOrder.cummulativeQuoteQty || 0;
+    const totalBoughtQuantity = trade.buyOrder.executedQty || 0;
 
-    // CRITICAL FIX #2: Calculate P&L percentage with validation to prevent division by zero
+    const filledSellOrders = trade.sellOrders.filter((order: IOrder) => {
+      const ocoStatus = order.orderListId ? ocoStatuses.get(order.orderListId) : null;
+      const realOrderStatus = ocoStatus?.orderReports?.find(
+        (report: BinanceOCOOrderReport) => report.orderId === order.orderId
+      );
+      const displayStatus = realOrderStatus?.status || order.status;
+      return displayStatus === "FILLED";
+    });
+
+    const sellRevenue = filledSellOrders.reduce(
+      (sum: number, order: IOrder) => sum + (order.cummulativeQuoteQty || 0),
+      0
+    );
+
+    const soldQuantity = filledSellOrders.reduce(
+      (sum: number, order: IOrder) => sum + (order.executedQty || 0),
+      0
+    );
+
+    // CRITICAL FIX #2: Calculate P&L percentage with proportional buy cost for partial fills
     let pnl = 0;
-    if (buyCost > 0 && sellRevenue >= 0) {
-      pnl = ((sellRevenue - buyCost) / buyCost) * 100;
-    } else if (buyCost === 0) {
+    if (totalBuyCost > 0 && totalBoughtQuantity > 0 && sellRevenue >= 0) {
+      // For partial fills (OPEN trades), use proportional buy cost
+      let proportionalBuyCost: number;
+      if (trade.status === "open" && soldQuantity < totalBoughtQuantity) {
+        // OPEN trade with partial fills: only count cost of sold portion
+        proportionalBuyCost = totalBuyCost * (soldQuantity / totalBoughtQuantity);
+      } else {
+        // CLOSED trade or all quantity sold: use total buy cost
+        proportionalBuyCost = totalBuyCost;
+      }
+
+      pnl = ((sellRevenue - proportionalBuyCost) / proportionalBuyCost) * 100;
+    } else if (totalBuyCost === 0) {
       console.warn("[getTradeCloseDetails] Buy cost is 0, cannot calculate P&L");
       pnl = 0;
     }
