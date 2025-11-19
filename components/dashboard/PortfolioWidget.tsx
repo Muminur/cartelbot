@@ -100,9 +100,13 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
+// Constants for portfolio filtering and retry logic
+const DUST_THRESHOLD_USDT = 0.001; // Assets below this value are filtered out
+const MAX_INDIVIDUAL_RETRY_ASSETS = 4; // Limit individual retries to prevent API abuse
+
 /**
  * Fetches asset price in USDT by trying multiple quote currencies
- * Priority: USDT (direct) → BTC (conversion) → ETH (conversion)
+ * Priority: USDT (direct) → BTC (conversion) → ETH (conversion) → BNB (conversion)
  * BUSD removed - delisted in Feb 2024
  * Returns valueUSDT and priceChangePercent
  *
@@ -241,7 +245,7 @@ export function PortfolioWidget() {
         nonStablecoins: nonStablecoinBalances.map((b: { asset: string }) => b.asset)
       });
 
-      // Major coins that usually have BTC/ETH pairs for redundancy
+      // Major coins that usually have BTC/ETH/BNB pairs for redundancy
       const MAJOR_COINS = ['BTC', 'ETH', 'BNB', 'SOL', 'ADA', 'XRP', 'DOT', 'LINK', 'MATIC', 'UNI'];
 
       nonStablecoinBalances.forEach((balance: { asset: string }) => {
@@ -252,7 +256,7 @@ export function PortfolioWidget() {
 
         // For major coins, include conversion pairs for redundancy
         if (MAJOR_COINS.includes(asset)) {
-          // These usually have BTC/ETH pairs
+          // These usually have BTC/ETH/BNB pairs
           if (asset !== 'BTC') {
             symbolsToFetch.add(`${asset}BTC`);
             // Need BTCUSDT for conversion
@@ -262,6 +266,11 @@ export function PortfolioWidget() {
             symbolsToFetch.add(`${asset}ETH`);
             // Need ETHUSDT for conversion
             symbolsToFetch.add('ETHUSDT');
+          }
+          if (asset !== 'BNB') {
+            symbolsToFetch.add(`${asset}BNB`);
+            // Need BNBUSDT for conversion
+            symbolsToFetch.add('BNBUSDT');
           }
         }
       });
@@ -365,10 +374,19 @@ export function PortfolioWidget() {
                   priceChangePercent = ethPair.change;
                   console.log(`[Portfolio] ${balance.asset}: Found ETH pair, value=${valueUSDT.toFixed(2)}`);
                 } else {
-                  // Asset not in batch ticker response - will retry with individual requests
-                  console.warn(`[Portfolio] ${balance.asset}: Not found in batch ticker response`);
-                  valueUSDT = 0;
-                  priceChangePercent = "0";
+                  // Try BNB conversion (Nov 19, 2025 - added fallback)
+                  const bnbPair = tickerMap.get(`${balance.asset}BNB`);
+                  const bnbUsdt = tickerMap.get("BNBUSDT");
+                  if (bnbPair && bnbUsdt) {
+                    valueUSDT = balance.total * bnbPair.price * bnbUsdt.price;
+                    priceChangePercent = bnbPair.change;
+                    console.log(`[Portfolio] ${balance.asset}: Found BNB pair, value=${valueUSDT.toFixed(2)}`);
+                  } else {
+                    // Asset not in batch ticker response - will retry with individual requests
+                    console.warn(`[Portfolio] ${balance.asset}: Not found in batch ticker response`);
+                    valueUSDT = 0;
+                    priceChangePercent = "0";
+                  }
                 }
               }
             }
@@ -419,8 +437,8 @@ export function PortfolioWidget() {
           tickerMap.size > 0  // Only if batch succeeded but assets missing
       );
 
-      // Only retry if reasonable number (<5) to avoid API abuse
-      if (assetsMissingPrice.length > 0 && assetsMissingPrice.length <= 4) {
+      // Only retry if reasonable number to avoid API abuse
+      if (assetsMissingPrice.length > 0 && assetsMissingPrice.length <= MAX_INDIVIDUAL_RETRY_ASSETS) {
         if (process.env.NODE_ENV === 'development') {
           console.log(`[Portfolio] Retrying ${assetsMissingPrice.length} assets with individual requests:`,
             assetsMissingPrice.map(a => a.asset).join(', '));
@@ -447,7 +465,7 @@ export function PortfolioWidget() {
             console.warn(`[Portfolio] ${assetsMissingPrice[index].asset}: Fallback failed`);
           }
         });
-      } else if (assetsMissingPrice.length > 4) {
+      } else if (assetsMissingPrice.length > MAX_INDIVIDUAL_RETRY_ASSETS) {
         // Warn about skipped assets (only in development to avoid production console spam)
         if (process.env.NODE_ENV === 'development') {
           console.warn(
@@ -457,10 +475,27 @@ export function PortfolioWidget() {
         }
       }
 
-      // Filter out dust (assets worth less than 0.01 USDT) and assets with no value
+      // Filter out dust using configured threshold
+      // Changed from 0.01 to 0.001 to show more assets (Nov 19, 2025)
       const significantAssets = assetsWithValues.filter(
-        (asset: PortfolioAsset) => asset.valueUSDT >= 0.01
+        (asset: PortfolioAsset) => asset.valueUSDT >= DUST_THRESHOLD_USDT
       );
+
+      // Diagnostic logging for asset filtering (Nov 19, 2025)
+      // Only log in development or when issues occur for production clarity
+      const excludedDust = assetsWithValues.filter(a => a.valueUSDT > 0 && a.valueUSDT < DUST_THRESHOLD_USDT);
+      const excludedNoPrice = assetsWithValues.filter(a => a.valueUSDT === 0 && !isStablecoin(a.asset));
+
+      if (process.env.NODE_ENV === 'development' || significantAssets.length === 0) {
+        console.log('[Portfolio] Asset filtering summary:', {
+          totalAssets: assetsWithValues.length,
+          displayed: significantAssets.length,
+          filteredTotal: assetsWithValues.length - significantAssets.length,
+          excludedDust: excludedDust.length,
+          excludedNoPriceCount: excludedNoPrice.length,
+          excludedNoPriceAssets: excludedNoPrice.map(a => a.asset).join(', ') || 'none'
+        });
+      }
 
       // If all assets filtered out but we had balances, show helpful error
       if (significantAssets.length === 0 && nonZeroBalances.length > 0) {
