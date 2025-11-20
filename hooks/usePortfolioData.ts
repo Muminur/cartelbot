@@ -63,6 +63,7 @@ export function usePortfolioData(options: UsePortfolioDataOptions = {}) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const cacheRef = useRef<CacheEntry>({ data: null, timestamp: 0 });
   const isMountedRef = useRef(true);
+  const isFirstFetchRef = useRef(true); // Track if this is the first fetch
 
   /**
    * Fetch portfolio data with proper abort handling
@@ -157,12 +158,17 @@ export function usePortfolioData(options: UsePortfolioDataOptions = {}) {
   useEffect(() => {
     isMountedRef.current = true;
 
-    // Initial fetch with logging
-    console.log('[usePortfolioData] Component mounted - initiating initial fetch');
-    fetchData().catch((err) => {
-      // Extra safety: ensure errors are caught and logged
-      console.error('[usePortfolioData] Initial fetch failed:', err);
-    });
+    // Initial fetch with logging (skip if this is React Strict Mode remount)
+    if (isFirstFetchRef.current) {
+      console.log('[usePortfolioData] Component mounted - initiating initial fetch');
+      isFirstFetchRef.current = false;
+      fetchData().catch((err) => {
+        // Extra safety: ensure errors are caught and logged
+        console.error('[usePortfolioData] Initial fetch failed:', err);
+      });
+    } else {
+      console.log('[usePortfolioData] Component remounted (React Strict Mode) - skipping duplicate fetch');
+    }
 
     if (!autoRefresh) {
       return;
