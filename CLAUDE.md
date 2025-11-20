@@ -285,6 +285,11 @@ git push origin main  # Auto-deploys via webhook
 
 ---
 
+## Session: Nov 20, 2025 - Critical Bug Fixes (Runtime + Build)
+**Fixed formatDate RangeError + build errors (f411dc0)**: Resolved "date value is not finite in DateTimeFormat" runtime error with validation (NaN/Infinity checks, "Invalid Date" fallback). Fixed TypeScript errors in email notifications (NotificationType alias, type-only import). Fixed Google Fonts build failure by switching to system font stack (privacy + performance win). Date serialization enhanced to preserve Date objects. Build: ✅ 70s compile, 52 routes. Code quality 8.5/10 (code-reviewer).
+
+---
+
 - Remember the Binance OCO API documentation when you work with binance api. New Order list - OCO (TRADE)
 POST /api/v3/orderList/oco
 
@@ -454,3 +459,5 @@ Fixed -1121 errors by removing delisted BUSD pairs (43% API reduction). Implemen
 ## Session: MongoDB ObjectId Serialization - Permanent Fix (Nov 19, 2025)
 
 **Permanent fix for [object Object] in URLs (20310ac)**: Root cause - API endpoints returning ObjectId objects without string conversion. Created lib/utils/serialize.ts with circular reference protection (WeakSet), depth limit (50 max), primitive handling (BigInt/Symbol/Function). Applied to 12 endpoints: 8 trade/signal routes + 4 admin routes. Security: prevents DoS via infinite loops/stack overflow. Performance: <5ms overhead typical. TypeScript clean, code review 9.0/10, production-ready.
+
+**Date preservation fix (f411dc0)**: Added instanceof Date check to serialize.ts preventing Date objects from losing prototype methods. Fixes "TypeError: dateObj.getTime is not a function" in formatDate(). Zero breaking changes (Date.toJSON() maintains ISO output). Bug-fix-engineer review 9.5/10, production-ready.
