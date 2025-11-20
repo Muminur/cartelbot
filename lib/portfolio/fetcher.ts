@@ -13,6 +13,12 @@ const DUST_THRESHOLD_USDT = 0.001;
 const MAX_INDIVIDUAL_RETRY_ASSETS = 4;
 const MAJOR_COINS = ['BTC', 'ETH', 'BNB', 'SOL', 'ADA', 'XRP', 'DOT', 'LINK', 'MATIC', 'UNI'];
 
+// Fiat currencies that don't exist as trading pairs on Binance
+const FIAT_PAIRS = ['EUR', 'GBP', 'AUD', 'JPY', 'TRY', 'ZAR', 'UAH', 'MXN', 'PLN', 'BRL', 'RUB', 'ARS', 'NGN'];
+
+// Delisted or non-existent symbols that cause 404 errors
+const DELISTED_SYMBOLS = ['W', 'BUSD', 'UST', 'LUNA', 'FTT'];
+
 // Cache for conversion rates (BTC/ETH/BNB prices change slowly)
 const conversionRatesCache = {
   BTCUSDT: 0,
@@ -100,6 +106,7 @@ export async function fetchPortfolioData(signal?: AbortSignal): Promise<Portfoli
 
 /**
  * Build optimized symbol list for batch ticker request
+ * Filters out invalid fiat pairs, delisted symbols, and self-trading pairs
  */
 function buildSymbolList(balances: BalanceData[]): Set<string> {
   const symbols = new Set<string>();
@@ -107,17 +114,32 @@ function buildSymbolList(balances: BalanceData[]): Set<string> {
   balances.forEach(balance => {
     const asset = balance.asset;
 
-    // Always try USDT pair first
-    symbols.add(`${asset}USDT`);
+    // Skip fiat currencies - they don't exist as trading pairs on Binance
+    if (FIAT_PAIRS.includes(asset)) {
+      return;
+    }
 
-    // For major coins, include conversion pairs
+    // Skip delisted/invalid symbols
+    if (DELISTED_SYMBOLS.includes(asset)) {
+      return;
+    }
+
+    // Always try USDT pair first (except for USDT itself)
+    if (asset !== 'USDT') {
+      symbols.add(`${asset}USDT`);
+    }
+
+    // For major coins, include conversion pairs (but avoid self-trading pairs)
     if (MAJOR_COINS.includes(asset)) {
+      // Only add BTC pair if asset is NOT BTC
       if (asset !== 'BTC') {
         symbols.add(`${asset}BTC`);
       }
+      // Only add ETH pair if asset is NOT ETH
       if (asset !== 'ETH') {
         symbols.add(`${asset}ETH`);
       }
+      // Only add BNB pair if asset is NOT BNB
       if (asset !== 'BNB') {
         symbols.add(`${asset}BNB`);
       }
