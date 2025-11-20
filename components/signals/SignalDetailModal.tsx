@@ -294,7 +294,7 @@ export default function SignalDetailModal({
         // Ignore abort errors (expected when component unmounts or times out)
         if (error instanceof Error && error.name === 'AbortError') {
           if (isMounted) {
-            setPriceError("Request timed out. Binance API may be slow.");
+            setPriceError("You were Inactive, refresh data?");
           }
           return;
         }
@@ -527,15 +527,34 @@ export default function SignalDetailModal({
             const stopLossOrders = updatedSellOrders.filter(
               (order: IOrder) => order.type === "STOP_LOSS_LIMIT"
             );
-            const stopLossTriggered = stopLossOrders.some((order: IOrder) => {
+
+            // Count how many stop losses are filled vs total
+            const filledStopLossCount = stopLossOrders.filter((order: IOrder) => {
               const liveStatus = orderStatusData.data.orders.find(
                 (o: any) => o.orderId === order.orderId
               );
               return liveStatus?.status === "FILLED";
+            }).length;
+
+            // CRITICAL FIX: Distinguish between partial and complete SL fills
+            // - stopLossTriggered: ANY SL filled (backward compatible for logging)
+            // - allStopLossesFilled: ALL SL filled (position fully closed)
+            const stopLossTriggered = filledStopLossCount > 0;
+            const allStopLossesFilled = stopLossOrders.length > 0 &&
+              filledStopLossCount === stopLossOrders.length;
+
+            console.log("[SignalDetailModal] Stop Loss Status Check:", {
+              signalId: signal?._id,
+              totalStopLosses: stopLossOrders.length,
+              filledStopLosses: filledStopLossCount,
+              partialFill: stopLossTriggered && !allStopLossesFilled,
+              completeFill: allStopLossesFilled,
+              shouldCloseSignal: allStopLossesFilled || allTargetsFilled,
             });
 
-            // If all targets filled OR stop loss triggered, update signal status in database
-            if ((allTargetsFilled || stopLossTriggered) && signal && signal.status === "executing") {
+            // If all targets filled OR ALL stop losses filled, update signal status in database
+            // CRITICAL: Only mark signal complete when ENTIRE position is closed
+            if ((allTargetsFilled || allStopLossesFilled) && signal && signal.status === "executing") {
               // Calculate exit price and P&L
               let exitPrice: number | undefined;
               let realizedPnL: number | undefined;
@@ -579,11 +598,13 @@ export default function SignalDetailModal({
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     allTargetsFilled,
-                    stopLossTriggered,
+                    stopLossTriggered: allStopLossesFilled,  // CRITICAL: Only true if ALL SLs filled
                     tradeId: String(trade._id),
                     exitPrice,
                     realizedPnL,
-                    filledTargetNumbers,  // NEW: Send which specific targets were filled
+                    filledTargetNumbers,  // Send which specific targets were filled
+                    stopLossFillCount: filledStopLossCount,  // NEW: Track partial vs complete SL
+                    totalStopLossOrders: stopLossOrders.length,  // NEW: Total SL count
                   }),
                 });
 
@@ -600,7 +621,10 @@ export default function SignalDetailModal({
                     newSignalStatus: updateData.data.signal.status,
                     newTradeStatus: updateData.data.trade.status,
                     allTargetsFilled,
-                    stopLossTriggered,
+                    allStopLossesFilled,
+                    partialStopLoss: stopLossTriggered && !allStopLossesFilled,
+                    stopLossFillCount: filledStopLossCount,
+                    totalStopLossOrders: stopLossOrders.length,
                   });
 
                   // Trigger page refresh to show updated status

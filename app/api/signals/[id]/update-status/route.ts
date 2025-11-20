@@ -37,7 +37,16 @@ export async function POST(
 
     // 2. Parse request body
     const body = await request.json();
-    const { allTargetsFilled, stopLossTriggered, tradeId, exitPrice, realizedPnL, filledTargetNumbers } = body;
+    const {
+      allTargetsFilled,
+      stopLossTriggered,
+      tradeId,
+      exitPrice,
+      realizedPnL,
+      filledTargetNumbers,
+      stopLossFillCount,
+      totalStopLossOrders,
+    } = body;
 
     // 3. Await params (Next.js async params)
     const resolvedParams = await params;
@@ -159,7 +168,20 @@ export async function POST(
 
         if (stopLossTriggered) {
           closeReason = "stop_loss";
-          closeReasonDetail = "Stop Loss Hit";
+
+          // Provide detailed information about how many SL orders filled
+          if (stopLossFillCount !== undefined && totalStopLossOrders !== undefined) {
+            if (stopLossFillCount === 1) {
+              closeReasonDetail = "Stop Loss Hit";
+            } else if (stopLossFillCount === totalStopLossOrders) {
+              closeReasonDetail = `All ${totalStopLossOrders} Stop Losses Hit`;
+            } else {
+              closeReasonDetail = `${stopLossFillCount} of ${totalStopLossOrders} Stop Losses Hit`;
+            }
+          } else {
+            // Fallback if counts not provided
+            closeReasonDetail = "Stop Loss Hit";
+          }
         } else if (filledTargetNumbers && Array.isArray(filledTargetNumbers) && filledTargetNumbers.length > 0) {
           // FIX BUG 1 (API side): Remove duplicates from filledTargetNumbers before joining
           const uniqueTargets = Array.from(new Set(filledTargetNumbers)).sort((a, b) => a - b);
@@ -212,8 +234,14 @@ export async function POST(
           oldTradeStatus: "open",
           newTradeStatus: trade.status,
           reason,
+          closeReasonDetail: trade.closeReasonDetail,
           exitPrice,
           realizedPnL,
+          stopLossInfo: stopLossTriggered ? {
+            filledCount: stopLossFillCount,
+            totalCount: totalStopLossOrders,
+            allFilled: stopLossFillCount === totalStopLossOrders,
+          } : undefined,
         });
       }
     } else {
