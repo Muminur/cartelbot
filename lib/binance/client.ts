@@ -662,9 +662,11 @@ export class BinanceClient {
   }
 
   async createUserDataStream(): Promise<{ listenKey: string }> {
+    // FIX: Binance API expects NO parameters - use empty object {} not null
+    // Passing null is interpreted as a parameter, causing -1101 error
     const response = await this.axios.post<{ listenKey: string }>(
       "/api/v3/userDataStream",
-      null,
+      {},
       {
         headers: {
           "X-MBX-APIKEY": this.apiKey,
@@ -675,7 +677,8 @@ export class BinanceClient {
   }
 
   async keepAliveUserDataStream(listenKey: string): Promise<void> {
-    await this.axios.put("/api/v3/userDataStream", null, {
+    // FIX: Use empty object {} instead of null for consistency
+    await this.axios.put("/api/v3/userDataStream", {}, {
       params: { listenKey },
       headers: {
         "X-MBX-APIKEY": this.apiKey,
