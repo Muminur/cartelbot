@@ -10,6 +10,7 @@ import { Types } from "mongoose";
 import { calculatePositionSize, PositionSizingMethod } from "./position-sizing";
 import { validateTradeRisk, getUserRiskLimits } from "./risk-manager";
 import { categorizeError, formatErrorCode } from "@/lib/utils/error-categorization";
+import { sendTargetAdjustmentNotification } from "@/lib/email/notifications";
 
 interface TradeExecutionParams {
   userId: Types.ObjectId | unknown;
@@ -224,23 +225,19 @@ export async function executeSignalTrade(
       totalCost: parseFloat(buyOrder.cummulativeQuoteQty || "0"),
     });
 
-    // CRITICAL: Validate targets against executed price for OCO compatibility
-    // Binance OCO rule for SELL: price > market price > stopPrice
-    const invalidTargets = signal.targets.filter((target: number) => target <= executedPrice);
-    if (invalidTargets.length > 0) {
-      throw new ValidationError(
-        `Signal targets are invalid for OCO sell orders. ` +
-        `Buy executed at ${executedPrice.toFixed(8)}, but ${invalidTargets.length} target(s) are below this price: ` +
-        `${invalidTargets.map((t: number) => t.toFixed(8)).join(', ')}. ` +
-        `For SELL OCO orders, target prices must be ABOVE the entry price. ` +
-        `This can happen when market price moves up between signal creation and execution.`
-      );
-    }
+    // CRITICAL FIX: Store ORIGINAL targets - filtering will happen in createOCOOrders()
+    // This prevents race condition where price changes between buy order and OCO creation
+    console.log(`[Trade Executor] Storing ORIGINAL targets for ${signal.symbol}:`, {
+      targets: signal.targets.map((t: number) => t.toFixed(8)),
+      stopLoss: signal.stopLoss,
+      note: "Target filtering will occur in createOCOOrders() with fresh market price",
+    });
 
-    // Validate stop loss is below executed price
+    // Basic validation: stop loss must be below executed price
     if (signal.stopLoss >= executedPrice) {
       throw new ValidationError(
-        `Stop loss (${signal.stopLoss.toFixed(8)}) must be BELOW entry price (${executedPrice.toFixed(8)}) for sell orders.`
+        `Stop loss (${signal.stopLoss.toFixed(8)}) must be BELOW entry price (${executedPrice.toFixed(8)}) for sell orders. ` +
+        `This indicates the signal's stop loss is incorrectly positioned or the market moved significantly.`
       );
     }
 
@@ -265,8 +262,9 @@ export async function executeSignalTrade(
       investedAmount: amount,
       status: "open",
       testnet,
-      targets: signal.targets,
-      stopLoss: signal.stopLoss,
+      targets: signal.targets, // Store ORIGINAL targets from signal
+      stopLoss: signal.stopLoss, // Store ORIGINAL stop loss from signal
+      targetAdjustmentNotificationSent: false, // Flag for notification system
     });
 
     console.log(`[Trade Executor] Trade document created:`, {
@@ -276,8 +274,9 @@ export async function executeSignalTrade(
       entryPrice: trade.entryPrice,
       investedAmount: trade.investedAmount,
       status: trade.status,
-      targets: trade.targets,
-      stopLoss: trade.stopLoss,
+      targets: signal.targets.map((t: number) => t.toFixed(8)),
+      stopLoss: signal.stopLoss,
+      note: "Targets will be validated and adjusted in createOCOOrders() if needed",
     });
 
     // Don't mark signal as completed yet - wait for OCO orders to fill
@@ -437,6 +436,8 @@ export async function createOCOOrders(
       buyQuantity: trade.quantity,
       entryPrice: trade.entryPrice,
       targets: trade.targets,
+      targetsAdjusted: trade.targetAdjustmentReason !== undefined,
+      adjustmentReason: trade.targetAdjustmentReason || "None",
       stopLoss: trade.stopLoss,
       testnet: testnet,
     });
@@ -458,7 +459,141 @@ export async function createOCOOrders(
     }
 
     const filters = symbolInfo.filters;
-    const targets = trade.targets; // Use ALL targets from signal
+
+    // CRITICAL: Fetch CURRENT market price for target validation
+    // This prevents race condition - price may have changed since buy order
+    const ticker = await client.get24hrTicker(trade.symbol);
+    const currentPrice = parseFloat(ticker.lastPrice);
+
+    console.log(`[OCO Creation] Current market state for ${trade.symbol}:`, {
+      currentPrice: currentPrice.toFixed(8),
+      entryPrice: trade.entryPrice.toFixed(8),
+      priceDifference: ((currentPrice - trade.entryPrice) / trade.entryPrice * 100).toFixed(2) + '%',
+      originalTargets: trade.targets.map((t: number) => t.toFixed(8)),
+      originalStopLoss: trade.stopLoss,
+    });
+
+    // CRITICAL: Filter targets against CURRENT price (not entry price)
+    // Binance OCO rule for SELL: price > market price > stopPrice
+    const originalTargets = [...trade.targets];
+    const validTargets = trade.targets.filter((target: number) => target > currentPrice);
+    const invalidTargets = trade.targets.filter((target: number) => target <= currentPrice);
+
+    console.log(`[OCO Creation] Target validation for ${trade.symbol}:`, {
+      currentPrice: currentPrice.toFixed(8),
+      validTargets: validTargets.map((t: number) => t.toFixed(8)),
+      invalidTargets: invalidTargets.map((t: number) => t.toFixed(8)),
+      filteredCount: invalidTargets.length,
+    });
+
+    // Handle case where market moved above ALL targets
+    let adjustedTargets: number[] = validTargets;
+    let adjustedStopLoss = trade.stopLoss;
+    let targetAdjustmentReason: string | undefined;
+
+    if (validTargets.length === 0) {
+      // Market moved above all targets - create emergency profit target
+      console.warn(
+        `[OCO Creation] ${trade.symbol} - Market moved above ALL ${originalTargets.length} target(s). ` +
+        `Creating emergency profit target...`
+      );
+
+      // Try 1.5% emergency target first (configurable via TRADE_EXECUTION)
+      let emergencyTarget = currentPrice * (1 + TRADE_EXECUTION.EMERGENCY_TARGET_PERCENTAGE);
+
+      // Validate emergency target against Binance filters
+      const emergencyValidation = validateAllFilters(emergencyTarget, trade.quantity, filters);
+
+      if (!emergencyValidation.isValid) {
+        console.warn(
+          `[OCO Creation] ${trade.symbol} - Emergency target ${emergencyTarget.toFixed(8)} failed filter validation: ` +
+          `${emergencyValidation.errors.join(", ")}. Trying fallback 1% target...`
+        );
+
+        // Fallback to 1% minimum if 1.5% fails filters
+        emergencyTarget = currentPrice * (1 + TRADE_EXECUTION.MIN_EMERGENCY_TARGET_PERCENTAGE);
+        const fallbackValidation = validateAllFilters(emergencyTarget, trade.quantity, filters);
+
+        if (!fallbackValidation.isValid) {
+          throw new ValidationError(
+            `Emergency profit target creation failed for ${trade.symbol}. ` +
+            `Both 1.5% (${(currentPrice * 1.015).toFixed(8)}) and 1% (${(currentPrice * 1.01).toFixed(8)}) ` +
+            `targets failed Binance filter validation: ${fallbackValidation.errors.join(", ")}. ` +
+            `This indicates the symbol's price filters are too restrictive for emergency targets. ` +
+            `Consider using a different entry strategy or symbol.`
+          );
+        }
+
+        // Use fallback 1% target with adjusted price if needed
+        emergencyTarget = fallbackValidation.adjustedPrice || emergencyTarget;
+        console.log(
+          `[OCO Creation] ${trade.symbol} - Using fallback 1% emergency target: ${emergencyTarget.toFixed(8)} ` +
+          `(adjusted from filters: ${fallbackValidation.adjustedPrice ? 'YES' : 'NO'})`
+        );
+      } else {
+        // Use 1.5% target with adjusted price if needed
+        emergencyTarget = emergencyValidation.adjustedPrice || emergencyTarget;
+        console.log(
+          `[OCO Creation] ${trade.symbol} - Using 1.5% emergency target: ${emergencyTarget.toFixed(8)} ` +
+          `(adjusted from filters: ${emergencyValidation.adjustedPrice ? 'YES' : 'NO'})`
+        );
+      }
+
+      adjustedTargets = [emergencyTarget];
+
+      // CRITICAL: Also adjust stop loss to max 2% loss when using emergency target
+      // Use the HIGHER of: original stop loss OR emergency stop loss (never widen the stop)
+      const emergencyStopLoss = currentPrice * (1 - TRADE_EXECUTION.EMERGENCY_STOP_LOSS_PERCENTAGE);
+      const originalStopLoss = trade.stopLoss;
+
+      if (emergencyStopLoss > originalStopLoss) {
+        adjustedStopLoss = emergencyStopLoss;
+        console.log(
+          `[OCO Creation] ${trade.symbol} - Emergency stop loss applied: ` +
+          `${emergencyStopLoss.toFixed(8)} (2% max loss) vs original ${originalStopLoss.toFixed(8)}. ` +
+          `Using TIGHTER stop loss: ${adjustedStopLoss.toFixed(8)}`
+        );
+      } else {
+        adjustedStopLoss = originalStopLoss;
+        console.log(
+          `[OCO Creation] ${trade.symbol} - Original stop loss ${originalStopLoss.toFixed(8)} ` +
+          `is already tighter than emergency stop loss ${emergencyStopLoss.toFixed(8)}. Keeping original.`
+        );
+      }
+
+      targetAdjustmentReason =
+        `Market moved above all ${originalTargets.length} original target(s). ` +
+        `Created emergency profit target at +${(TRADE_EXECUTION.EMERGENCY_TARGET_PERCENTAGE * 100).toFixed(1)}% ` +
+        `(${emergencyTarget.toFixed(8)}) above current price (${currentPrice.toFixed(8)}). ` +
+        `${adjustedStopLoss !== originalStopLoss ?
+          `Adjusted stop loss to ${adjustedStopLoss.toFixed(8)} (max 2% loss).` :
+          `Original stop loss maintained at ${originalStopLoss.toFixed(8)}.`}`;
+
+      console.warn(`[OCO Creation] ${trade.symbol} - ${targetAdjustmentReason}`);
+
+      // Store adjustment reason in Trade document for user notification
+      trade.targetAdjustmentReason = targetAdjustmentReason;
+    } else if (invalidTargets.length > 0) {
+      // Market moved above some targets - use remaining valid targets
+      targetAdjustmentReason =
+        `Market moved above ${invalidTargets.length} of ${originalTargets.length} target(s). ` +
+        `Using ${validTargets.length} remaining valid target(s) above current price.`;
+
+      console.warn(`[OCO Creation] ${trade.symbol} - ${targetAdjustmentReason}`);
+
+      // Store adjustment reason in Trade document for user notification
+      trade.targetAdjustmentReason = targetAdjustmentReason;
+    }
+
+    // Validate stop loss is below current price
+    if (adjustedStopLoss >= currentPrice) {
+      throw new ValidationError(
+        `Stop loss (${adjustedStopLoss.toFixed(8)}) must be BELOW current price (${currentPrice.toFixed(8)}) for sell orders. ` +
+        `This indicates the market moved significantly or stop loss is incorrectly positioned.`
+      );
+    }
+
+    const targets = adjustedTargets; // Use adjusted targets (filtered or emergency)
     const orders: OCOOrderResult[] = [];
 
     // Get user's risk limits (includes custom targetDistribution)
@@ -711,7 +846,7 @@ export async function createOCOOrders(
       // Validate and adjust target price and quantity
       const validation = validateAllFilters(targetPrice, qtyForTarget, filters);
       if (!validation.isValid) {
-        console.warn(`Skipping target ${i} due to filter validation: ${validation.errors.join(", ")}`);
+        console.warn(`[OCO] ${trade.symbol} - Skipping target ${i} due to filter validation: ${validation.errors.join(", ")}`);
         continue;
       }
 
@@ -763,9 +898,9 @@ export async function createOCOOrders(
         adjustedQty = revalidation.adjustedQuantity || adjustedQty;
       }
 
-      // Validate and adjust stop loss price
-      const stopPriceValidation = validateAllFilters(trade.stopLoss, adjustedQty, filters);
-      const adjustedStopPrice = stopPriceValidation.adjustedPrice || trade.stopLoss;
+      // Validate and adjust stop loss price (use adjustedStopLoss from emergency logic)
+      const stopPriceValidation = validateAllFilters(adjustedStopLoss, adjustedQty, filters);
+      const adjustedStopPrice = stopPriceValidation.adjustedPrice || adjustedStopLoss;
 
       // Calculate and validate stop limit price (0.5% below stop loss for sell orders)
       const rawStopLimitPrice = adjustedStopPrice * 0.995;
@@ -773,7 +908,7 @@ export async function createOCOOrders(
       const adjustedStopLimitPrice = stopLimitValidation.adjustedPrice || rawStopLimitPrice;
 
       // eslint-disable-next-line no-console
-      console.log(`Creating OCO for target ${i}:`, {
+      console.log(`[OCO] ${trade.symbol} - Creating OCO for target ${i + 1}/${targets.length}:`, {
         symbol: trade.symbol,
         targetPrice: targetPrice,
         adjustedPrice: adjustedPrice,
@@ -781,7 +916,8 @@ export async function createOCOOrders(
         adjustedQty: adjustedQty.toFixed(8),
         currentFreeBalance: currentAvailableBalance.toFixed(8),
         percentage: `${percentage}%`,
-        stopLoss: trade.stopLoss,
+        originalStopLoss: trade.stopLoss,
+        adjustedStopLoss: adjustedStopLoss,
         adjustedStopPrice: adjustedStopPrice,
         rawStopLimitPrice: rawStopLimitPrice,
         adjustedStopLimitPrice: adjustedStopLimitPrice,
@@ -886,7 +1022,7 @@ export async function createOCOOrders(
             type: "LIMIT_MAKER" as const, // Store actual Binance type (not "OCO")
             quantity: parseFloat(limitMakerOrder.origQty),
             price: parseFloat(limitMakerOrder.price),
-            stopPrice: trade.stopLoss,
+            stopPrice: adjustedStopLoss, // Use adjusted stop loss
             executedQty: parseFloat(limitMakerOrder.executedQty),
             cummulativeQuoteQty: parseFloat(limitMakerOrder.cummulativeQuoteQty),
             status: limitMakerOrder.status,
@@ -903,7 +1039,7 @@ export async function createOCOOrders(
             type: "STOP_LOSS_LIMIT" as const, // Store actual Binance type (not "OCO")
             quantity: parseFloat(stopLossOrder.origQty),
             price: parseFloat(stopLossOrder.price),
-            stopPrice: parseFloat(stopLossOrder.stopPrice || String(trade.stopLoss)),
+            stopPrice: parseFloat(stopLossOrder.stopPrice || String(adjustedStopLoss)), // Use adjusted stop loss
             executedQty: parseFloat(stopLossOrder.executedQty),
             cummulativeQuoteQty: parseFloat(stopLossOrder.cummulativeQuoteQty),
             status: stopLossOrder.status,
@@ -943,6 +1079,33 @@ export async function createOCOOrders(
     }
 
     await trade.save();
+
+    // Send notification if targets were adjusted and user hasn't been notified yet
+    if (targetAdjustmentReason && !trade.targetAdjustmentNotificationSent) {
+      console.log(`[OCO Creation] Sending target adjustment notification for ${trade.symbol}...`);
+
+      // Send notification asynchronously (don't block OCO success response)
+      sendTargetAdjustmentNotification({
+        userId: trade.userId,
+        tradeId: trade._id,
+        symbol: trade.symbol,
+        adjustmentReason: targetAdjustmentReason,
+        originalTargets: originalTargets,
+        adjustedTargets: adjustedTargets,
+        originalStopLoss: originalTargets.length === 0 ? trade.stopLoss : undefined,
+        adjustedStopLoss: adjustedStopLoss !== trade.stopLoss ? adjustedStopLoss : undefined,
+        entryPrice: trade.entryPrice,
+        currentPrice: currentPrice,
+        timestamp: new Date(),
+      }).then(() => {
+        // Mark notification as sent
+        Trade.findByIdAndUpdate(trade._id, { targetAdjustmentNotificationSent: true }).catch(err => {
+          console.error(`[OCO Creation] Failed to update notification flag:`, err);
+        });
+      }).catch(err => {
+        console.error(`[OCO Creation] Failed to send target adjustment notification:`, err);
+      });
+    }
 
     return {
       success: true,

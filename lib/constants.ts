@@ -53,6 +53,10 @@ export const TRADE_EXECUTION = {
   OCO_RETRY_BASE_DELAY_MS: 2000,
   OCO_RETRY_MAX_TOTAL_DURATION_MS: 20000, // 20 seconds max total wait (3s initial + 2s + 4s + 8s retries)
   BALANCE_TOLERANCE: 0.00000001, // 1e-8 for Binance precision (floating point tolerance)
+  // Emergency target configuration (when market moves above all targets)
+  EMERGENCY_TARGET_PERCENTAGE: 0.015, // 1.5% minimum profit target
+  MIN_EMERGENCY_TARGET_PERCENTAGE: 0.01, // 1% absolute minimum (fallback)
+  EMERGENCY_STOP_LOSS_PERCENTAGE: 0.02, // 2% max loss when using emergency target
 } as const;
 
 export const SIGNAL_STATUS = {

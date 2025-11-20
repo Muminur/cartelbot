@@ -5,7 +5,7 @@ import { connectDB } from "@/lib/db";
 import { Types } from "mongoose";
 import type { IUser } from "@/types";
 
-type NotificationType = "onTradeExecuted" | "onTargetHit" | "onStopLossHit" | "dailySummary";
+type NotificationType = "onTradeExecuted" | "onTargetHit" | "onStopLossHit" | "dailySummary" | "onTargetAdjustment";
 
 let resend: Resend | null = null;
 
@@ -80,6 +80,7 @@ async function shouldSendNotification(
       onTradeExecuted: true,
       onTargetHit: true,
       onStopLossHit: true,
+      onTargetAdjustment: true,
       dailySummary: false,
     };
 
@@ -521,5 +522,136 @@ export async function sendDailySummaryNotification(data: {
     });
   } catch (error) {
     console.error("[Email] Error sending daily summary:", error);
+  }
+}
+
+/**
+ * Send Target Adjustment Notification
+ * Notifies user when targets are adjusted due to market movement
+ */
+export async function sendTargetAdjustmentNotification(data: {
+  userId: Types.ObjectId | string;
+  tradeId: Types.ObjectId | string;
+  symbol: string;
+  adjustmentReason: string;
+  originalTargets: number[];
+  adjustedTargets: number[];
+  originalStopLoss?: number;
+  adjustedStopLoss?: number;
+  entryPrice: number;
+  currentPrice: number;
+  timestamp: Date;
+}): Promise<void> {
+  try {
+    const { shouldSend, email } = await shouldSendNotification(
+      data.userId,
+      "onTargetAdjustment"
+    );
+
+    if (!shouldSend || !email) {
+      console.log(`[Email] Target adjustment notification disabled for user ${data.userId}`);
+      return;
+    }
+
+    const client = getResendClient();
+
+    const stopLossAdjusted = data.originalStopLoss && data.adjustedStopLoss &&
+                             data.originalStopLoss !== data.adjustedStopLoss;
+
+    const content = `
+      <h2>⚠️ Trade Targets Adjusted</h2>
+      <p>The market price moved significantly during trade execution for ${data.symbol}. Your targets have been automatically adjusted to ensure profitability.</p>
+
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">Symbol</div>
+          <div class="info-value">${data.symbol}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Entry Price</div>
+          <div class="info-value">$${data.entryPrice.toFixed(6)}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Current Price</div>
+          <div class="info-value">$${data.currentPrice.toFixed(6)}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Price Change</div>
+          <div class="info-value ${data.currentPrice > data.entryPrice ? "text-success" : "text-danger"}">
+            ${((data.currentPrice - data.entryPrice) / data.entryPrice * 100).toFixed(2)}%
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <h3 style="color: #1f2937; margin-bottom: 15px;">Target Adjustments</h3>
+
+      <div style="background: #f9fafb; padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+        <div style="margin-bottom: 10px;">
+          <strong style="color: #6b7280; font-size: 12px;">Original Targets:</strong><br>
+          <span style="color: #dc2626; text-decoration: line-through;">
+            ${data.originalTargets.map(t => `$${t.toFixed(6)}`).join(", ")}
+          </span>
+        </div>
+        <div>
+          <strong style="color: #6b7280; font-size: 12px;">Adjusted Targets:</strong><br>
+          <span style="color: #059669; font-weight: 600;">
+            ${data.adjustedTargets.map(t => `$${t.toFixed(6)}`).join(", ")}
+          </span>
+        </div>
+      </div>
+
+      ${stopLossAdjusted ? `
+        <div style="background: #fef3c7; padding: 15px; border-radius: 6px; margin-bottom: 15px;">
+          <div style="margin-bottom: 10px;">
+            <strong style="color: #92400e; font-size: 12px;">Stop Loss Adjusted:</strong><br>
+            <span style="color: #92400e;">
+              Original: $${data.originalStopLoss?.toFixed(6)} → New: $${data.adjustedStopLoss?.toFixed(6)}
+            </span>
+          </div>
+          <p style="color: #92400e; font-size: 13px; margin: 0;">
+            Stop loss was tightened to limit risk to maximum 2% loss.
+          </p>
+        </div>
+      ` : ''}
+
+      <hr class="divider">
+
+      <h3 style="color: #1f2937; margin-bottom: 10px;">Adjustment Reason</h3>
+      <p style="background: #f3f4f6; padding: 15px; border-radius: 6px; color: #1f2937; font-size: 14px; line-height: 1.6;">
+        ${data.adjustmentReason}
+      </p>
+
+      <hr class="divider">
+
+      <p style="color: #6b7280; font-size: 14px;">
+        ℹ️ <strong>Why did this happen?</strong><br>
+        Markets move quickly. The price changed between signal submission and trade execution.
+        CartelBot automatically adjusted your targets to ensure all sell orders are above the current market price,
+        which is required by Binance's OCO (One-Cancels-Other) order rules.
+      </p>
+
+      <p class="text-muted">Adjusted at: ${data.timestamp.toLocaleString()}</p>
+
+      <a href="${env.NEXT_PUBLIC_API_URL}/trades" class="btn">View Trade Details</a>
+    `;
+
+    await retryWithBackoff(async () => {
+      const { error } = await client.emails.send({
+        from: "CartelBot <noreply@cartelbot.coinspree.cc>",
+        to: email,
+        subject: `⚠️ Trade Targets Adjusted: ${data.symbol}`,
+        html: createEmailTemplate(content),
+      });
+
+      if (error) {
+        throw new Error(`Failed to send email: ${error.message}`);
+      }
+
+      console.log(`[Email] Target adjustment notification sent to ${email}`);
+    });
+  } catch (error) {
+    console.error("[Email] Error sending target adjustment notification:", error);
   }
 }

@@ -21,6 +21,7 @@ export interface IUser extends Document {
     onTradeExecuted: boolean;
     onTargetHit: boolean;
     onStopLossHit: boolean;
+    onTargetAdjustment: boolean;
     dailySummary: boolean;
   };
   emailFrequency?: "instant" | "hourly" | "daily";
@@ -103,6 +104,8 @@ export interface ITrade extends Document {
   approvedBy?: string;
   targets?: number[];
   stopLoss?: number;
+  targetAdjustmentReason?: string; // Records why targets were adjusted (e.g., market moved above targets)
+  targetAdjustmentNotificationSent?: boolean; // Flag to track if user has been notified about target adjustments
   testnet?: boolean;
   lastError?: {
     message?: string;

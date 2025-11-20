@@ -155,6 +155,16 @@ const tradeSchema = new Schema<ITrade>(
     stopLoss: {
       type: Number,
     },
+    targetAdjustmentReason: {
+      type: String,
+      maxlength: [500, "Target adjustment reason cannot exceed 500 characters"],
+      // Records why targets were adjusted (e.g., market moved above original targets)
+    },
+    targetAdjustmentNotificationSent: {
+      type: Boolean,
+      default: false,
+      // Flag to track if user has been notified about target adjustments
+    },
     testnet: {
       type: Boolean,
       default: false,
