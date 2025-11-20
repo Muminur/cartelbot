@@ -45,7 +45,8 @@ interface TickerData {
 export async function fetchPortfolioData(signal?: AbortSignal): Promise<PortfolioData> {
   // Step 1: Fetch account balances
   const accountResponse = await fetch('/api/binance/account', { signal });
-  const accountData = await accountResponse.json();
+  const { safeJsonParse } = await import('@/lib/utils/api');
+  const accountData = await safeJsonParse<{ success: boolean; data?: any; error?: any }>(accountResponse, 'Portfolio Account Fetch');
 
   if (!accountData.success) {
     throw new Error(accountData.error?.message || 'Failed to fetch account data');
@@ -212,6 +213,7 @@ async function fetchBatchTickers(
 
   try {
     // Fetch all batches in parallel
+    const { safeJsonParse } = await import('@/lib/utils/api');
     const batchResults = await Promise.allSettled(
       batches.map(async (batch, batchIndex) => {
         const encodedSymbols = encodeURIComponent(JSON.stringify(batch));
@@ -219,7 +221,7 @@ async function fetchBatchTickers(
           `/api/binance/ticker/batch?symbols=${encodedSymbols}`,
           { signal }
         );
-        const data = await response.json();
+        const data = await safeJsonParse<{ success: boolean; data?: any; error?: any }>(response, `Portfolio Batch ${batchIndex + 1}/${batches.length}`);
 
         if (!data.success) {
           // If batch failed with 404, some symbols might not exist on testnet
@@ -273,7 +275,7 @@ async function fetchBatchTickers(
         failedSymbols.map(async (symbol) => {
           try {
             const response = await fetch(`/api/binance/ticker?symbol=${symbol}`, { signal });
-            const data = await response.json();
+            const data = await safeJsonParse<{ success: boolean; data?: any }>(response, `Portfolio Individual ${symbol}`);
 
             if (data.success && data.data) {
               return {
@@ -444,10 +446,12 @@ async function getAssetValueFallback(
   balance: number,
   signal?: AbortSignal
 ): Promise<{ valueUSDT: number; priceChangePercent: string }> {
+  const { safeJsonParse } = await import('@/lib/utils/api');
+
   // Try USDT pair
   try {
     const response = await fetch(`/api/binance/ticker?symbol=${asset}USDT`, { signal });
-    const data = await response.json();
+    const data = await safeJsonParse<{ success: boolean; data?: any }>(response, `Portfolio Fallback ${asset}USDT`);
     if (data.success && data.data) {
       const price = parseFloat(data.data.price || data.data.lastPrice);
       return {
@@ -467,8 +471,8 @@ async function getAssetValueFallback(
     ]);
 
     if (btcPairRes.ok && btcUsdtRes.ok) {
-      const btcPairData = await btcPairRes.json();
-      const btcUsdtData = await btcUsdtRes.json();
+      const btcPairData = await safeJsonParse<{ success: boolean; data?: any }>(btcPairRes, `Portfolio Fallback ${asset}BTC`);
+      const btcUsdtData = await safeJsonParse<{ success: boolean; data?: any }>(btcUsdtRes, 'Portfolio Fallback BTCUSDT');
 
       if (btcPairData.success && btcUsdtData.success) {
         const btcPrice = parseFloat(btcPairData.data.price || btcPairData.data.lastPrice);

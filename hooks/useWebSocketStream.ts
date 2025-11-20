@@ -27,8 +27,14 @@ export function useWebSocketStream(options: UseWebSocketStreamOptions = {}) {
       });
 
       if (!startResponse.ok) {
-        const errorData = await startResponse.json();
-        setError(errorData.error?.message || "Failed to start WebSocket connection");
+        try {
+          const { safeJsonParse } = await import('@/lib/utils/api');
+          const errorData = await safeJsonParse<{ error?: any }>(startResponse, 'WebSocket Start');
+          setError(errorData.error?.message || "Failed to start WebSocket connection");
+        } catch (parseError) {
+          console.error('[WebSocketStream] Failed to parse error response:', parseError);
+          setError(`Failed to start WebSocket connection (HTTP ${startResponse.status})`);
+        }
         return () => {};
       }
 
@@ -42,11 +48,20 @@ export function useWebSocketStream(options: UseWebSocketStreamOptions = {}) {
 
       eventSource.onmessage = (event) => {
         try {
+          // Validate event data is not empty
+          if (!event.data || event.data.trim() === '') {
+            console.warn('[WebSocketStream] Received empty event data');
+            return;
+          }
+
           const parsedEvent = JSON.parse(event.data) as WebSocketEvent;
           setLastEvent(parsedEvent);
           onEvent?.(parsedEvent);
         } catch (err) {
-          console.error("Error parsing WebSocket event:", err);
+          console.error('[WebSocketStream] Failed to parse event data:', {
+            error: err instanceof Error ? err.message : String(err),
+            rawData: event.data?.substring(0, 200),
+          });
         }
       };
 

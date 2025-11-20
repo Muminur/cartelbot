@@ -75,3 +75,74 @@ export function validateRequiredFields<T extends Record<string, unknown>>(
 
   return errors;
 }
+
+/**
+ * Safely parse JSON from a fetch Response
+ *
+ * This function prevents "JSON.parse: unexpected character" errors by:
+ * 1. Checking if response is OK (status 200-299)
+ * 2. Validating Content-Type header is JSON
+ * 3. Handling empty responses
+ * 4. Providing detailed error context on failure
+ *
+ * @param response - Fetch Response object
+ * @param context - Optional context for error logging (e.g., "portfolio fetch", "ticker API")
+ * @returns Parsed JSON data
+ * @throws Error with detailed context if parsing fails
+ */
+export async function safeJsonParse<T = unknown>(
+  response: Response,
+  context?: string
+): Promise<T> {
+  const contextPrefix = context ? `[${context}] ` : '';
+
+  // Check if response is OK (status 200-299)
+  if (!response.ok) {
+    const contentType = response.headers.get('content-type') || 'unknown';
+    const status = response.status;
+    const statusText = response.statusText;
+
+    // Try to extract error message from response body
+    let errorMessage = `HTTP ${status} ${statusText}`;
+
+    try {
+      // Only try to parse if content-type is JSON
+      if (contentType.includes('application/json')) {
+        const errorData = await response.json();
+        errorMessage = errorData.error?.message || errorData.message || errorMessage;
+      } else {
+        // For HTML error pages (404, 500), read as text for debugging
+        const textBody = await response.text();
+        console.error(`${contextPrefix}Non-JSON response (${contentType}):`, textBody.substring(0, 200));
+      }
+    } catch (parseError) {
+      console.error(`${contextPrefix}Failed to parse error response:`, parseError);
+    }
+
+    throw new Error(`${contextPrefix}${errorMessage}`);
+  }
+
+  // Validate Content-Type is JSON
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const textBody = await response.text();
+    console.error(`${contextPrefix}Expected JSON but got ${contentType}:`, textBody.substring(0, 200));
+    throw new Error(`${contextPrefix}Server returned ${contentType} instead of JSON`);
+  }
+
+  // Clone response so we can read it multiple times if needed
+  const responseClone = response.clone();
+
+  try {
+    const data = await response.json();
+    return data as T;
+  } catch (error) {
+    // Get raw text for debugging
+    const rawText = await responseClone.text();
+    console.error(`${contextPrefix}JSON parse failed. Raw response:`, rawText.substring(0, 500));
+
+    throw new Error(
+      `${contextPrefix}Failed to parse JSON response: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
+  }
+}

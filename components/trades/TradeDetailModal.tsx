@@ -51,8 +51,9 @@ export function TradeDetailModal({
   const fetchTradeDetails = async () => {
     setLoading(true);
     try {
+      const { safeJsonParse } = await import('@/lib/utils/api');
       const response = await fetch(`/api/trades/${tradeId}`);
-      const data = await response.json();
+      const data = await safeJsonParse<{ success: boolean; data?: any; error?: any }>(response, `Trade Details ${tradeId}`);
 
       if (data.success && data.data) {
         setTrade(data.data);
@@ -72,8 +73,9 @@ export function TradeDetailModal({
   const fetchCurrentPrice = useCallback(async (symbol: string) => {
     setFetchingPrice(true);
     try {
+      const { safeJsonParse } = await import('@/lib/utils/api');
       const response = await fetch(`/api/binance/ticker?symbol=${symbol}`);
-      const data = await response.json();
+      const data = await safeJsonParse<{ success: boolean; data?: any }>(response, `Trade Ticker ${symbol}`);
 
       if (data.success && data.data?.lastPrice) {
         setCurrentPrice(parseFloat(data.data.lastPrice));
@@ -103,13 +105,14 @@ export function TradeDetailModal({
     setFetchingOrderStatus(true);
 
     try {
+      const { safeJsonParse } = await import('@/lib/utils/api');
       const orderStatusResponse = await fetch("/api/trades/orders/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orders: ordersToCheck }),
       });
 
-      const orderStatusData = await orderStatusResponse.json();
+      const orderStatusData = await safeJsonParse<{ success: boolean; data?: any }>(orderStatusResponse, 'Trade Order Status');
 
       if (orderStatusData.success && orderStatusData.data?.orders) {
         // Update trade.sellOrders with real-time statuses from Binance

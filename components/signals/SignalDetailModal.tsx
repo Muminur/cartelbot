@@ -234,7 +234,11 @@ export default function SignalDetailModal({
           throw new Error(`Failed to fetch price: ${response.statusText}`);
         }
 
-        const data = await response.json();
+        const { safeJsonParse } = await import('@/lib/utils/api');
+        const data = await safeJsonParse<{ success: boolean; data?: any; error?: any }>(
+          response,
+          'Signal Detail - Live Price'
+        );
 
         // Only update state if still mounted
         if (isMounted && data.success && data.data) {
@@ -355,7 +359,11 @@ export default function SignalDetailModal({
           throw new Error(`Failed to fetch trade data: ${response.statusText}`);
         }
 
-        const data = await response.json();
+        const { safeJsonParse } = await import('@/lib/utils/api');
+        const data = await safeJsonParse<{ success: boolean; data?: any; error?: any }>(
+          response,
+          'Signal Detail - Trade Data'
+        );
 
         // Only update state if component is still mounted
         if (!isMounted) return;
@@ -455,7 +463,11 @@ export default function SignalDetailModal({
             body: JSON.stringify({ orders: ordersToCheck }),
           });
 
-          const orderStatusData = await orderStatusResponse.json();
+          const { safeJsonParse } = await import('@/lib/utils/api');
+          const orderStatusData = await safeJsonParse<{ success: boolean; data?: any; error?: any }>(
+            orderStatusResponse,
+            'Signal Detail - Order Status'
+          );
 
           if (orderStatusData.success && orderStatusData.data?.orders) {
             // Update trade.sellOrders with real-time statuses from Binance
@@ -575,7 +587,11 @@ export default function SignalDetailModal({
                   }),
                 });
 
-                const updateData = await updateResponse.json();
+                const { safeJsonParse } = await import('@/lib/utils/api');
+                const updateData = await safeJsonParse<{ success: boolean; data?: any; error?: any }>(
+                  updateResponse,
+                  'Signal Detail - Update Status'
+                );
 
                 if (updateData.success && updateData.data.updated) {
                   console.log("[SignalDetailModal] Signal and trade status updated:", {
@@ -608,7 +624,11 @@ export default function SignalDetailModal({
           const response = await fetch(
             `/api/trades/oco-status/${orderListId}?testnet=${trade.testnet || false}`
           );
-          const data = await response.json();
+          const { safeJsonParse } = await import('@/lib/utils/api');
+          const data = await safeJsonParse<{ success: boolean; data?: any; error?: any }>(
+            response,
+            `Signal Detail - OCO Status ${orderListId}`
+          );
 
           if (data.success) {
             return [orderListId, data.data] as const;
@@ -722,7 +742,11 @@ export default function SignalDetailModal({
             newValue: correctPnL,
           });
         } else {
-          const errorData = await response.json();
+          const { safeJsonParse } = await import('@/lib/utils/api');
+          const errorData = await safeJsonParse<{ success: boolean; error?: any }>(
+            response,
+            'Signal Detail - P&L Update Error'
+          );
           console.error("[SignalDetailModal] Failed to update P&L in database:", {
             status: response.status,
             error: errorData,
@@ -1474,23 +1498,23 @@ export default function SignalDetailModal({
                                 {/* Take Profit Section */}
                                 <div className={`p-3 rounded-lg border-2 ${
                                   tpTriggered
-                                    ? 'bg-green-50 border-green-300'
+                                    ? 'bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700'
                                     : tpStatus === 'CANCELED'
-                                    ? 'bg-gray-100 border-gray-300'
-                                    : 'bg-blue-50 border-blue-200'
+                                    ? 'bg-gray-100 dark:bg-gray-800/50 border-gray-300 dark:border-gray-600'
+                                    : 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800'
                                 }`}>
                                   <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-xs font-bold text-foreground">
+                                      <span className="text-xs font-bold text-gray-900 dark:text-gray-100">
                                         Take Profit #{currentTpIndex}
                                       </span>
                                       {tpTriggered && (
-                                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                        <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
                                       )}
                                     </div>
                                     <div className="flex items-center gap-2">
                                       {trade.testnet && (
-                                        <Badge variant="outline" className="text-xs bg-orange-100 border-orange-300">
+                                        <Badge variant="outline" className="text-xs bg-orange-100 dark:bg-orange-950/50 border-orange-300 dark:border-orange-700 text-orange-800 dark:text-orange-300">
                                           TESTNET
                                         </Badge>
                                       )}
@@ -1509,36 +1533,36 @@ export default function SignalDetailModal({
                                   <div className="grid grid-cols-2 gap-2 text-xs">
                                     <div>
                                       <span className="text-muted-foreground">Target Price:</span>
-                                      <span className="ml-2 font-medium text-green-700">
+                                      <span className="ml-2 font-medium text-green-700 dark:text-green-400">
                                         ${formatPrice(takeProfit.price || 0)}
                                       </span>
                                     </div>
                                     <div>
                                       <span className="text-muted-foreground">Quantity:</span>
-                                      <span className="ml-2 text-foreground">{takeProfit.quantity.toFixed(6)}</span>
+                                      <span className="ml-2 text-gray-900 dark:text-gray-100">{takeProfit.quantity.toFixed(6)}</span>
                                     </div>
                                     {tpExecutedQty > 0 && (
                                       <>
                                         <div>
                                           <span className="text-muted-foreground">Executed:</span>
-                                          <span className="ml-2 font-semibold text-green-600">
+                                          <span className="ml-2 font-semibold text-green-600 dark:text-green-400">
                                             {tpExecutedQty.toFixed(6)}
                                           </span>
                                         </div>
                                         <div>
                                           <span className="text-muted-foreground">Filled Value:</span>
-                                          <span className="ml-2 font-medium text-foreground">${tpFilledValue.toFixed(2)}</span>
+                                          <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">${tpFilledValue.toFixed(2)}</span>
                                         </div>
                                       </>
                                     )}
                                     <div className="col-span-2">
                                       <span className="text-muted-foreground">Order ID:</span>
-                                      <span className="ml-2 font-mono text-xs">{takeProfit.orderId}</span>
+                                      <span className="ml-2 font-mono text-xs text-gray-700 dark:text-gray-300">{takeProfit.orderId}</span>
                                     </div>
                                   </div>
                                   {tpTriggered && slStatus === 'CANCELED' && (
-                                    <div className="mt-2 pt-2 border-t border-green-200">
-                                      <span className="text-xs text-green-700 font-medium">
+                                    <div className="mt-2 pt-2 border-t border-green-200 dark:border-green-800">
+                                      <span className="text-xs text-green-700 dark:text-green-400 font-medium">
                                         ✓ Take profit executed successfully
                                       </span>
                                     </div>
@@ -1548,18 +1572,18 @@ export default function SignalDetailModal({
                                 {/* Stop Loss Section */}
                                 <div className={`p-3 rounded-lg border-2 ${
                                   slTriggered
-                                    ? 'bg-red-50 border-red-300'
+                                    ? 'bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700'
                                     : slStatus === 'CANCELED'
-                                    ? 'bg-gray-100 border-gray-300'
-                                    : 'bg-orange-50 border-orange-200'
+                                    ? 'bg-gray-100 dark:bg-gray-800/50 border-gray-300 dark:border-gray-600'
+                                    : 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800'
                                 }`}>
                                   <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-xs font-bold text-foreground">
+                                      <span className="text-xs font-bold text-gray-900 dark:text-gray-100">
                                         Stop Loss for TP #{currentTpIndex}
                                       </span>
                                       {slTriggered && (
-                                        <AlertTriangle className="h-4 w-4 text-red-600" />
+                                        <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
                                       )}
                                     </div>
                                     <Badge
@@ -1576,43 +1600,43 @@ export default function SignalDetailModal({
                                   <div className="grid grid-cols-2 gap-2 text-xs">
                                     <div>
                                       <span className="text-muted-foreground">Stop Price:</span>
-                                      <span className="ml-2 font-medium text-red-700">
+                                      <span className="ml-2 font-medium text-red-700 dark:text-red-400">
                                         ${formatPrice(stopLoss.stopPrice || 0)}
                                       </span>
                                     </div>
                                     <div>
                                       <span className="text-muted-foreground">Quantity:</span>
-                                      <span className="ml-2 text-foreground">{stopLoss.quantity.toFixed(6)}</span>
+                                      <span className="ml-2 text-gray-900 dark:text-gray-100">{stopLoss.quantity.toFixed(6)}</span>
                                     </div>
                                     {slExecutedQty > 0 && (
                                       <>
                                         <div>
                                           <span className="text-muted-foreground">Executed:</span>
-                                          <span className="ml-2 font-semibold text-red-600">
+                                          <span className="ml-2 font-semibold text-red-600 dark:text-red-400">
                                             {slExecutedQty.toFixed(6)}
                                           </span>
                                         </div>
                                         <div>
                                           <span className="text-muted-foreground">Filled Value:</span>
-                                          <span className="ml-2 font-medium text-foreground">${slFilledValue.toFixed(2)}</span>
+                                          <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">${slFilledValue.toFixed(2)}</span>
                                         </div>
                                       </>
                                     )}
                                     <div className="col-span-2">
                                       <span className="text-muted-foreground">Order ID:</span>
-                                      <span className="ml-2 font-mono text-xs">{stopLoss.orderId}</span>
+                                      <span className="ml-2 font-mono text-xs text-gray-700 dark:text-gray-300">{stopLoss.orderId}</span>
                                     </div>
                                   </div>
                                   {slTriggered && tpStatus === 'CANCELED' && (
-                                    <div className="mt-2 pt-2 border-t border-red-200">
-                                      <span className="text-xs text-red-700 font-medium">
+                                    <div className="mt-2 pt-2 border-t border-red-200 dark:border-red-800">
+                                      <span className="text-xs text-red-700 dark:text-red-400 font-medium">
                                         ⚠ Stop loss triggered - Take profit auto-cancelled
                                       </span>
                                     </div>
                                   )}
                                   {slStatus === 'CANCELED' && tpTriggered && (
-                                    <div className="mt-2 pt-2 border-t border-gray-300">
-                                      <span className="text-xs text-muted-foreground">
+                                    <div className="mt-2 pt-2 border-t border-gray-300 dark:border-gray-600">
+                                      <span className="text-xs text-gray-700 dark:text-gray-400">
                                         Auto-cancelled when take profit filled
                                       </span>
                                     </div>

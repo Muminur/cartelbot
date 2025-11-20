@@ -86,10 +86,44 @@ export class WebSocketManager extends EventEmitter {
 
         this.connection.ws.on("message", (data: WebSocket.Data) => {
           try {
-            const message = JSON.parse(data.toString());
-            this.handleMessage(message);
+            const rawData = data.toString();
+
+            // Validate data is not empty
+            if (!rawData || rawData.trim() === '') {
+              console.warn(`[WebSocket ${this.userId}] Received empty message`);
+              return;
+            }
+
+            // Safe JSON parsing with validation
+            try {
+              const message = JSON.parse(rawData);
+
+              // Validate parsed data is an object
+              if (typeof message !== 'object' || message === null) {
+                console.warn(`[WebSocket ${this.userId}] Parsed message is not an object:`, {
+                  type: typeof message,
+                  value: String(message).substring(0, 100),
+                });
+                return;
+              }
+
+              this.handleMessage(message);
+            } catch (parseError) {
+              // Log parse error with context
+              console.error(`[WebSocket ${this.userId}] JSON parse failed:`, {
+                error: parseError instanceof Error ? parseError.message : String(parseError),
+                rawData: rawData.substring(0, 200),
+                dataLength: rawData.length,
+                firstChar: rawData.charAt(0),
+                lastChar: rawData.charAt(rawData.length - 1),
+              });
+              return;
+            }
           } catch (error) {
-            console.error("Failed to parse WebSocket message:", error);
+            console.error(`[WebSocket ${this.userId}] Message handling error:`, {
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            });
           }
         });
 
