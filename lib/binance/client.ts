@@ -662,11 +662,11 @@ export class BinanceClient {
   }
 
   async createUserDataStream(): Promise<{ listenKey: string }> {
-    // FIX: Binance API expects NO parameters - use empty object {} not null
-    // Passing null is interpreted as a parameter, causing -1101 error
+    // Binance API expects NO body parameters, only X-MBX-APIKEY header
+    // Pass undefined explicitly to prevent Axios from sending any body data
     const response = await this.axios.post<{ listenKey: string }>(
       "/api/v3/userDataStream",
-      {},
+      undefined,
       {
         headers: {
           "X-MBX-APIKEY": this.apiKey,
@@ -677,8 +677,8 @@ export class BinanceClient {
   }
 
   async keepAliveUserDataStream(listenKey: string): Promise<void> {
-    // FIX: Use empty object {} instead of null for consistency
-    await this.axios.put("/api/v3/userDataStream", {}, {
+    // Binance API expects listenKey as query parameter, no body
+    await this.axios.put("/api/v3/userDataStream", undefined, {
       params: { listenKey },
       headers: {
         "X-MBX-APIKEY": this.apiKey,

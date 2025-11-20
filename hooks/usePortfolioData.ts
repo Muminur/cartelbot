@@ -69,11 +69,15 @@ export function usePortfolioData(options: UsePortfolioDataOptions = {}) {
    * @param force - Force fetch even if cache is fresh
    */
   const fetchData = useCallback(async (force = false): Promise<PortfolioData | null> => {
+    const fetchId = Math.random().toString(36).substring(7);
+    console.log(`[usePortfolioData:${fetchId}] Starting fetch (force=${force})`);
+
     // Check cache (skip if force=true)
     if (!force && cacheRef.current.data) {
       const age = Date.now() - cacheRef.current.timestamp;
       if (age < CACHE_STALE_TIME) {
         // Cache hit - return cached data
+        console.log(`[usePortfolioData:${fetchId}] Cache hit (age=${age}ms)`);
         if (isMountedRef.current) {
           setData(cacheRef.current.data);
           setLoading(false);
@@ -84,6 +88,7 @@ export function usePortfolioData(options: UsePortfolioDataOptions = {}) {
 
     // Cancel previous in-flight request
     if (abortControllerRef.current) {
+      console.log(`[usePortfolioData:${fetchId}] Aborting previous request`);
       abortControllerRef.current.abort();
     }
 
@@ -93,6 +98,7 @@ export function usePortfolioData(options: UsePortfolioDataOptions = {}) {
 
     try {
       if (isMountedRef.current) {
+        console.log(`[usePortfolioData:${fetchId}] Setting refreshing=true, error=null`);
         setRefreshing(true);
         setError(null);
       }
@@ -100,7 +106,9 @@ export function usePortfolioData(options: UsePortfolioDataOptions = {}) {
       // Import dynamically to avoid circular dependencies
       const { fetchPortfolioData } = await import('@/lib/portfolio/fetcher');
 
+      console.log(`[usePortfolioData:${fetchId}] Calling fetchPortfolioData`);
       const result = await fetchPortfolioData(controller.signal);
+      console.log(`[usePortfolioData:${fetchId}] Fetch successful - ${result.assets.length} assets, $${result.totalValueUSDT.toFixed(2)}`);
 
       // Update cache and state (only if component is still mounted)
       if (isMountedRef.current) {
@@ -110,17 +118,21 @@ export function usePortfolioData(options: UsePortfolioDataOptions = {}) {
         };
         setData(result);
         setError(null);
+        console.log(`[usePortfolioData:${fetchId}] State updated successfully`);
+      } else {
+        console.log(`[usePortfolioData:${fetchId}] Component unmounted - skipping state update`);
       }
 
       return result;
     } catch (err) {
       // Silent handling for AbortError (prevents console spam)
       if (err instanceof Error && err.name === 'AbortError') {
+        console.log(`[usePortfolioData:${fetchId}] Request aborted`);
         return null;
       }
 
       // Handle all other errors
-      console.error('[usePortfolioData] Fetch error:', err);
+      console.error(`[usePortfolioData:${fetchId}] Fetch error:`, err);
 
       if (isMountedRef.current) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to fetch portfolio data';
@@ -128,11 +140,13 @@ export function usePortfolioData(options: UsePortfolioDataOptions = {}) {
           message: errorMessage,
           code: 'FETCH_ERROR',
         });
+        console.log(`[usePortfolioData:${fetchId}] Error state set`);
       }
 
       return null;
     } finally {
       if (isMountedRef.current) {
+        console.log(`[usePortfolioData:${fetchId}] Finally block - setting loading=false, refreshing=false`);
         setLoading(false);
         setRefreshing(false);
       }
@@ -143,8 +157,12 @@ export function usePortfolioData(options: UsePortfolioDataOptions = {}) {
   useEffect(() => {
     isMountedRef.current = true;
 
-    // Initial fetch
-    fetchData();
+    // Initial fetch with logging
+    console.log('[usePortfolioData] Component mounted - initiating initial fetch');
+    fetchData().catch((err) => {
+      // Extra safety: ensure errors are caught and logged
+      console.error('[usePortfolioData] Initial fetch failed:', err);
+    });
 
     if (!autoRefresh) {
       return;
