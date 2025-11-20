@@ -68,3 +68,5 @@ verify-*.sh
 investigate-*.js
 validate-*.js
 *.backup
+# Local documentation (tracked but not pushed)
+CLAUDE_Details.md
