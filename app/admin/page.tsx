@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Radio, TrendingUp, DollarSign, Activity, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, Radio, TrendingUp, DollarSign, Activity, AlertCircle, Trash2, Search } from "lucide-react";
 
 interface SystemStats {
   users: {
@@ -39,6 +40,11 @@ export default function AdminDashboardPage() {
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Mock signal cleanup state
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [cleanupAnalysis, setCleanupAnalysis] = useState<any>(null);
+  const [cleanupMessage, setCleanupMessage] = useState<string | null>(null);
+
   useEffect(() => {
     fetchStats();
   }, []);
@@ -58,6 +64,56 @@ export default function AdminDashboardPage() {
       setError("Failed to load system statistics");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const analyzeMockSignals = async () => {
+    setCleanupLoading(true);
+    setCleanupMessage(null);
+    try {
+      const response = await fetch("/api/admin/cleanup-mock-signals");
+      const data = await response.json();
+
+      if (data.success) {
+        setCleanupAnalysis(data.analysis);
+        setCleanupMessage(data.message);
+      } else {
+        setCleanupMessage(`Error: ${data.error || "Failed to analyze signals"}`);
+      }
+    } catch (err) {
+      console.error("Error analyzing mock signals:", err);
+      setCleanupMessage("Failed to analyze mock signals");
+    } finally {
+      setCleanupLoading(false);
+    }
+  };
+
+  const deleteMockSignals = async () => {
+    if (!confirm("Are you sure you want to delete all mock signals? This action cannot be undone.")) {
+      return;
+    }
+
+    setCleanupLoading(true);
+    setCleanupMessage(null);
+    try {
+      const response = await fetch("/api/admin/cleanup-mock-signals", {
+        method: "POST",
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        setCleanupAnalysis(null);
+        setCleanupMessage(`✅ ${data.message}`);
+        // Refresh stats after deletion
+        fetchStats();
+      } else {
+        setCleanupMessage(`❌ Error: ${data.error || "Failed to delete signals"}`);
+      }
+    } catch (err) {
+      console.error("Error deleting mock signals:", err);
+      setCleanupMessage("❌ Failed to delete mock signals");
+    } finally {
+      setCleanupLoading(false);
     }
   };
 
@@ -277,6 +333,122 @@ export default function AdminDashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Database Cleanup Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Trash2 className="h-5 w-5" />
+            Database Cleanup
+          </CardTitle>
+          <p className="text-sm text-muted-foreground dark:text-gray-400 mt-2">
+            Remove mock/test signals that were never executed on Binance
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={analyzeMockSignals}
+              disabled={cleanupLoading}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Search className="h-4 w-4" />
+              {cleanupLoading ? "Analyzing..." : "Analyze Mock Signals"}
+            </Button>
+
+            {cleanupAnalysis && cleanupAnalysis.mockSignals?.length > 0 && (
+              <Button
+                onClick={deleteMockSignals}
+                disabled={cleanupLoading}
+                variant="destructive"
+                className="flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                {cleanupLoading ? "Deleting..." : `Delete ${cleanupAnalysis.mockSignals.length} Mock Signals`}
+              </Button>
+            )}
+          </div>
+
+          {/* Cleanup Message */}
+          {cleanupMessage && (
+            <div
+              className={`p-4 rounded-lg border ${
+                cleanupMessage.startsWith("✅")
+                  ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200"
+                  : cleanupMessage.startsWith("❌")
+                  ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200"
+                  : "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200"
+              }`}
+            >
+              <p className="text-sm font-medium">{cleanupMessage}</p>
+            </div>
+          )}
+
+          {/* Analysis Results */}
+          {cleanupAnalysis && (
+            <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+              <h4 className="font-semibold text-sm text-foreground dark:text-white">Analysis Results</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground dark:text-gray-400">Total Signals</p>
+                  <p className="text-lg font-bold text-foreground dark:text-white">{cleanupAnalysis.totalSignals}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground dark:text-gray-400">Real Binance Orders</p>
+                  <p className="text-lg font-bold text-green-600">{cleanupAnalysis.signalsWithRealBinanceOrders}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground dark:text-gray-400">Mock Signals</p>
+                  <p className="text-lg font-bold text-red-600">{cleanupAnalysis.mockSignals?.length || 0}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground dark:text-gray-400">With Trades</p>
+                  <p className="text-lg font-bold text-foreground dark:text-white">{cleanupAnalysis.signalsWithTrades}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground dark:text-gray-400">Without Trades</p>
+                  <p className="text-lg font-bold text-foreground dark:text-white">{cleanupAnalysis.signalsWithoutTrades}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground dark:text-gray-400">Mock Trades</p>
+                  <p className="text-lg font-bold text-foreground dark:text-white">{cleanupAnalysis.signalsWithMockTrades}</p>
+                </div>
+              </div>
+
+              {/* Mock Signals List */}
+              {cleanupAnalysis.mockSignals?.length > 0 && (
+                <div className="mt-4">
+                  <h5 className="text-xs font-semibold text-muted-foreground dark:text-gray-400 mb-2">
+                    Mock Signals (showing first 5):
+                  </h5>
+                  <div className="space-y-2">
+                    {cleanupAnalysis.mockSignals.slice(0, 5).map((signal: any) => (
+                      <div
+                        key={signal._id}
+                        className="text-xs p-2 bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-foreground dark:text-white">{signal.symbol}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {signal.status}
+                          </Badge>
+                        </div>
+                        <p className="text-muted-foreground dark:text-gray-400 mt-1">{signal.reason}</p>
+                      </div>
+                    ))}
+                    {cleanupAnalysis.mockSignals.length > 5 && (
+                      <p className="text-xs text-muted-foreground dark:text-gray-400 text-center">
+                        ...and {cleanupAnalysis.mockSignals.length - 5} more
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
