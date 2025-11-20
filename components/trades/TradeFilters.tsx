@@ -61,9 +61,9 @@ export function TradeFilters({
   });
 
   return (
-    <div className="bg-white p-4 rounded-lg border space-y-4">
+    <div className="bg-card p-4 rounded-lg border space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Filters</h3>
+        <h3 className="text-sm font-semibold text-foreground">Filters</h3>
         {hasActiveFilters && (
           <Button
             variant="ghost"

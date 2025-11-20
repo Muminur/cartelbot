@@ -1029,7 +1029,7 @@ export default function SignalDetailModal({
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm text-gray-500">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <TrendingUp className="h-4 w-4" />
                 <span>Symbol</span>
               </div>
@@ -1038,7 +1038,7 @@ export default function SignalDetailModal({
 
             {/* Live Price with change indicator */}
             <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm text-gray-500">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <DollarSign className="h-4 w-4" />
                 <span>Current Price</span>
                 {priceLoading && <Clock className="h-3 w-3 animate-spin" />}
@@ -1082,7 +1082,7 @@ export default function SignalDetailModal({
                   </p>
                   {signal.currentMarketPrice && (
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="text-gray-500">
+                      <span className="text-muted-foreground">
                         Created at: {formatPrice(signal.currentMarketPrice)}
                       </span>
                       <Badge
@@ -1105,7 +1105,7 @@ export default function SignalDetailModal({
                   )}
                 </div>
               ) : signal.currentMarketPrice ? (
-                <p className="text-2xl font-bold text-gray-400">
+                <p className="text-2xl font-bold text-muted-foreground/60">
                   {formatPrice(signal.currentMarketPrice)}
                 </p>
               ) : null}
@@ -1223,7 +1223,7 @@ export default function SignalDetailModal({
 
             <div className="space-y-2">
               <p className="text-sm font-medium text-foreground">Raw Signal:</p>
-              <pre className="bg-gray-50 p-3 rounded-lg text-xs overflow-x-auto border">
+              <pre className="bg-muted/50 p-3 rounded-lg text-xs text-foreground overflow-x-auto border">
                 {signal.rawSignal}
               </pre>
             </div>
@@ -1260,7 +1260,7 @@ export default function SignalDetailModal({
                 </div>
 
                 {loadingTrade ? (
-                  <div className="text-sm text-gray-500 flex items-center gap-2">
+                  <div className="text-sm text-muted-foreground flex items-center gap-2">
                     <Clock className="h-4 w-4 animate-spin" />
                     Loading trade details...
                   </div>
@@ -1344,12 +1344,12 @@ export default function SignalDetailModal({
                     })()}
 
                     {/* Buy Order */}
-                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                      <div className="text-xs font-semibold text-blue-900 mb-2">BUY ORDER</div>
+                    <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <div className="text-xs font-semibold text-blue-900 dark:text-blue-300 mb-2">BUY ORDER</div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div>
                           <span className="text-muted-foreground">Order ID:</span>
-                          <span className="ml-2 font-mono text-blue-700">{trade.buyOrder.orderId}</span>
+                          <span className="ml-2 font-mono text-blue-700 dark:text-blue-400">{trade.buyOrder.orderId}</span>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Status:</span>
@@ -1359,11 +1359,11 @@ export default function SignalDetailModal({
                         </div>
                         <div>
                           <span className="text-muted-foreground">Quantity:</span>
-                          <span className="ml-2 font-medium">{trade.buyOrder.quantity.toFixed(6)}</span>
+                          <span className="ml-2 font-medium text-foreground">{trade.buyOrder.quantity.toFixed(6)}</span>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Invested:</span>
-                          <span className="ml-2 font-medium">${trade.investedAmount.toFixed(2)}</span>
+                          <span className="ml-2 font-medium text-foreground">${trade.investedAmount.toFixed(2)}</span>
                         </div>
                       </div>
                     </div>
@@ -1425,7 +1425,7 @@ export default function SignalDetailModal({
                                 const displayStatus = realOrderStatus?.status || order.status;
 
                                 return (
-                                  <div key={order.orderId} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                  <div key={order.orderId} className="bg-muted/50 p-3 rounded-lg border border-border">
                                     <div className="flex items-center justify-between mb-2">
                                       <span className="text-xs font-semibold text-foreground">
                                         Order #{order.orderId}
@@ -1470,7 +1470,7 @@ export default function SignalDetailModal({
                             const currentTpIndex = tpIndex++;
 
                             return (
-                              <div key={takeProfit.orderListId} className="bg-gray-50 p-4 rounded-lg border-2 border-gray-300 space-y-3">
+                              <div key={takeProfit.orderListId} className="bg-muted/50 p-4 rounded-lg border-2 border-border space-y-3">
                                 {/* Take Profit Section */}
                                 <div className={`p-3 rounded-lg border-2 ${
                                   tpTriggered
@@ -1515,7 +1515,7 @@ export default function SignalDetailModal({
                                     </div>
                                     <div>
                                       <span className="text-muted-foreground">Quantity:</span>
-                                      <span className="ml-2">{takeProfit.quantity.toFixed(6)}</span>
+                                      <span className="ml-2 text-foreground">{takeProfit.quantity.toFixed(6)}</span>
                                     </div>
                                     {tpExecutedQty > 0 && (
                                       <>
@@ -1527,7 +1527,7 @@ export default function SignalDetailModal({
                                         </div>
                                         <div>
                                           <span className="text-muted-foreground">Filled Value:</span>
-                                          <span className="ml-2 font-medium">${tpFilledValue.toFixed(2)}</span>
+                                          <span className="ml-2 font-medium text-foreground">${tpFilledValue.toFixed(2)}</span>
                                         </div>
                                       </>
                                     )}
@@ -1582,7 +1582,7 @@ export default function SignalDetailModal({
                                     </div>
                                     <div>
                                       <span className="text-muted-foreground">Quantity:</span>
-                                      <span className="ml-2">{stopLoss.quantity.toFixed(6)}</span>
+                                      <span className="ml-2 text-foreground">{stopLoss.quantity.toFixed(6)}</span>
                                     </div>
                                     {slExecutedQty > 0 && (
                                       <>
@@ -1594,7 +1594,7 @@ export default function SignalDetailModal({
                                         </div>
                                         <div>
                                           <span className="text-muted-foreground">Filled Value:</span>
-                                          <span className="ml-2 font-medium">${slFilledValue.toFixed(2)}</span>
+                                          <span className="ml-2 font-medium text-foreground">${slFilledValue.toFixed(2)}</span>
                                         </div>
                                       </>
                                     )}
@@ -1621,8 +1621,8 @@ export default function SignalDetailModal({
 
                                 {/* Live Status Indicator - Only show when using Binance API data */}
                                 {ocoStatus && (
-                                  <div className="flex items-center justify-center gap-2 pt-2 border-t border-gray-300">
-                                    <span className="text-xs text-green-600 font-medium" title="Status verified from Binance API">
+                                  <div className="flex items-center justify-center gap-2 pt-2 border-t border-border">
+                                    <span className="text-xs text-green-600 dark:text-green-400 font-medium" title="Status verified from Binance API">
                                       ✓ Live data from Binance
                                     </span>
                                   </div>
@@ -1670,8 +1670,8 @@ export default function SignalDetailModal({
                     ) : null}
 
                     {/* Trade Summary */}
-                    <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-3 rounded-lg border border-purple-200">
-                      <div className="text-xs font-semibold text-purple-900 mb-2">TRADE SUMMARY</div>
+                    <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
+                      <div className="text-xs font-semibold text-purple-900 dark:text-purple-300 mb-2">TRADE SUMMARY</div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div>
                           <span className="text-muted-foreground">Trade Status:</span>
@@ -1681,12 +1681,12 @@ export default function SignalDetailModal({
                         </div>
                         <div>
                           <span className="text-muted-foreground">Entry Price:</span>
-                          <span className="ml-2 font-medium">${formatPrice(trade.entryPrice)}</span>
+                          <span className="ml-2 font-medium text-foreground">${formatPrice(trade.entryPrice)}</span>
                         </div>
                         {trade.exitPrice && (
                           <div>
                             <span className="text-muted-foreground">Exit Price:</span>
-                            <span className="ml-2 font-medium">${formatPrice(trade.exitPrice)}</span>
+                            <span className="ml-2 font-medium text-foreground">${formatPrice(trade.exitPrice)}</span>
                           </div>
                         )}
                         {(() => {
@@ -1721,7 +1721,7 @@ export default function SignalDetailModal({
                                 ${displayPnL.toFixed(2)} ({displayPercentage.toFixed(2)}%)
                               </span>
                               {shouldUseCalculated && (
-                                <span className="ml-1 text-xs text-gray-500" title="Calculated from actual order values">
+                                <span className="ml-1 text-xs text-muted-foreground/70" title="Calculated from actual order values">
                                   *
                                 </span>
                               )}
@@ -1740,7 +1740,7 @@ export default function SignalDetailModal({
                     </div>
                   </div>
                 ) : (
-                  <div className="text-sm text-gray-500">No trade data available for this signal.</div>
+                  <div className="text-sm text-muted-foreground">No trade data available for this signal.</div>
                 )}
               </div>
             </>

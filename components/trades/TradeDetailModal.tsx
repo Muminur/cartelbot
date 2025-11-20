@@ -170,8 +170,18 @@ export function TradeDetailModal({
 
   const handleViewSignal = () => {
     if (trade?.signalId) {
-      // Convert signalId to string (handles MongoDB ObjectId)
-      const signalIdString = String(trade.signalId);
+      // Extract ID whether signalId is a string or a populated object
+      // Populated: {_id: "abc123", symbol: "BTC", ...} → "abc123"
+      // String: "abc123" → "abc123"
+      const signalIdString = typeof trade.signalId === "string"
+        ? trade.signalId
+        : (trade.signalId as { _id?: string })._id || String(trade.signalId);
+
+      if (!signalIdString || signalIdString === "[object Object]") {
+        console.error("[TradeDetailModal] Invalid signal ID:", trade.signalId);
+        return;
+      }
+
       router.push(`/signals/history?signalId=${signalIdString}&openModal=true`);
       onOpenChange(false);
     }
@@ -197,11 +207,11 @@ export function TradeDetailModal({
       case "closed":
         return "bg-green-100 text-green-800";
       case "cancelled":
-        return "bg-gray-100 text-gray-800";
+        return "bg-muted text-muted-foreground";
       case "pending_approval":
-        return "bg-purple-100 text-purple-800";
+        return "bg-purple-100 text-purple-800 dark:bg-purple-950/30 dark:text-purple-300";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-muted text-muted-foreground";
     }
   };
 
@@ -214,9 +224,9 @@ export function TradeDetailModal({
       case "manual":
         return "bg-blue-100 text-blue-800";
       case "cancelled":
-        return "bg-gray-100 text-gray-800";
+        return "bg-muted text-muted-foreground";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-muted text-muted-foreground";
     }
   };
 
@@ -230,11 +240,11 @@ export function TradeDetailModal({
         return "bg-blue-100 text-blue-800";
       case "CANCELED":
       case "CANCELLED":
-        return "bg-gray-100 text-gray-800";
+        return "bg-muted text-muted-foreground";
       case "REJECTED":
-        return "bg-red-100 text-red-800";
+        return "bg-red-100 text-red-800 dark:bg-red-950/30 dark:text-red-300";
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-muted text-muted-foreground";
     }
   };
 
@@ -329,8 +339,8 @@ export function TradeDetailModal({
 
             {/* Entry Details */}
             <div>
-              <h3 className="font-semibold mb-3">Entry Details</h3>
-              <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+              <h3 className="font-semibold mb-3 text-foreground">Entry Details</h3>
+              <div className="grid grid-cols-2 gap-4 bg-muted/50 p-4 rounded-lg">
                 <div>
                   <p className="text-sm text-muted-foreground">Entry Price</p>
                   <p className="font-medium">{formatCurrency(trade.entryPrice)}</p>
@@ -353,8 +363,8 @@ export function TradeDetailModal({
             {/* Exit Details (if closed) */}
             {trade.status === "closed" && trade.exitPrice && (
               <div>
-                <h3 className="font-semibold mb-3">Exit Details</h3>
-                <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-semibold mb-3 text-foreground">Exit Details</h3>
+                <div className="grid grid-cols-2 gap-4 bg-muted/50 p-4 rounded-lg">
                   <div>
                     <p className="text-sm text-muted-foreground">Exit Price</p>
                     <p className="font-medium">{formatCurrency(trade.exitPrice)}</p>
@@ -382,7 +392,7 @@ export function TradeDetailModal({
             {/* P&L Breakdown */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold">P&L Breakdown</h3>
+                <h3 className="font-semibold text-foreground">P&L Breakdown</h3>
                 {(trade.status === "open" || trade.status === "partial") && (
                   <Button
                     variant="outline"
@@ -405,9 +415,9 @@ export function TradeDetailModal({
                   </Button>
                 )}
               </div>
-              <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+              <div className="bg-muted/50 p-4 rounded-lg space-y-3">
                 {(trade.status === "open" || trade.status === "partial") && currentPrice && (
-                  <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                  <div className="flex items-center justify-between pb-3 border-b border-border">
                     <span className="text-sm text-muted-foreground">Current Market Price</span>
                     <div className="text-right">
                       <div className="font-medium">{formatCurrency(currentPrice)}</div>
@@ -434,8 +444,8 @@ export function TradeDetailModal({
 
             {/* Buy Order */}
             <div>
-              <h3 className="font-semibold mb-3">Buy Order</h3>
-              <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+              <h3 className="font-semibold mb-3 text-foreground">Buy Order</h3>
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Order ID</span>
                   <span className="font-mono text-sm">{trade.buyOrder.orderId}</span>
@@ -508,9 +518,9 @@ export function TradeDetailModal({
                       if (!takeProfit || !stopLoss) {
                         // Fallback: Display orders individually if pairing failed
                         return orders.map((order: IOrder) => (
-                          <div key={order.orderId} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                          <div key={order.orderId} className="bg-muted/50 p-4 rounded-lg border border-border">
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-semibold">
+                              <span className="text-sm font-semibold text-foreground">
                                 Order #{order.orderId}
                               </span>
                               <Badge className={getOrderStatusColor(order.status)}>
@@ -548,19 +558,19 @@ export function TradeDetailModal({
                       const currentTpIndex = tpIndex++;
 
                       return (
-                        <div key={takeProfit.orderListId} className="bg-gray-50 p-4 rounded-lg border-2 border-gray-300 space-y-3">
+                        <div key={takeProfit.orderListId} className="bg-muted/50 p-4 rounded-lg border-2 border-border space-y-3">
                           {/* OCO Pair Header */}
-                          <div className="text-xs font-semibold text-muted-foreground mb-2">
+                          <div className="text-xs font-semibold text-muted-foreground/80 mb-2">
                             OCO Pair #{currentTpIndex} (Order List ID: {takeProfit.orderListId})
                           </div>
 
                           {/* Take Profit Section */}
                           <div className={`p-3 rounded-lg border-2 ${
                             tpTriggered
-                              ? 'bg-green-50 border-green-300'
+                              ? 'bg-green-50 border-green-300 dark:bg-green-950/20 dark:border-green-800'
                               : tpStatus === 'CANCELED' || tpStatus === 'CANCELLED'
-                              ? 'bg-gray-100 border-gray-300'
-                              : 'bg-blue-50 border-blue-200'
+                              ? 'bg-muted/70 border-border'
+                              : 'bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800'
                           }`}>
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
@@ -573,10 +583,10 @@ export function TradeDetailModal({
                               </div>
                               <Badge
                                 className={
-                                  tpTriggered ? "bg-green-500 text-white" :
-                                  tpStatus === "CANCELED" || tpStatus === "CANCELLED" ? "bg-gray-400 text-white" :
-                                  tpStatus === "PARTIALLY_FILLED" ? "bg-blue-500 text-white" :
-                                  "bg-yellow-500 text-white"
+                                  tpTriggered ? "bg-green-500 text-white dark:bg-green-600" :
+                                  tpStatus === "CANCELED" || tpStatus === "CANCELLED" ? "bg-muted-foreground/60 text-white" :
+                                  tpStatus === "PARTIALLY_FILLED" ? "bg-blue-500 text-white dark:bg-blue-600" :
+                                  "bg-yellow-500 text-white dark:bg-yellow-600"
                                 }
                               >
                                 {tpStatus}
@@ -624,10 +634,10 @@ export function TradeDetailModal({
                           {/* Stop Loss Section */}
                           <div className={`p-3 rounded-lg border-2 ${
                             slTriggered
-                              ? 'bg-red-50 border-red-300'
+                              ? 'bg-red-50 border-red-300 dark:bg-red-950/20 dark:border-red-800'
                               : slStatus === 'CANCELED' || slStatus === 'CANCELLED'
-                              ? 'bg-gray-100 border-gray-300'
-                              : 'bg-orange-50 border-orange-200'
+                              ? 'bg-muted/70 border-border'
+                              : 'bg-orange-50 border-orange-200 dark:bg-orange-950/20 dark:border-orange-800'
                           }`}>
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
@@ -640,10 +650,10 @@ export function TradeDetailModal({
                               </div>
                               <Badge
                                 className={
-                                  slTriggered ? "bg-red-500 text-white" :
-                                  slStatus === "CANCELED" || slStatus === "CANCELLED" ? "bg-gray-400 text-white" :
-                                  slStatus === "PARTIALLY_FILLED" ? "bg-blue-500 text-white" :
-                                  "bg-yellow-500 text-white"
+                                  slTriggered ? "bg-red-500 text-white dark:bg-red-600" :
+                                  slStatus === "CANCELED" || slStatus === "CANCELLED" ? "bg-muted-foreground/60 text-white" :
+                                  slStatus === "PARTIALLY_FILLED" ? "bg-blue-500 text-white dark:bg-blue-600" :
+                                  "bg-yellow-500 text-white dark:bg-yellow-600"
                                 }
                               >
                                 {slStatus}
@@ -698,15 +708,22 @@ export function TradeDetailModal({
             {/* Signal Information */}
             {trade.signalId && (
               <div>
-                <h3 className="font-semibold mb-3">Signal Information</h3>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Signal ID</span>
+                <h3 className="font-semibold mb-3 text-foreground">Signal Information</h3>
+                <div className="bg-muted/50 p-4 rounded-lg">
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm text-muted-foreground block mb-1">Signal ID</span>
+                      <code className="text-xs text-foreground/80 break-all block">
+                        {typeof trade.signalId === "string"
+                          ? trade.signalId
+                          : (trade.signalId as { _id?: string })._id || "N/A"}
+                      </code>
+                    </div>
                     <Button
                       variant="link"
                       size="sm"
                       onClick={handleViewSignal}
-                      className="h-auto p-0"
+                      className="h-auto p-0 flex-shrink-0"
                     >
                       View Signal
                       <ExternalLink className="ml-1 h-3 w-3" />
