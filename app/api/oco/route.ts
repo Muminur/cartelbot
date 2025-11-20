@@ -80,6 +80,8 @@ export async function GET(request: NextRequest) {
       userId: String(user._id),
       "sellOrders.0": { $exists: true }, // Has at least one sell order
       "sellOrders.orderListId": { $exists: true }, // Has OCO orders
+      status: { $ne: "pending_approval" }, // Exclude pending approval trades (not executed)
+      "buyOrder.orderId": { $ne: 0 }, // Exclude fake trades with orderId 0
     };
 
     // C4: Filter by symbol with NoSQL injection protection
