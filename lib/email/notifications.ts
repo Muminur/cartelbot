@@ -3,7 +3,9 @@ import { env } from "@/lib/config";
 import { User } from "@/lib/db/models";
 import { connectDB } from "@/lib/db";
 import { Types } from "mongoose";
-import { IUser } from "@/types";
+import type { IUser } from "@/types";
+
+type NotificationType = "onTradeExecuted" | "onTargetHit" | "onStopLossHit" | "dailySummary";
 
 let resend: Resend | null = null;
 
@@ -63,7 +65,7 @@ async function retryWithBackoff<T>(
  */
 async function shouldSendNotification(
   userId: Types.ObjectId | string,
-  notificationType: "onTradeExecuted" | "onTargetHit" | "onStopLossHit" | "dailySummary"
+  notificationType: NotificationType
 ): Promise<{ shouldSend: boolean; email: string | null }> {
   try {
     await connectDB();

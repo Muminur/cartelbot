@@ -76,6 +76,12 @@ export function formatNumber(value: number, decimals: number = 2): string {
 export function formatDate(date: Date | string, format: "short" | "long" = "short"): string {
   const dateObj = typeof date === "string" ? new Date(date) : date;
 
+  // Validate date is finite and valid
+  if (!dateObj || isNaN(dateObj.getTime()) || !isFinite(dateObj.getTime())) {
+    console.warn("[formatDate] Invalid date value:", date);
+    return "Invalid Date";
+  }
+
   if (format === "long") {
     return new Intl.DateTimeFormat("en-US", {
       year: "numeric",

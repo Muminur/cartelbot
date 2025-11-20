@@ -44,6 +44,11 @@ function serializeObjectIds(
     return String(obj);
   }
 
+  // Preserve Date objects (don't serialize them)
+  if (obj instanceof Date) {
+    return obj;
+  }
+
   // Check for circular references
   if (visited.has(obj)) {
     console.warn("[Serialization] Circular reference detected, skipping");
