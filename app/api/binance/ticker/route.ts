@@ -27,15 +27,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fix #3: Add symbol format validation
-    const SYMBOL_REGEX = /^[A-Z]{2,10}(USDT|BTC|ETH|BNB|BUSD)$/;
+    // Fix #3: Add symbol format validation (allow numbers for coins like 1INCH, API3, 1000SATS)
+    const SYMBOL_REGEX = /^[A-Z0-9]{2,20}(USDT|BTC|ETH|BNB|BUSD)$/;
     if (!SYMBOL_REGEX.test(symbol.toUpperCase())) {
       return NextResponse.json(
         {
           success: false,
           error: {
             code: "INVALID_SYMBOL_FORMAT",
-            message: "Symbol must match Binance format (e.g., BTCUSDT, ETHUSDT)",
+            message: "Symbol must match Binance format (e.g., BTCUSDT, ETHUSDT, 1INCHUSDT)",
             statusCode: 400,
           },
         },

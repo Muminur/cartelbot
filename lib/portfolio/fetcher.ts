@@ -150,29 +150,149 @@ async function fetchBatchTickers(
     return tickerMap;
   }
 
-  try {
-    const encodedSymbols = encodeURIComponent(JSON.stringify([...symbols]));
-    const response = await fetch(
-      `/api/binance/ticker/batch?symbols=${encodedSymbols}`,
-      { signal }
-    );
-    const data = await response.json();
+  const symbolsArray = [...symbols];
 
-    if (data.success && data.data) {
-      data.data.forEach((ticker: { symbol: string; lastPrice: string; priceChangePercent: string }) => {
-        tickerMap.set(ticker.symbol, {
-          price: parseFloat(ticker.lastPrice),
-          change: ticker.priceChangePercent || '0',
-        });
+  // Common symbols that exist on testnet (prioritize these)
+  const COMMON_TESTNET_SYMBOLS = [
+    'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'LTCUSDT', 'ADAUSDT', 'DOTUSDT',
+    'LINKUSDT', 'XRPUSDT', 'SOLUSDT', 'MATICUSDT', 'UNIUSDT', 'AVAXUSDT'
+  ];
+
+  // Separate into common (likely to exist) and uncommon symbols
+  const commonSymbols = symbolsArray.filter(s => COMMON_TESTNET_SYMBOLS.includes(s));
+  const uncommonSymbols = symbolsArray.filter(s => !COMMON_TESTNET_SYMBOLS.includes(s));
+
+  const BATCH_SIZE = 100; // API limit
+  const batches: string[][] = [];
+
+  // Prioritize common symbols (put them in first batch)
+  if (commonSymbols.length > 0) {
+    batches.push(commonSymbols);
+  }
+
+  // Split uncommon symbols into batches of 100
+  for (let i = 0; i < uncommonSymbols.length; i += BATCH_SIZE) {
+    batches.push(uncommonSymbols.slice(i, i + BATCH_SIZE));
+  }
+
+  console.log('[Portfolio] 🔄 Fetching tickers:', {
+    total: symbolsArray.length,
+    common: commonSymbols.length,
+    uncommon: uncommonSymbols.length,
+    batches: batches.length
+  });
+
+  try {
+    // Fetch all batches in parallel
+    const batchResults = await Promise.allSettled(
+      batches.map(async (batch, batchIndex) => {
+        const encodedSymbols = encodeURIComponent(JSON.stringify(batch));
+        const response = await fetch(
+          `/api/binance/ticker/batch?symbols=${encodedSymbols}`,
+          { signal }
+        );
+        const data = await response.json();
+
+        if (!data.success) {
+          // If batch failed with 404, some symbols might not exist on testnet
+          // Return the batch symbols so we can retry them individually
+          if (data.error?.statusCode === 404 || data.error?.binanceCode === -1121) {
+            console.log(`[Portfolio] ℹ️ Batch ${batchIndex + 1}/${batches.length}: Failed with 404/1121, will retry ${batch.length} symbols individually`);
+            return { failed: true, symbols: batch, batchIndex };
+          }
+          console.warn(`[Portfolio] ⚠️ Batch ${batchIndex + 1}/${batches.length} failed:`, data.error?.message);
+          return { failed: true, symbols: batch, batchIndex };
+        }
+
+        console.log(`[Portfolio] ✅ Batch ${batchIndex + 1}/${batches.length}: ${data.data?.length || 0} prices loaded`);
+        return { failed: false, data: data.data || [], batchIndex };
+      })
+    );
+
+    // Combine all successful results and collect failed symbols
+    let successCount = 0;
+    let failureCount = 0;
+    const failedSymbols: string[] = [];
+
+    batchResults.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        const value = result.value as { failed: boolean; data?: any[]; symbols?: string[]; batchIndex: number };
+
+        if (!value.failed && Array.isArray(value.data)) {
+          // Successful batch - add tickers to map
+          value.data.forEach((ticker: { symbol: string; lastPrice: string; priceChangePercent: string }) => {
+            tickerMap.set(ticker.symbol, {
+              price: parseFloat(ticker.lastPrice),
+              change: ticker.priceChangePercent || '0',
+            });
+          });
+          successCount++;
+        } else if (value.failed && value.symbols) {
+          // Failed batch - collect symbols for individual retry
+          failedSymbols.push(...value.symbols);
+          failureCount++;
+        }
+      } else {
+        failureCount++;
+      }
+    });
+
+    // Retry failed symbols individually
+    if (failedSymbols.length > 0) {
+      console.log(`[Portfolio] 🔄 Retrying ${failedSymbols.length} symbols individually...`);
+
+      const individualResults = await Promise.allSettled(
+        failedSymbols.map(async (symbol) => {
+          try {
+            const response = await fetch(`/api/binance/ticker?symbol=${symbol}`, { signal });
+            const data = await response.json();
+
+            if (data.success && data.data) {
+              return {
+                symbol,
+                price: parseFloat(data.data.price || data.data.lastPrice),
+                change: data.data.priceChangePercent || '0',
+              };
+            }
+            return null;
+          } catch {
+            // Silently skip symbols that fail individually
+            return null;
+          }
+        })
+      );
+
+      // Add successfully fetched individual symbols to ticker map
+      let individualSuccessCount = 0;
+      individualResults.forEach((result) => {
+        if (result.status === 'fulfilled' && result.value) {
+          const ticker = result.value;
+          tickerMap.set(ticker.symbol, {
+            price: ticker.price,
+            change: ticker.change,
+          });
+          individualSuccessCount++;
+        }
       });
 
-      // Update conversion rates cache
-      if (tickerMap.has('BTCUSDT')) {
-        conversionRatesCache.BTCUSDT = tickerMap.get('BTCUSDT')!.price;
-        conversionRatesCache.ETHUSDT = tickerMap.get('ETHUSDT')?.price || 0;
-        conversionRatesCache.BNBUSDT = tickerMap.get('BNBUSDT')?.price || 0;
-        conversionRatesCache.lastUpdated = Date.now();
-      }
+      console.log(`[Portfolio] ✅ Individual retry: ${individualSuccessCount}/${failedSymbols.length} symbols fetched successfully`);
+    }
+
+    console.log('[Portfolio] 📊 Batch summary:', {
+      totalSymbols: symbolsArray.length,
+      batches: batches.length,
+      successfulBatches: successCount,
+      failedBatches: failureCount,
+      retriedIndividually: failedSymbols.length,
+      pricesLoaded: tickerMap.size,
+    });
+
+    // Update conversion rates cache
+    if (tickerMap.has('BTCUSDT')) {
+      conversionRatesCache.BTCUSDT = tickerMap.get('BTCUSDT')!.price;
+      conversionRatesCache.ETHUSDT = tickerMap.get('ETHUSDT')?.price || 0;
+      conversionRatesCache.BNBUSDT = tickerMap.get('BNBUSDT')?.price || 0;
+      conversionRatesCache.lastUpdated = Date.now();
     }
   } catch (error) {
     // Silent handling for AbortError
