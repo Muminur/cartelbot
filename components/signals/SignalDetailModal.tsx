@@ -998,14 +998,16 @@ export default function SignalDetailModal({
     if (onExecute) {
       onExecute(signal);
     } else {
-      router.push(`/trades/execute?signalId=${signal._id}`);
+      // Convert signalId to string (handles MongoDB ObjectId)
+      router.push(`/trades/execute?signalId=${String(signal._id)}`);
     }
     onClose();
   };
 
   const handleRetry = () => {
     // Navigate to execution page with the signal ID
-    router.push(`/trades/execute?signalId=${signal._id}`);
+    // Convert signalId to string (handles MongoDB ObjectId)
+    router.push(`/trades/execute?signalId=${String(signal._id)}`);
     onClose();
   };
 

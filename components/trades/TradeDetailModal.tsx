@@ -170,7 +170,9 @@ export function TradeDetailModal({
 
   const handleViewSignal = () => {
     if (trade?.signalId) {
-      router.push(`/signals/history?signalId=${trade.signalId}&openModal=true`);
+      // Convert signalId to string (handles MongoDB ObjectId)
+      const signalIdString = String(trade.signalId);
+      router.push(`/signals/history?signalId=${signalIdString}&openModal=true`);
       onOpenChange(false);
     }
   };

@@ -234,7 +234,8 @@ function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<t
   };
 
   const handleExecute = (signal: ISignal) => {
-    router.push(`/trades/execute?signalId=${signal._id}`);
+    // Convert signalId to string (handles MongoDB ObjectId)
+    router.push(`/trades/execute?signalId=${String(signal._id)}`);
   };
 
   const handleDelete = async (signal: ISignal) => {

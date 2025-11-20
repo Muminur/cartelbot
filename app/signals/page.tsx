@@ -279,7 +279,8 @@ export default function SignalsPage() {
   const handleRetryExecution = () => {
     if (executionError?.signalId) {
       setExecutionError(null);
-      router.push(`/trades/execute?signalId=${executionError.signalId}`);
+      // Convert signalId to string (handles MongoDB ObjectId)
+      router.push(`/trades/execute?signalId=${String(executionError.signalId)}`);
     }
   };
 
