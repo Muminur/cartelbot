@@ -73,11 +73,30 @@ export function formatNumber(value: number, decimals: number = 2): string {
   }).format(value);
 }
 
-export function formatDate(date: Date | string, format: "short" | "long" = "short"): string {
-  const dateObj = typeof date === "string" ? new Date(date) : date;
+export function formatDate(date: Date | string | unknown, format: "short" | "long" = "short"): string {
+  // Ensure we have a proper Date instance
+  let dateObj: Date;
+
+  if (date instanceof Date) {
+    // Already a Date instance
+    dateObj = date;
+  } else if (typeof date === "string" || typeof date === "number") {
+    // String or number (timestamp)
+    dateObj = new Date(date);
+  } else if (date && typeof date === "object") {
+    // Plain object that might have been a Date (from JSON serialization)
+    // Try to extract the date value if it exists
+    const dateValue = (date as { toJSON?: () => string; toString?: () => string }).toJSON?.()
+      || (date as { toString?: () => string }).toString?.();
+    dateObj = new Date(dateValue || "");
+  } else {
+    // Invalid input
+    console.warn("[formatDate] Invalid date input type:", typeof date, date);
+    return "Invalid Date";
+  }
 
   // Validate date is finite and valid
-  if (!dateObj || isNaN(dateObj.getTime()) || !isFinite(dateObj.getTime())) {
+  if (!dateObj || typeof dateObj.getTime !== "function" || isNaN(dateObj.getTime()) || !isFinite(dateObj.getTime())) {
     console.warn("[formatDate] Invalid date value:", date);
     return "Invalid Date";
   }
