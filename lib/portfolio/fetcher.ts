@@ -17,7 +17,7 @@ const MAJOR_COINS = ['BTC', 'ETH', 'BNB', 'SOL', 'ADA', 'XRP', 'DOT', 'LINK', 'M
 const FIAT_PAIRS = ['EUR', 'GBP', 'AUD', 'JPY', 'TRY', 'ZAR', 'UAH', 'MXN', 'PLN', 'BRL', 'RUB', 'ARS', 'NGN'];
 
 // Delisted or non-existent symbols that cause 404 errors
-const DELISTED_SYMBOLS = ['W', 'BUSD', 'UST', 'LUNA', 'FTT'];
+const DELISTED_SYMBOLS = ['W', 'BUSD', 'UST', 'LUNA', 'FTT', 'RON'];
 
 // Cache for conversion rates (BTC/ETH/BNB prices change slowly)
 const conversionRatesCache = {
@@ -129,19 +129,25 @@ function buildSymbolList(balances: BalanceData[]): Set<string> {
       symbols.add(`${asset}USDT`);
     }
 
-    // For major coins, include conversion pairs (but avoid self-trading pairs)
+    // For major coins, include conversion pairs (use correct Binance base/quote format)
     if (MAJOR_COINS.includes(asset)) {
-      // Only add BTC pair if asset is NOT BTC
-      if (asset !== 'BTC') {
-        symbols.add(`${asset}BTC`);
-      }
-      // Only add ETH pair if asset is NOT ETH
-      if (asset !== 'ETH') {
-        symbols.add(`${asset}ETH`);
-      }
-      // Only add BNB pair if asset is NOT BNB
-      if (asset !== 'BNB') {
-        symbols.add(`${asset}BNB`);
+      if (asset === 'BTC') {
+        // BTC can trade against ETH and BNB (BTC is quote currency)
+        symbols.add('ETHBTC');  // ETH/BTC pair
+        symbols.add('BNBBTC');  // BNB/BTC pair
+      } else if (asset === 'ETH') {
+        // ETH trades against BTC, and BNB trades against ETH
+        symbols.add('ETHBTC');  // ETH/BTC pair
+        symbols.add('BNBETH');  // BNB/ETH pair
+      } else if (asset === 'BNB') {
+        // BNB trades against BTC and ETH
+        symbols.add('BNBBTC');  // BNB/BTC pair
+        symbols.add('BNBETH');  // BNB/ETH pair
+      } else {
+        // Other major coins (SOL, ADA, etc.) - add all three conversion pairs
+        symbols.add(`${asset}BTC`);  // e.g., SOLBTC
+        symbols.add(`${asset}ETH`);  // e.g., SOLETH
+        symbols.add(`${asset}BNB`);  // e.g., SOLBNB
       }
     }
   });
