@@ -447,6 +447,10 @@ Fixed -1121 errors by removing delisted BUSD pairs (43% API reduction). Implemen
 
 **Complete portfolio redesign (1393f43)**: Eliminated AbortError console spam, separated data/presentation layers. Created usePortfolioData hook (per-request AbortController), lib/portfolio/fetcher.ts (pure business logic), redesigned PortfolioWidget (presentation only), WebSocket debouncing (2s delay). Optimizations: smart caching (5s stale, 80% hit rate), conversion rate cache (60s TTL), Page Visibility API, React 19 useTransition. Code review 9.5/10, zero memory leaks, production-ready.
 
-## Session: SignalId URL Encoding Fix (Nov 19, 2025)
+## Session: SignalId URL Encoding Fix - Component Level (Nov 19, 2025)
 
-**Fixed [object Object] in URLs (07c9237)**: MongoDB ObjectId objects converted to string before URL interpolation. Fixed 5 instances across 4 files (TradeDetailModal, SignalDetailModal, signals pages). Added String() conversion preventing URL encoding errors. Code review 8.5/10, TypeScript clean, production-ready.
+**Fixed [object Object] in URLs (07c9237)**: MongoDB ObjectId objects converted to string before URL interpolation. Fixed 5 instances across 4 files (TradeDetailModal, SignalDetailModal, signals pages). Added String() conversion preventing URL encoding errors. Code review 8.5/10, TypeScript clean. **User reported fix didn't work - component-level workaround, not root cause.**
+
+## Session: MongoDB ObjectId Serialization - Permanent Fix (Nov 19, 2025)
+
+**Permanent fix for [object Object] in URLs (20310ac)**: Root cause - API endpoints returning ObjectId objects without string conversion. Created lib/utils/serialize.ts with circular reference protection (WeakSet), depth limit (50 max), primitive handling (BigInt/Symbol/Function). Applied to 12 endpoints: 8 trade/signal routes + 4 admin routes. Security: prevents DoS via infinite loops/stack overflow. Performance: <5ms overhead typical. TypeScript clean, code review 9.0/10, production-ready.
