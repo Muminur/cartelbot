@@ -6,6 +6,7 @@ import { TRADE_EXECUTION } from "@/lib/constants";
 import { Types } from "mongoose";
 import { categorizeError } from "@/lib/utils/error-categorization";
 import { serializeResponse } from "@/lib/utils/serialize";
+import { sendTradeExecutedNotification } from "@/lib/email/notifications";
 
 export async function POST(request: NextRequest) {
   try {
@@ -94,6 +95,26 @@ export async function POST(request: NextRequest) {
 
       if (ocoResult.success) {
         console.log(`[Trade Execute] OCO orders created successfully in ${ocoTotalTime}ms`);
+
+        // Send trade execution notification asynchronously (don't block response)
+        sendTradeExecutedNotification({
+          userId: user._id as Types.ObjectId,
+          tradeId: result.tradeId as Types.ObjectId,
+          symbol: result.buyOrder?.symbol || '',
+          side: 'BUY',
+          quantity: parseFloat(result.buyOrder?.executedQty || '0'),
+          price: result.buyOrder?.fills?.[0]
+            ? parseFloat(result.buyOrder.fills[0].price)
+            : 0,
+          totalAmount: parseFloat(result.buyOrder?.cummulativeQuoteQty || '0'),
+          timestamp: result.buyOrder?.transactTime
+            ? new Date(result.buyOrder.transactTime)
+            : new Date(),
+          orderId: result.buyOrder?.orderId || 0,
+        }).catch(error => {
+          // Log error but don't fail the trade execution
+          console.error('[Trade Execute] Failed to send notification:', error);
+        });
       } else {
         console.error(`[Trade Execute] OCO creation failed after ${ocoTotalTime}ms:`, ocoResult.error);
 

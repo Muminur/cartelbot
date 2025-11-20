@@ -17,6 +17,13 @@ const updateSettingsSchema = z.object({
   targetDistribution: z.array(z.number()).length(3).optional(),
   positionSizingMethod: z.enum(["fixed", "percentage", "risk_based"]).optional(),
   riskPercentage: z.number().min(0.5).max(10).optional(),
+  emailNotifications: z.object({
+    onTradeExecuted: z.boolean(),
+    onTargetHit: z.boolean(),
+    onStopLossHit: z.boolean(),
+    dailySummary: z.boolean(),
+  }).optional(),
+  emailFrequency: z.enum(["instant", "hourly", "daily"]).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -52,6 +59,13 @@ export async function GET(request: NextRequest) {
         targetDistribution: userDoc.targetDistribution,
         positionSizingMethod: userDoc.positionSizingMethod,
         riskPercentage: userDoc.riskPercentage,
+        emailNotifications: userDoc.emailNotifications || {
+          onTradeExecuted: true,
+          onTargetHit: true,
+          onStopLossHit: true,
+          dailySummary: false,
+        },
+        emailFrequency: userDoc.emailFrequency || "instant",
       },
     });
   } catch (error) {
@@ -177,6 +191,13 @@ export async function POST(request: NextRequest) {
         targetDistribution: updatedUser.targetDistribution,
         positionSizingMethod: updatedUser.positionSizingMethod,
         riskPercentage: updatedUser.riskPercentage,
+        emailNotifications: updatedUser.emailNotifications || {
+          onTradeExecuted: true,
+          onTargetHit: true,
+          onStopLossHit: true,
+          dailySummary: false,
+        },
+        emailFrequency: updatedUser.emailFrequency || "instant",
       },
     });
   } catch (error) {

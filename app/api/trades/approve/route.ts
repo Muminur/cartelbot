@@ -10,6 +10,7 @@ import { validateAllFilters } from "@/lib/binance/filters";
 import { formatErrorResponse } from "@/lib/utils/errors";
 import { Types } from "mongoose";
 import { serializeResponse } from "@/lib/utils/serialize";
+import { sendTradeExecutedNotification } from "@/lib/email/notifications";
 
 export async function POST(request: NextRequest) {
   try {
@@ -172,6 +173,22 @@ export async function POST(request: NextRequest) {
     trade.approvedBy = (user._id as Types.ObjectId).toString();
 
     await trade.save();
+
+    // Send trade execution notification asynchronously (don't block response)
+    sendTradeExecutedNotification({
+      userId: user._id as Types.ObjectId,
+      tradeId: trade._id as Types.ObjectId,
+      symbol: buyOrder.symbol,
+      side: 'BUY',
+      quantity: executedQty,
+      price: executedPrice,
+      totalAmount: parseFloat(buyOrder.cummulativeQuoteQty || '0'),
+      timestamp: new Date(buyOrder.transactTime || Date.now()),
+      orderId: buyOrder.orderId,
+    }).catch(error => {
+      // Log error but don't fail the trade approval
+      console.error('[Trade Approve] Failed to send notification:', error);
+    });
 
     // NOTE: Signal status is NOT updated to "completed" here.
     // The signal should remain in "executing" status until the OCO orders are filled.
