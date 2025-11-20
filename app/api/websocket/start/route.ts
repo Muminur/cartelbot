@@ -18,8 +18,11 @@ export async function POST(req: NextRequest) {
     const user = await requireAuth();
     const userId = String(user._id);
 
-    const userDoc = await User.findById(userId);
+    // CRITICAL: Must explicitly select encrypted fields (schema has select: false)
+    const userDoc = await User.findById(userId).select("+encryptedApiKey +encryptedApiSecret useTestnet");
     if (!userDoc?.encryptedApiKey || !userDoc?.encryptedApiSecret) {
+      console.error(`[WebSocket Start] API keys not configured for user ${userId}`);
+      console.error(`[WebSocket Start] encryptedApiKey: ${!!userDoc?.encryptedApiKey}, encryptedApiSecret: ${!!userDoc?.encryptedApiSecret}`);
       return NextResponse.json(
         { success: false, error: { message: "Binance API keys not configured" } },
         { status: 400 }
@@ -63,7 +66,11 @@ export async function POST(req: NextRequest) {
     // Use testnet parameter if provided, otherwise use user preference
     const testnet = body.testnet ?? userDoc.useTestnet ?? false;
 
+    console.log(`[WebSocket Start] Creating Binance client for user ${userId}, testnet: ${testnet}`);
+
     const binanceClient = createBinanceClient(apiKey, apiSecret, testnet);
+
+    console.log(`[WebSocket Start] Creating WebSocket manager for user ${userId}`);
 
     const wsManager = new WebSocketManager({
       userId,
@@ -73,7 +80,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    console.log(`[WebSocket Start] Starting WebSocket manager for user ${userId}`);
     const listenKey = await wsManager.start();
+    console.log(`[WebSocket Start] WebSocket started successfully with listen key: ${listenKey?.substring(0, 10)}...`);
 
     setConnection(userId, wsManager);
 
@@ -89,7 +98,14 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error starting WebSocket:", error);
+    console.error("[WebSocket Start] Error starting WebSocket:", error);
+
+    // Enhanced error logging
+    if (error instanceof Error) {
+      console.error(`[WebSocket Start] Error name: ${error.name}`);
+      console.error(`[WebSocket Start] Error message: ${error.message}`);
+      console.error(`[WebSocket Start] Error stack: ${error.stack}`);
+    }
 
     const message = error instanceof Error ? error.message : "Failed to start WebSocket";
     const statusCode = error instanceof Error && error.name === "AuthenticationError" ? 401 : 500;
