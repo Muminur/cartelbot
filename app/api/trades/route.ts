@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Trade } from "@/lib/db/models";
 import { formatErrorResponse } from "@/lib/utils/errors";
+import { serializeDocuments } from "@/lib/utils/serialize";
 
 export async function GET(request: NextRequest) {
   try {
@@ -55,9 +56,10 @@ export async function GET(request: NextRequest) {
       Trade.countDocuments(query),
     ]);
 
+    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in URLs)
     return NextResponse.json({
       success: true,
-      data: trades,
+      data: serializeDocuments(trades),
       pagination: {
         page,
         limit,

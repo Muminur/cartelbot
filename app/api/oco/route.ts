@@ -3,6 +3,7 @@ import { getUserFromRequest } from "@/lib/auth";
 import { connectDB } from "@/lib/db/connection";
 import { Trade } from "@/lib/db/models/Trade";
 import type { ITrade, IOrder } from "@/types";
+import { serializeResponse } from "@/lib/utils/serialize";
 
 // Type for lean queries (no Mongoose Document methods)
 type LeanTrade = {
@@ -273,9 +274,10 @@ export async function GET(request: NextRequest) {
     );
 
     // 9. Return response
+    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in OCO UI)
     return NextResponse.json({
       success: true,
-      data: paginatedOrders,
+      data: serializeResponse(paginatedOrders),
       pagination: {
         page,
         limit,

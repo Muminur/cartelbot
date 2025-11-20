@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/middleware/admin-auth";
 import { connectDB } from "@/lib/db";
 import { User } from "@/lib/db/models";
 import { escapeRegex, validatePagination, isValidObjectId } from "@/lib/utils/validation";
+import { serializeDocuments, serializeDocument } from "@/lib/utils/serialize";
 
 interface UserQuery {
   email?: { $regex: string; $options: string };
@@ -56,9 +57,10 @@ export async function GET(request: Request) {
       User.countDocuments(query),
     ]);
 
+    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in admin UI)
     return NextResponse.json({
       success: true,
-      data: users,
+      data: serializeDocuments(users),
       pagination: {
         page,
         limit,
@@ -158,9 +160,10 @@ export async function PATCH(request: Request) {
       );
     }
 
+    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in admin UI)
     return NextResponse.json({
       success: true,
-      data: user,
+      data: serializeDocument(user),
     });
   } catch (error) {
     console.error("Error updating user:", {

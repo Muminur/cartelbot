@@ -4,6 +4,7 @@ import { connectDB } from "@/lib/db";
 import { Signal } from "@/lib/db/models";
 import { parseSignal } from "@/lib/parser";
 import { formatErrorResponse } from "@/lib/utils/errors";
+import { serializeDocument } from "@/lib/utils/serialize";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -23,9 +24,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
+    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in URLs)
     return NextResponse.json({
       success: true,
-      data: signal,
+      data: serializeDocument(signal),
     });
   } catch (error) {
     const { id } = await params;
@@ -109,10 +111,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     await signal.save();
 
+    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in URLs)
     return NextResponse.json({
       success: true,
       data: {
-        signal: {
+        signal: serializeDocument({
           id: signal._id,
           symbol: signal.symbol,
           entries: signal.entries,
@@ -123,7 +126,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           rawSignal: signal.rawSignal,
           parseErrors: signal.parseErrors,
           updatedAt: signal.updatedAt,
-        },
+        }),
         parsed,
       },
     });

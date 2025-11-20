@@ -5,6 +5,7 @@ import { formatErrorResponse } from "@/lib/utils/errors";
 import { TRADE_EXECUTION } from "@/lib/constants";
 import { Types } from "mongoose";
 import { categorizeError } from "@/lib/utils/error-categorization";
+import { serializeResponse } from "@/lib/utils/serialize";
 
 export async function POST(request: NextRequest) {
   try {
@@ -119,16 +120,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in URLs)
     return NextResponse.json(
       {
         success: true,
-        data: {
+        data: serializeResponse({
           tradeId: result.tradeId,
           buyOrder: result.buyOrder,
           ocoOrders: ocoResult?.orders,
           ocoError: ocoResult?.success === false ? ocoResult.error : undefined,
           requiresApproval: result.requiresApproval,
-        },
+        }),
       },
       { status: 201 }
     );

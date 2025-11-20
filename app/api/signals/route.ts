@@ -6,6 +6,7 @@ import { parseSignal } from "@/lib/parser";
 import { formatErrorResponse } from "@/lib/utils/errors";
 import { BinanceClient } from "@/lib/binance";
 import { checkSignalLimit } from "@/lib/middleware/usage-limiter";
+import { serializeDocument, serializeDocuments } from "@/lib/utils/serialize";
 
 export async function POST(request: NextRequest) {
   try {
@@ -145,13 +146,14 @@ export async function POST(request: NextRequest) {
       parseErrors: parsed.errors,
     });
 
+    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in URLs)
     return NextResponse.json(
       {
         success: true,
         data: {
-          signalId: signal._id,
+          signalId: String(signal._id),
           parsed,
-          signal: {
+          signal: serializeDocument({
             id: signal._id,
             symbol: signal.symbol,
             entries: signal.entries,
@@ -160,7 +162,7 @@ export async function POST(request: NextRequest) {
             currentMarketPrice: signal.currentMarketPrice,
             status: signal.status,
             createdAt: signal.createdAt,
-          },
+          }),
         },
       },
       { status: 201 }
@@ -235,9 +237,10 @@ export async function GET(request: NextRequest) {
       Signal.countDocuments(query),
     ]);
 
+    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in URLs)
     return NextResponse.json({
       success: true,
-      data: signals,
+      data: serializeDocuments(signals),
       pagination: {
         page,
         limit,

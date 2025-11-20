@@ -9,6 +9,7 @@ import { resolveTestnetPreference } from "@/lib/binance/helpers";
 import { validateAllFilters } from "@/lib/binance/filters";
 import { formatErrorResponse } from "@/lib/utils/errors";
 import { Types } from "mongoose";
+import { serializeResponse } from "@/lib/utils/serialize";
 
 export async function POST(request: NextRequest) {
   try {
@@ -81,13 +82,14 @@ export async function POST(request: NextRequest) {
 
       await Signal.findByIdAndUpdate(trade.signalId, { status: "cancelled" });
 
+      // Serialize MongoDB ObjectIds to strings (prevents [object Object] in URLs)
       return NextResponse.json({
         success: true,
-        data: {
+        data: serializeResponse({
           tradeId: trade._id,
           status: trade.status,
           approvalStatus: trade.approvalStatus,
-        },
+        }),
       });
     }
 
@@ -176,15 +178,16 @@ export async function POST(request: NextRequest) {
     // Signal completion is handled by WebSocket event handlers when targets/stop-loss hit,
     // or by the manual close endpoint if user manually exits the position.
 
+    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in URLs)
     return NextResponse.json(
       {
         success: true,
-        data: {
+        data: serializeResponse({
           tradeId: trade._id,
           buyOrder: trade.buyOrder,
           status: trade.status,
           approvalStatus: trade.approvalStatus,
-        },
+        }),
       },
       { status: 200 }
     );

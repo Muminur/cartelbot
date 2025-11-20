@@ -9,6 +9,7 @@ import { resolveTestnetPreference } from "@/lib/binance/helpers";
 import { formatErrorResponse } from "@/lib/utils/errors";
 import { Types } from "mongoose";
 import { markSignalCompleted } from "@/lib/binance/signal-status-manager";
+import { serializeResponse } from "@/lib/utils/serialize";
 
 export async function POST(
   request: NextRequest,
@@ -182,10 +183,11 @@ export async function POST(
 
     await trade.save();
 
+    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in URLs)
     return NextResponse.json(
       {
         success: true,
-        data: {
+        data: serializeResponse({
           tradeId: trade._id,
           status: trade.status,
           exitPrice: trade.exitPrice,
@@ -193,7 +195,7 @@ export async function POST(
           closeReason: trade.closeReason,
           cancelledOrders: tradeOrders.length,
           marketSellExecuted: !!marketSellOrder,
-        },
+        }),
       },
       { status: 200 }
     );

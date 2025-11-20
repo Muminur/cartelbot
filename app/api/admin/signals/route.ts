@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/middleware/admin-auth";
 import { connectDB } from "@/lib/db";
 import { Signal } from "@/lib/db/models";
 import { escapeRegex, validatePagination, isValidObjectId } from "@/lib/utils/validation";
+import { serializeDocuments, serializeDocument } from "@/lib/utils/serialize";
 
 interface SignalQuery {
   status?: string;
@@ -70,9 +71,10 @@ export async function GET(request: Request) {
       cancelled: stats.find((s) => s._id === "cancelled")?.count || 0,
     };
 
+    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in admin UI)
     return NextResponse.json({
       success: true,
-      data: signals,
+      data: serializeDocuments(signals),
       pagination: {
         page,
         limit,
@@ -177,9 +179,10 @@ export async function PATCH(request: Request) {
       );
     }
 
+    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in admin UI)
     return NextResponse.json({
       success: true,
-      data: signal,
+      data: serializeDocument(signal),
     });
   } catch (error) {
     console.error("Error updating signal:", {

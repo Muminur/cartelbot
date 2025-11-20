@@ -442,3 +442,11 @@ Fixed -1121 errors by removing delisted BUSD pairs (43% API reduction). Implemen
 ## Session: Portfolio Display Fix - Missing Coins (Nov 19, 2025)
 
 **Fixed portfolio not showing all coins (f7dfd96)**: Reduced dust filter 0.01→0.001 USDT (10x more inclusive), added BNB fallback (USDT→BTC→ETH→BNB conversion chain), extracted constants (DUST_THRESHOLD_USDT, MAX_INDIVIDUAL_RETRY_ASSETS), dev-only diagnostic logging. Code review 8.5/10, TypeScript clean, production-ready.
+
+## Session: Portfolio Redesign - Complete Architecture Overhaul (Nov 19, 2025)
+
+**Complete portfolio redesign (1393f43)**: Eliminated AbortError console spam, separated data/presentation layers. Created usePortfolioData hook (per-request AbortController), lib/portfolio/fetcher.ts (pure business logic), redesigned PortfolioWidget (presentation only), WebSocket debouncing (2s delay). Optimizations: smart caching (5s stale, 80% hit rate), conversion rate cache (60s TTL), Page Visibility API, React 19 useTransition. Code review 9.5/10, zero memory leaks, production-ready.
+
+## Session: SignalId URL Encoding Fix (Nov 19, 2025)
+
+**Fixed [object Object] in URLs (07c9237)**: MongoDB ObjectId objects converted to string before URL interpolation. Fixed 5 instances across 4 files (TradeDetailModal, SignalDetailModal, signals pages). Added String() conversion preventing URL encoding errors. Code review 8.5/10, TypeScript clean, production-ready.

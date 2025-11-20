@@ -7,6 +7,7 @@ import { decrypt } from "@/lib/encryption";
 import { BinanceClient } from "@/lib/binance";
 import { resolveTestnetPreference } from "@/lib/binance/helpers";
 import { formatErrorResponse } from "@/lib/utils/errors";
+import { serializeDocument } from "@/lib/utils/serialize";
 import { Types } from "mongoose";
 
 export async function GET(
@@ -43,9 +44,10 @@ export async function GET(
       );
     }
 
+    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in URLs)
     return NextResponse.json({
       success: true,
-      data: trade,
+      data: serializeDocument(trade),
     });
   } catch (error) {
     console.error("GET /api/trades/[id] error:", error);
@@ -138,10 +140,11 @@ export async function DELETE(
     trade.status = "cancelled";
     await trade.save();
 
+    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in URLs)
     return NextResponse.json({
       success: true,
       data: {
-        trade,
+        trade: serializeDocument(trade),
         cancelledOrders,
       },
     });
