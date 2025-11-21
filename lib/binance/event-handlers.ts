@@ -131,9 +131,10 @@ export async function handleExecutionReport(event: BinanceWebSocketEvent): Promi
 
           // Send notification based on order type
           if (isStopLoss) {
-            // Stop Loss Hit
-            const buyCost = trade.buyOrder.cummulativeQuoteQty;
-            const loss = cummulativeQuoteQty - buyCost;
+            // Stop Loss Hit - Calculate loss proportionally
+            const avgBuyPrice = trade.buyOrder.cummulativeQuoteQty / trade.buyOrder.executedQty;
+            const buyCostForThisQuantity = avgBuyPrice * executedQty;
+            const loss = cummulativeQuoteQty - buyCostForThisQuantity;
 
             sendStopLossHitNotification({
               userId: trade.userId,
@@ -293,13 +294,20 @@ export async function handleListStatus(event: BinanceWebSocketEvent): Promise<vo
                   (order: { type: string }) => order.type === "STOP_LOSS_LIMIT"
                 );
                 if (stopLossOrder) {
+                  // Calculate proportional loss for the stop loss order executed quantity
+                  const avgBuyPrice = trade.buyOrder.cummulativeQuoteQty / trade.buyOrder.executedQty;
+                  const stopLossExecutedQty = parseFloat(stopLossOrder.executedQty);
+                  const stopLossCost = avgBuyPrice * stopLossExecutedQty;
+                  const stopLossRevenue = parseFloat(stopLossOrder.cummulativeQuoteQty);
+                  const stopLossLoss = stopLossRevenue - stopLossCost;
+
                   sendStopLossHitNotification({
                     userId: trade.userId,
                     tradeId: trade._id,
                     symbol: trade.symbol,
                     stopLossPrice: stopLossOrder.stopPrice || stopLossOrder.price,
-                    executedQuantity: totalExecutedQty,
-                    loss: trade.realizedPnL,
+                    executedQuantity: stopLossExecutedQty,
+                    loss: stopLossLoss,
                     timestamp: new Date(data.T),
                     orderId: stopLossOrder.orderId,
                   }).catch((error) => {
