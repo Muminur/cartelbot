@@ -12,6 +12,7 @@ import { OpenPositionsWidget } from "@/components/dashboard/OpenPositionsWidget"
 import { AccountBalanceWidget } from "@/components/dashboard/AccountBalanceWidget";
 import { PnLChartWidget } from "@/components/dashboard/PnLChartWidget";
 import { RecentTradesWidget } from "@/components/dashboard/RecentTradesWidget";
+import SubscriptionStatusWidget from "@/components/dashboard/SubscriptionStatusWidget";
 import { useWebSocketStream } from "@/hooks/useWebSocketStream";
 import { TrendingUp, Signal, Wallet, Award } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
@@ -32,12 +33,26 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [pendingRefresh, setPendingRefresh] = useState(false);
+
+  // Debounced refresh to prevent too many updates
+  useEffect(() => {
+    if (pendingRefresh) {
+      const timer = setTimeout(() => {
+        setRefreshKey((prev) => prev + 1);
+        setPendingRefresh(false);
+      }, 2000); // Wait 2 seconds before refreshing
+
+      return () => clearTimeout(timer);
+    }
+  }, [pendingRefresh]);
 
   const { isConnected, lastEvent } = useWebSocketStream({
     autoConnect: true,
     onEvent: (event) => {
       if (event.type === "executionReport" || event.type === "listStatus") {
-        setRefreshKey((prev) => prev + 1);
+        // Mark that we need to refresh, but don't do it immediately
+        setPendingRefresh(true);
       }
     },
   });
@@ -107,7 +122,7 @@ export default function DashboardPage() {
         </div>
 
         {stats && (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Active Signals</CardTitle>
@@ -159,6 +174,8 @@ export default function DashboardPage() {
                 </p>
               </CardContent>
             </Card>
+
+            <SubscriptionStatusWidget key={`subscription-${refreshKey}`} />
           </div>
         )}
 
