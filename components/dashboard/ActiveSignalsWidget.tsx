@@ -22,7 +22,7 @@ export function ActiveSignalsWidget() {
         const response = await fetch("/api/signals?status=pending,executing&limit=5");
         const data = await response.json();
         if (data.success) {
-          setSignals(data.data.signals || []);
+          setSignals(data.data || []);
         }
       } catch (error) {
         console.error("Error fetching signals:", error);

@@ -29,7 +29,7 @@ export function OpenPositionsWidget() {
         const response = await fetch("/api/trades?status=open");
         const data = await response.json();
         if (data.success) {
-          setTrades(data.data.trades || []);
+          setTrades(data.data || []);
         }
       } catch (error) {
         console.error("Error fetching trades:", error);

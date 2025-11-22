@@ -113,7 +113,21 @@ export async function POST(
     let updatedTrade = trade;
 
     // Only update if signal is currently "executing" (not already completed/failed)
-    if (signal.status === "executing" && trade.status === "open") {
+    // CRITICAL FIX: Accept both "open" and "partial" trade statuses
+    // - "open" = no targets filled yet
+    // - "partial" = some targets filled, but position still has remaining quantity
+    // When ALL stop losses fill (even on a partial trade), the entire position is closed
+    if (signal.status === "executing" && (trade.status === "open" || trade.status === "partial")) {
+      console.log("[Signal Status Update] Processing update:", {
+        signalId: signal._id,
+        tradeId: trade._id,
+        currentTradeStatus: trade.status,
+        allTargetsFilled,
+        stopLossTriggered,
+        stopLossFillCount,
+        totalStopLossOrders,
+      });
+
       // CRITICAL FIX #1: Operator precedence fix for signal status validation
       // Logic: Valid close if (all targets filled AND at least one filled target) OR stop loss triggered
       // Previous bug: (A && B) || C evaluated to true whenever C was true, bypassing validation
@@ -159,8 +173,19 @@ export async function POST(
       }
 
       if (allTargetsFilled || stopLossTriggered) {
+        console.log("[Signal Status Update] Closing trade:", {
+          signalId: signal._id,
+          tradeId: trade._id,
+          previousStatus: trade.status,
+          allTargetsFilled,
+          stopLossTriggered,
+          stopLossFillCount,
+          totalStopLossOrders,
+        });
+
         // Update trade status
         trade.status = "closed";
+        trade.closedAt = new Date();
 
         // Determine close reason (enum value) and detail (human-readable)
         let closeReason: "target" | "stop_loss";
@@ -182,6 +207,12 @@ export async function POST(
             // Fallback if counts not provided
             closeReasonDetail = "Stop Loss Hit";
           }
+
+          console.log("[Signal Status Update] Stop loss triggered:", {
+            closeReasonDetail,
+            filledCount: stopLossFillCount,
+            totalCount: totalStopLossOrders,
+          });
         } else if (filledTargetNumbers && Array.isArray(filledTargetNumbers) && filledTargetNumbers.length > 0) {
           // FIX BUG 1 (API side): Remove duplicates from filledTargetNumbers before joining
           const uniqueTargets = Array.from(new Set(filledTargetNumbers)).sort((a, b) => a - b);

@@ -90,7 +90,13 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("auto-switch-time");
       if (stored) {
-        return JSON.parse(stored);
+        try {
+          return JSON.parse(stored);
+        } catch (error) {
+          console.error('[ThemeProvider] Failed to parse auto-switch-time from localStorage:', error);
+          // Return default if parse fails
+          return { day: "06:00", night: "18:00" };
+        }
       }
     }
     return { day: "06:00", night: "18:00" };

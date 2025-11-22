@@ -149,7 +149,11 @@ export async function handleExecutionReport(event: BinanceWebSocketEvent): Promi
               console.error("[Notification] Failed to send stop loss email:", error);
             });
           } else {
-            // Target Hit (Take Profit)
+            // Target Hit (Take Profit) - Calculate profit proportionally
+            const avgBuyPrice = trade.buyOrder.cummulativeQuoteQty / trade.buyOrder.executedQty;
+            const buyCostForThisQuantity = avgBuyPrice * executedQty;
+            const profit = cummulativeQuoteQty - buyCostForThisQuantity;
+
             const targetNumber = sellOrderIndex + 1; // TP #1, TP #2, etc.
             const remainingTargets = trade.sellOrders.filter(
               (order: { status: string; type: string }) =>
@@ -163,7 +167,7 @@ export async function handleExecutionReport(event: BinanceWebSocketEvent): Promi
               targetNumber: targetNumber,
               targetPrice: currentOrder.price,
               executedQuantity: executedQty,
-              revenue: cummulativeQuoteQty,
+              revenue: profit,
               timestamp: new Date(data.T),
               orderId: data.i,
               remainingTargets: remainingTargets,
@@ -319,6 +323,11 @@ export async function handleListStatus(event: BinanceWebSocketEvent): Promise<vo
                 trade.closeReasonDetail = "Target Hit";
 
                 // Send final target hit notification (OCO complete - all targets hit)
+                // Calculate proportional profit for all filled target orders
+                const avgBuyPrice = trade.buyOrder.cummulativeQuoteQty / trade.buyOrder.executedQty;
+                const buyCostForExecutedQty = avgBuyPrice * totalExecutedQty;
+                const profit = sellRevenue - buyCostForExecutedQty;
+
                 const lastTarget = filledOrders.filter(
                   (order: { type: string }) => order.type !== "STOP_LOSS_LIMIT"
                 ).length;
@@ -329,7 +338,7 @@ export async function handleListStatus(event: BinanceWebSocketEvent): Promise<vo
                   targetNumber: lastTarget,
                   targetPrice: trade.exitPrice,
                   executedQuantity: totalExecutedQty,
-                  revenue: sellRevenue,
+                  revenue: profit,
                   timestamp: new Date(data.T),
                   orderId: filledOrders[filledOrders.length - 1].orderId,
                   remainingTargets: 0,

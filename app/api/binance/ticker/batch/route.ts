@@ -30,7 +30,13 @@ export async function GET(request: NextRequest) {
       symbols = JSON.parse(symbolsParam);
 
       if (!Array.isArray(symbols)) {
-        throw new Error("Symbols must be an array");
+        return NextResponse.json(
+          {
+            success: false,
+            error: { message: "Symbols parameter must be a JSON array", statusCode: 400 },
+          },
+          { status: 400 }
+        );
       }
 
       if (symbols.length === 0) {
@@ -54,7 +60,8 @@ export async function GET(request: NextRequest) {
       }
 
       // Validate symbol format (BUSD deprecated Feb 2024, kept for legacy holdings)
-      const SYMBOL_REGEX = /^[A-Z]{2,10}(USDT|BTC|ETH|BNB|BUSD)$/;
+      // Allow numbers in symbol names (e.g., 1INCH, API3, 1000SATS)
+      const SYMBOL_REGEX = /^[A-Z0-9]{1,20}(USDT|BTC|ETH|BNB|BUSD)$/;
       const invalidSymbols = symbols.filter(s => !SYMBOL_REGEX.test(s.toUpperCase()));
 
       if (invalidSymbols.length > 0) {

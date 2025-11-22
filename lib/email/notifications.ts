@@ -276,7 +276,7 @@ export async function sendTargetHitNotification(data: {
           <div class="info-value">${data.executedQuantity.toFixed(6)}</div>
         </div>
         <div class="info-item">
-          <div class="info-label">Revenue</div>
+          <div class="info-label">Realized Profit</div>
           <div class="info-value text-success">+$${data.revenue.toFixed(2)}</div>
         </div>
         <div class="info-item">

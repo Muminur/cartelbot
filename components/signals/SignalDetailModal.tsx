@@ -555,6 +555,17 @@ export default function SignalDetailModal({
             // If all targets filled OR ALL stop losses filled, update signal status in database
             // CRITICAL: Only mark signal complete when ENTIRE position is closed
             if ((allTargetsFilled || allStopLossesFilled) && signal && signal.status === "executing") {
+              console.log("[SignalDetailModal] Triggering signal status update:", {
+                signalId: signal._id,
+                tradeId: trade._id,
+                currentTradeStatus: trade.status,
+                currentSignalStatus: signal.status,
+                allTargetsFilled,
+                allStopLossesFilled,
+                totalStopLosses: stopLossOrders.length,
+                filledStopLosses: filledStopLossCount,
+              });
+
               // Calculate exit price and P&L
               let exitPrice: number | undefined;
               let realizedPnL: number | undefined;

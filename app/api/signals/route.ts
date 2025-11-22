@@ -205,8 +205,14 @@ export async function GET(request: NextRequest) {
 
     const query: Record<string, unknown> = { userId: user._id };
 
+    // Handle comma-separated status values (e.g., "pending,executing")
     if (status) {
-      query.status = status;
+      const statusValues = status.split(",").map((s) => s.trim());
+      if (statusValues.length === 1) {
+        query.status = statusValues[0]; // Single status
+      } else {
+        query.status = { $in: statusValues }; // Multiple statuses - use MongoDB $in operator
+      }
     }
 
     if (symbol) {

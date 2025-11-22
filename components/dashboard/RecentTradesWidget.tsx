@@ -27,7 +27,7 @@ export function RecentTradesWidget() {
         const response = await fetch("/api/trades?limit=10");
         const data = await response.json();
         if (data.success) {
-          setTrades(data.data.trades || []);
+          setTrades(data.data || []);
         }
       } catch (error) {
         console.error("Error fetching recent trades:", error);
