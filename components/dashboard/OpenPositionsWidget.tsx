@@ -107,7 +107,7 @@ export function OpenPositionsWidget() {
       </CardHeader>
       <CardContent>
         {trades.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-4">
+          <p className="text-sm text-muted-foreground text-center py-4">
             No open positions
           </p>
         ) : (

@@ -82,17 +82,17 @@ export function AccountBalanceWidget() {
   // Handle "No API keys configured" scenario with helpful prompt
   if (error?.code === "NO_API_KEYS" || error?.requiresSetup) {
     return (
-      <Card className="border-yellow-200 bg-yellow-50/50">
+      <Card className="border-yellow-200 dark:border-yellow-700 bg-yellow-50/50 dark:bg-yellow-950/20">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-yellow-600" />
+            <Wallet className="w-5 h-5 text-yellow-600 dark:text-yellow-500" />
             Account Balance
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-4">
             <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
-            <p className="text-sm text-gray-700 mb-4">
+            <p className="text-sm text-foreground mb-4">
               {error.message}
             </p>
             <Link href="/settings">
@@ -102,8 +102,8 @@ export function AccountBalanceWidget() {
               </Button>
             </Link>
             {error.binanceCode === -2015 && (
-              <div className="mt-4 text-xs text-muted-foreground bg-white p-3 rounded border border-yellow-200">
-                <p className="font-semibold mb-1">Common Binance API Error -2015 Causes:</p>
+              <div className="mt-4 text-xs text-muted-foreground bg-white dark:bg-gray-800 p-3 rounded border border-yellow-200 dark:border-yellow-700">
+                <p className="font-semibold mb-1 text-foreground">Common Binance API Error -2015 Causes:</p>
                 <ul className="list-disc text-left pl-5 space-y-1">
                   <li>API key or secret is incorrect</li>
                   <li>Server IP not whitelisted on Binance</li>
@@ -121,17 +121,17 @@ export function AccountBalanceWidget() {
   // Handle other errors (invalid keys, network issues, etc.)
   if (error) {
     return (
-      <Card className="border-red-200 bg-red-50/50">
+      <Card className="border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-950/20">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-red-600" />
+            <Wallet className="w-5 h-5 text-red-600 dark:text-red-500" />
             Account Balance
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center py-4">
             <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" />
-            <p className="text-sm text-red-700 mb-3">{error.message}</p>
+            <p className="text-sm text-red-700 dark:text-red-400 mb-3">{error.message}</p>
             {error.code === "INVALID_API_KEYS" || error.code === "INVALID_SIGNATURE" ? (
               <Link href="/settings">
                 <Button variant="outline" size="sm" className="gap-2">
@@ -166,11 +166,11 @@ export function AccountBalanceWidget() {
       <CardContent>
         {balances.length === 0 ? (
           <div className="text-center py-6">
-            <Wallet className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-500">
+            <Wallet className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">
               No balances available
             </p>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-muted-foreground/80 mt-1">
               Deposit funds to your Binance account to start trading
             </p>
           </div>
@@ -179,18 +179,18 @@ export function AccountBalanceWidget() {
             {balances.map((balance) => (
               <div
                 key={balance.asset}
-                className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
+                className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
               >
                 <div>
-                  <p className="font-medium">{balance.asset}</p>
-                  <p className="text-xs text-gray-500">Available</p>
+                  <p className="font-medium text-foreground">{balance.asset}</p>
+                  <p className="text-xs text-muted-foreground">Available</p>
                 </div>
                 <div className="text-right">
-                  <p className="font-medium">
+                  <p className="font-medium text-foreground">
                     {formatCurrency(parseFloat(balance.free))}
                   </p>
                   {parseFloat(balance.locked) > 0 && (
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       Locked: {formatCurrency(parseFloat(balance.locked))}
                     </p>
                   )}

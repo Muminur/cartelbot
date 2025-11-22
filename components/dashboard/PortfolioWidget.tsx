@@ -29,9 +29,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils/format';
-import { isStablecoin } from '@/lib/utils/stablecoins';
 import Link from 'next/link';
-import { usePortfolioData, type PortfolioAsset } from '@/hooks/usePortfolioData';
+import { usePortfolioData } from '@/hooks/usePortfolioData';
 
 // Coin name mappings for enhanced search
 const COIN_NAMES: Record<string, string> = {

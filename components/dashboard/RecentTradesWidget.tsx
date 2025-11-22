@@ -67,7 +67,7 @@ export function RecentTradesWidget() {
       </CardHeader>
       <CardContent>
         {trades.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-4">
+          <p className="text-sm text-muted-foreground text-center py-4">
             No trades yet
           </p>
         ) : (
@@ -75,17 +75,17 @@ export function RecentTradesWidget() {
             {trades.map((trade) => (
               <div
                 key={trade._id}
-                className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
+                className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
               >
                 <div className="flex items-center gap-3">
                   {trade.realizedPnL !== undefined && trade.realizedPnL >= 0 ? (
-                    <TrendingUp className="w-4 h-4 text-green-600" />
+                    <TrendingUp className="w-4 h-4 text-green-600 dark:text-green-500" />
                   ) : (
-                    <TrendingDown className="w-4 h-4 text-red-600" />
+                    <TrendingDown className="w-4 h-4 text-red-600 dark:text-red-500" />
                   )}
                   <div>
-                    <p className="font-medium">{trade.symbol}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="font-medium text-foreground">{trade.symbol}</p>
+                    <p className="text-xs text-muted-foreground">
                       {formatNumber(trade.quantity, 4)} @ {formatCurrency(trade.entryPrice)}
                     </p>
                   </div>
@@ -105,7 +105,7 @@ export function RecentTradesWidget() {
                   {trade.realizedPnL !== undefined && (
                     <p
                       className={`text-sm font-medium mt-1 ${
-                        trade.realizedPnL >= 0 ? "text-green-600" : "text-red-600"
+                        trade.realizedPnL >= 0 ? "text-green-600 dark:text-green-500" : "text-red-600 dark:text-red-500"
                       }`}
                     >
                       {formatCurrency(trade.realizedPnL)}

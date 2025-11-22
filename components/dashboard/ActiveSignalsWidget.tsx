@@ -62,7 +62,7 @@ export function ActiveSignalsWidget() {
       </CardHeader>
       <CardContent>
         {signals.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-4">
+          <p className="text-sm text-muted-foreground text-center py-4">
             No active signals
           </p>
         ) : (
@@ -70,11 +70,11 @@ export function ActiveSignalsWidget() {
             {signals.map((signal) => (
               <div
                 key={signal._id}
-                className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
+                className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
               >
                 <div>
-                  <p className="font-medium">{signal.symbol}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="font-medium text-foreground">{signal.symbol}</p>
+                  <p className="text-xs text-muted-foreground">
                     {new Date(signal.createdAt).toLocaleDateString()}
                   </p>
                 </div>
