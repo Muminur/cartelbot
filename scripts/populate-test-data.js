@@ -56,6 +56,13 @@ function encryptApiKey(apiKey) {
 async function main() {
   console.log('🚀 Starting test data population...\n');
 
+  // CRITICAL: Production safety check
+  if (process.env.NODE_ENV === 'production') {
+    console.error('❌ BLOCKED: Cannot run test data script in production environment!');
+    console.error('   This script uses deleteMany({}) which would wipe ALL production data.');
+    process.exit(1);
+  }
+
   try {
     // Connect to MongoDB
     console.log('📊 Connecting to MongoDB...');
@@ -66,6 +73,21 @@ async function main() {
     console.log('✅ Connected to MongoDB\n');
 
     const db = mongoose.connection.db;
+
+    // CRITICAL: Database name validation
+    const dbName = db.databaseName;
+    const allowedDatabases = ['cartelbot', 'cartelbot-dev', 'cartelbot-test'];
+
+    if (!allowedDatabases.includes(dbName)) {
+      console.error('❌ BLOCKED: Invalid database name!');
+      console.error(`   Current database: ${dbName}`);
+      console.error(`   Allowed databases: ${allowedDatabases.join(', ')}`);
+      console.error('   This script can only run on development/test databases.');
+      await mongoose.connection.close();
+      process.exit(1);
+    }
+
+    console.log(`✅ Database validation passed: ${dbName}\n`);
 
     // Check if data already exists
     const existingUsers = await db.collection('users').countDocuments();

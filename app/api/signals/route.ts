@@ -207,8 +207,16 @@ export async function GET(request: NextRequest) {
 
     // Handle comma-separated status values (e.g., "pending,executing")
     if (status) {
-      const statusValues = status.split(",").map((s) => s.trim());
-      if (statusValues.length === 1) {
+      const VALID_STATUSES = ["pending", "executing", "completed", "failed"] as const;
+      const statusValues = status
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => VALID_STATUSES.includes(s as any));
+
+      if (statusValues.length === 0) {
+        // Invalid status provided, return empty results
+        query.status = "invalid_status_value"; // Will match nothing
+      } else if (statusValues.length === 1) {
         query.status = statusValues[0]; // Single status
       } else {
         query.status = { $in: statusValues }; // Multiple statuses - use MongoDB $in operator
