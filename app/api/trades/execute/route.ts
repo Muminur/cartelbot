@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       const failureReason = result.error ? categorizeError(new Error(result.error)) : 'UNKNOWN';
 
       return NextResponse.json(
-        {
+        serializeResponse({
           success: false,
           error: {
             message: result.error || "Trade execution failed",
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
             failureReason,
             retryable: true,
           },
-        },
+        }),
         { status: 400 }
       );
     }
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
         const failureReason = ocoResult.error ? categorizeError(new Error(ocoResult.error)) : 'UNKNOWN';
 
         return NextResponse.json(
-          {
+          serializeResponse({
             success: false,
             error: {
               message: ocoResult.error || 'OCO order creation failed',
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
               buyOrder: result.buyOrder,
               retryable: true,
             },
-          },
+          }),
           { status: 400 }
         );
       }
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
     console.error("POST /api/trades/execute error:", error);
     const errorResponse = formatErrorResponse(error);
     return NextResponse.json(
-      { success: false, ...errorResponse },
+      serializeResponse({ success: false, ...errorResponse }),
       { status: errorResponse.error.statusCode }
     );
   }

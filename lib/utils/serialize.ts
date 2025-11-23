@@ -49,6 +49,48 @@ function serializeObjectIds(
     return obj;
   }
 
+  // Handle Error objects (extract enumerable properties + non-enumerable error fields)
+  // This prevents Error objects from serializing to {} in JSON responses
+  if (obj instanceof Error) {
+    // SECURITY: Use whitelist approach to prevent sensitive data leakage
+    // Only include safe properties that are expected in error responses
+    const errorObj = obj as {
+      code?: string;
+      statusCode?: number;
+      binanceCode?: number;
+      fields?: Record<string, string>;
+      failureStage?: string;
+      failureReason?: string;
+      tradeId?: string;
+      signalId?: string;
+      retryable?: boolean;
+    };
+
+    const serialized: Record<string, unknown> = {
+      // Standard Error properties (non-enumerable)
+      message: obj.message,
+      name: obj.name,
+
+      // Custom error properties (whitelisted for security)
+      ...(errorObj.code && { code: errorObj.code }),
+      ...(errorObj.statusCode && { statusCode: errorObj.statusCode }),
+      ...(errorObj.binanceCode && { binanceCode: errorObj.binanceCode }),
+      ...(errorObj.fields && { fields: errorObj.fields }),
+      ...(errorObj.failureStage && { failureStage: errorObj.failureStage }),
+      ...(errorObj.failureReason && { failureReason: errorObj.failureReason }),
+      ...(errorObj.tradeId && { tradeId: errorObj.tradeId }),
+      ...(errorObj.signalId && { signalId: errorObj.signalId }),
+      ...(errorObj.retryable !== undefined && { retryable: errorObj.retryable }),
+    };
+
+    // Only include stack trace in development mode for security
+    if (process.env.NODE_ENV === 'development') {
+      serialized.stack = obj.stack;
+    }
+
+    return serialized;
+  }
+
   // Check for circular references
   if (visited.has(obj)) {
     console.warn("[Serialization] Circular reference detected, skipping");

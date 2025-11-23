@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Trade } from "@/lib/db/models";
 import { formatErrorResponse } from "@/lib/utils/errors";
-import { serializeDocuments } from "@/lib/utils/serialize";
+import { serializeDocuments, serializeResponse } from "@/lib/utils/serialize";
 
 export async function GET(request: NextRequest) {
   try {
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
     console.error("GET /api/trades error:", error);
     const errorResponse = formatErrorResponse(error);
     return NextResponse.json(
-      { success: false, ...errorResponse },
+      serializeResponse({ success: false, ...errorResponse }),
       { status: errorResponse.error.statusCode }
     );
   }

@@ -6,7 +6,7 @@ import { parseSignal } from "@/lib/parser";
 import { formatErrorResponse } from "@/lib/utils/errors";
 import { BinanceClient } from "@/lib/binance";
 import { checkSignalLimit } from "@/lib/middleware/usage-limiter";
-import { serializeDocument, serializeDocuments } from "@/lib/utils/serialize";
+import { serializeDocument, serializeDocuments, serializeResponse } from "@/lib/utils/serialize";
 import { limitSignalTargets } from "@/lib/parser/target-limiter";
 
 export async function POST(request: NextRequest) {
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
 
     const errorResponse = formatErrorResponse(error);
     return NextResponse.json(
-      { success: false, ...errorResponse },
+      serializeResponse({ success: false, ...errorResponse }),
       { status: errorResponse.error.statusCode }
     );
   }
@@ -281,7 +281,7 @@ export async function GET(request: NextRequest) {
     console.error("GET /api/signals error:", error);
     const errorResponse = formatErrorResponse(error);
     return NextResponse.json(
-      { success: false, ...errorResponse },
+      serializeResponse({ success: false, ...errorResponse }),
       { status: errorResponse.error.statusCode }
     );
   }
