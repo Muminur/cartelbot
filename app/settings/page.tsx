@@ -49,6 +49,7 @@ export default function SettingsPage() {
 
   // Trade Settings state
   const [investmentAmount, setInvestmentAmount] = useState(100);
+  const [maxTargets, setMaxTargets] = useState(3);
   const [targetDistribution, setTargetDistribution] = useState([75, 15, 10]);
   const [positionSizingMethod, setPositionSizingMethod] = useState<"fixed" | "percentage" | "risk_based">("fixed");
   const [riskPercentage, setRiskPercentage] = useState(2);
@@ -112,6 +113,7 @@ export default function SettingsPage() {
             setEmergencyStop(data.emergencyStop || false);
             setUseTestnet(data.useTestnet || false);
             setInvestmentAmount(data.investmentAmount || 100);
+            setMaxTargets(data.maxTargets || 3);
             setTargetDistribution(data.targetDistribution || [75, 15, 10]);
             setPositionSizingMethod(data.positionSizingMethod || "fixed");
             setRiskPercentage(data.riskPercentage || 2);
@@ -238,6 +240,36 @@ export default function SettingsPage() {
     }
   };
 
+  // Handle maxTargets change - adjust distribution array length
+  const handleMaxTargetsChange = (newMaxTargets: number) => {
+    setMaxTargets(newMaxTargets);
+
+    // Adjust targetDistribution array length to match maxTargets
+    if (newMaxTargets > targetDistribution.length) {
+      // Add more targets - distribute evenly
+      const equalPercentage = 100 / newMaxTargets;
+      setTargetDistribution(Array(newMaxTargets).fill(parseFloat(equalPercentage.toFixed(2))));
+    } else if (newMaxTargets < targetDistribution.length) {
+      // Remove targets - keep first N, normalize to 100%
+      const sliced = targetDistribution.slice(0, newMaxTargets);
+      const sum = sliced.reduce((a, b) => a + b, 0);
+      if (Math.abs(sum - 100) > 0.01) {
+        // Normalize to 100%
+        const normalized = sliced.map(v => (v / sum) * 100);
+        setTargetDistribution(normalized);
+      } else {
+        setTargetDistribution(sliced);
+      }
+    }
+  };
+
+  // Update a specific target distribution value
+  const handleDistributionChange = (index: number, value: number) => {
+    const newDistribution = [...targetDistribution];
+    newDistribution[index] = value;
+    setTargetDistribution(newDistribution);
+  };
+
   const handleSaveTradeSettings = async () => {
     // Client-side validation before API call
     if (maxOpenPositions > maxOpenPositionsLimit) {
@@ -249,8 +281,14 @@ export default function SettingsPage() {
 
     // Validate target distribution sums to 100%
     const distributionSum = targetDistribution.reduce((a, b) => a + b, 0);
-    if (distributionSum !== 100) {
-      toast.error("Target distribution must sum to 100%");
+    if (Math.abs(distributionSum - 100) > 0.01) {
+      toast.error(`Target distribution must sum to 100% (currently ${distributionSum.toFixed(2)}%)`);
+      return;
+    }
+
+    // Validate distribution length matches maxTargets
+    if (targetDistribution.length !== maxTargets) {
+      toast.error(`Target distribution length (${targetDistribution.length}) must equal maxTargets (${maxTargets})`);
       return;
     }
 
@@ -268,6 +306,7 @@ export default function SettingsPage() {
           emergencyStop,
           useTestnet,
           investmentAmount,
+          maxTargets,
           targetDistribution,
           positionSizingMethod,
           riskPercentage,
@@ -547,58 +586,53 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-base md:text-sm">Target Distribution (%)</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <Input
-                      type="number"
-                      value={targetDistribution[0]}
-                      onChange={(e) =>
-                        setTargetDistribution([
-                          parseFloat(e.target.value),
-                          targetDistribution[1],
-                          targetDistribution[2],
-                        ])
-                      }
-                      min="0"
-                      max="100"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Target 1</p>
-                  </div>
-                  <div>
-                    <Input
-                      type="number"
-                      value={targetDistribution[1]}
-                      onChange={(e) =>
-                        setTargetDistribution([
-                          targetDistribution[0],
-                          parseFloat(e.target.value),
-                          targetDistribution[2],
-                        ])
-                      }
-                      min="0"
-                      max="100"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Target 2</p>
-                  </div>
-                  <div>
-                    <Input
-                      type="number"
-                      value={targetDistribution[2]}
-                      onChange={(e) =>
-                        setTargetDistribution([
-                          targetDistribution[0],
-                          targetDistribution[1],
-                          parseFloat(e.target.value),
-                        ])
-                      }
-                      min="0"
-                      max="100"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Target 3</p>
-                  </div>
+                <Label className="text-base md:text-sm" htmlFor="maxTargets">Maximum Targets</Label>
+                <select
+                  id="maxTargets"
+                  value={maxTargets}
+                  onChange={(e) => handleMaxTargetsChange(parseInt(e.target.value))}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value={1}>1 Target</option>
+                  <option value={2}>2 Targets</option>
+                  <option value={3}>3 Targets</option>
+                  <option value={4}>4 Targets</option>
+                  <option value={5}>5 Targets</option>
+                </select>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Number of targets to execute from signals (1-5)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-base md:text-sm">
+                  Target Distribution (%)
+                  <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                    Current sum: {targetDistribution.reduce((a, b) => a + b, 0).toFixed(2)}%
+                  </span>
+                </Label>
+                <div className={`grid gap-2 ${
+                  maxTargets === 1 ? 'grid-cols-1' :
+                  maxTargets === 2 ? 'grid-cols-2' :
+                  maxTargets === 3 ? 'grid-cols-3' :
+                  maxTargets === 4 ? 'grid-cols-4' :
+                  'grid-cols-5'
+                }`}>
+                  {Array.from({ length: maxTargets }).map((_, index) => (
+                    <div key={index}>
+                      <Input
+                        type="number"
+                        value={targetDistribution[index] || 0}
+                        onChange={(e) => handleDistributionChange(index, parseFloat(e.target.value) || 0)}
+                        min="0"
+                        max="100"
+                        step="0.1"
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Target {index + 1}</p>
+                    </div>
+                  ))}
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   Distribution of position across targets (must sum to 100%)
                 </p>
               </div>

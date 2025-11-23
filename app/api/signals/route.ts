@@ -7,6 +7,7 @@ import { formatErrorResponse } from "@/lib/utils/errors";
 import { BinanceClient } from "@/lib/binance";
 import { checkSignalLimit } from "@/lib/middleware/usage-limiter";
 import { serializeDocument, serializeDocuments } from "@/lib/utils/serialize";
+import { limitSignalTargets } from "@/lib/parser/target-limiter";
 
 export async function POST(request: NextRequest) {
   try {
@@ -122,11 +123,25 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
 
+    // CRITICAL: Limit targets based on user's maxTargets setting
+    const originalTargets = parsed.targets;
+    const limitedTargets = await limitSignalTargets(originalTargets, String(user._id));
+
+    if (limitedTargets.length < originalTargets.length) {
+      console.log(
+        `[Signal Creation] Limited targets from ${originalTargets.length} to ${limitedTargets.length} ` +
+        `based on user's maxTargets setting. Original: [${originalTargets.map(t => t.toFixed(8)).join(", ")}], ` +
+        `Limited: [${limitedTargets.map(t => t.toFixed(8)).join(", ")}]`
+      );
+    }
+
     console.log("POST /api/signals - Creating signal document:", {
       userId: user._id,
       symbol: parsed.symbol,
       entries: parsed.entries,
-      targets: parsed.targets,
+      originalTargets: originalTargets.length,
+      limitedTargets: limitedTargets.length,
+      targets: limitedTargets,
       stopLoss: parsed.stopLoss,
       currentMarketPrice: currentMarketPrice,
       status: parsed.errors.length === 0 ? "parsed" : "pending",
@@ -137,7 +152,7 @@ export async function POST(request: NextRequest) {
       userId: user._id,
       symbol: parsed.symbol,
       entries: parsed.entries,
-      targets: parsed.targets,
+      targets: limitedTargets, // Use limited targets instead of all parsed targets
       stopLoss: parsed.stopLoss,
       currentMarketPrice: currentMarketPrice,
       status: parsed.errors.length === 0 ? "parsed" : "pending",

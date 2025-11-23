@@ -14,7 +14,8 @@ const updateSettingsSchema = z.object({
   emergencyStop: z.boolean().optional(),
   useTestnet: z.boolean().optional(),
   investmentAmount: z.number().min(10).max(100000).optional(),
-  targetDistribution: z.array(z.number()).length(3).optional(),
+  maxTargets: z.number().min(1).max(5).optional(),
+  targetDistribution: z.array(z.number()).min(1).max(5).optional(),
   positionSizingMethod: z.enum(["fixed", "percentage", "risk_based"]).optional(),
   riskPercentage: z.number().min(0.5).max(10).optional(),
   emailNotifications: z.object({
@@ -56,6 +57,7 @@ export async function GET(request: NextRequest) {
         emergencyStop: userDoc.emergencyStop,
         useTestnet: userDoc.useTestnet || false,
         investmentAmount: userDoc.investmentAmount,
+        maxTargets: userDoc.maxTargets || 3,
         targetDistribution: userDoc.targetDistribution,
         positionSizingMethod: userDoc.positionSizingMethod,
         riskPercentage: userDoc.riskPercentage,
@@ -97,16 +99,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // CRITICAL: Comprehensive validation for target distribution
-    if (validation.data.targetDistribution) {
-      const distribution = validation.data.targetDistribution;
+    // CRITICAL: Comprehensive validation for maxTargets and target distribution
+    const maxTargets = validation.data.maxTargets;
+    const targetDistribution = validation.data.targetDistribution;
 
+    // If maxTargets is provided, validate it
+    if (maxTargets !== undefined && (maxTargets < 1 || maxTargets > 5)) {
+      return NextResponse.json(
+        { success: false, error: "maxTargets must be between 1 and 5" },
+        { status: 400 }
+      );
+    }
+
+    // If both maxTargets and targetDistribution are provided, ensure they match
+    if (maxTargets !== undefined && targetDistribution !== undefined) {
+      if (targetDistribution.length !== maxTargets) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Target distribution length (${targetDistribution.length}) must equal maxTargets (${maxTargets})`
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate target distribution
+    if (targetDistribution) {
       // Use centralized validation logic
-      if (!isValidDistribution(distribution)) {
+      if (!isValidDistribution(targetDistribution)) {
         // Determine specific error reason
-        const length = distribution.length;
-        const sum = distribution.reduce((a, b) => a + b, 0);
-        const hasInvalidValue = distribution.some((v) => v < 0 || v > 100 || isNaN(v));
+        const length = targetDistribution.length;
+        const sum = targetDistribution.reduce((a, b) => a + b, 0);
+        const hasInvalidValue = targetDistribution.some((v) => v < 0 || v > 100 || isNaN(v));
 
         let errorMessage = "Invalid target distribution: ";
 
@@ -121,7 +146,7 @@ export async function POST(request: NextRequest) {
         }
 
         console.warn("[Settings API] Target distribution validation failed:", {
-          distribution,
+          distribution: targetDistribution,
           length,
           sum,
           hasInvalidValue,
@@ -134,8 +159,8 @@ export async function POST(request: NextRequest) {
       }
 
       console.log("[Settings API] Target distribution validated successfully:", {
-        distribution,
-        sum: distribution.reduce((a, b) => a + b, 0).toFixed(2) + "%",
+        distribution: targetDistribution,
+        sum: targetDistribution.reduce((a, b) => a + b, 0).toFixed(2) + "%",
       });
     }
 
@@ -188,6 +213,7 @@ export async function POST(request: NextRequest) {
         emergencyStop: updatedUser.emergencyStop,
         useTestnet: updatedUser.useTestnet || false,
         investmentAmount: updatedUser.investmentAmount,
+        maxTargets: updatedUser.maxTargets || 3,
         targetDistribution: updatedUser.targetDistribution,
         positionSizingMethod: updatedUser.positionSizingMethod,
         riskPercentage: updatedUser.riskPercentage,

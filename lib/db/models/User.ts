@@ -68,6 +68,12 @@ const userSchema = new Schema<IUser>(
       default: 100,
       min: 10,
     },
+    maxTargets: {
+      type: Number,
+      default: 3,
+      min: 1,
+      max: 5,
+    },
     targetDistribution: {
       type: [Number],
       default: [75, 15, 10],

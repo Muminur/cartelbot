@@ -14,6 +14,7 @@ export interface IUser extends Document {
   requireApproval?: boolean;
   emergencyStop?: boolean;
   investmentAmount?: number;
+  maxTargets?: number;
   targetDistribution?: number[];
   positionSizingMethod?: "fixed" | "percentage" | "risk_based";
   riskPercentage?: number;
@@ -334,6 +335,7 @@ export interface UserProfile {
   positionSizingMethod?: "fixed" | "percentage" | "risk_based";
   riskPercentage?: number;
   useTestnet?: boolean;
+  maxTargets?: number;
   targetDistribution?: number[];
   maxPositionSize?: number;
   maxDailyLoss?: number;

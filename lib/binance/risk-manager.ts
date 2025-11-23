@@ -8,6 +8,7 @@ export interface RiskLimits {
   maxDailyLoss: number;
   maxOpenPositions: number;
   requireApproval: boolean;
+  maxTargets: number;
   targetDistribution: number[];
 }
 
@@ -30,6 +31,7 @@ const DEFAULT_RISK_LIMITS: RiskLimits = {
   maxDailyLoss: 1000,
   maxOpenPositions: 10,
   requireApproval: false,
+  maxTargets: 3,
   targetDistribution: [75, 15, 10],
 };
 
@@ -97,11 +99,13 @@ export async function getUserRiskLimits(userId: Types.ObjectId | string): Promis
     maxDailyLoss?: number;
     maxOpenPositions?: number;
     requireApproval?: boolean;
+    maxTargets?: number;
     targetDistribution?: number[];
   };
 
   // CRITICAL: Validate target distribution before using
   let targetDistribution = userDoc.targetDistribution;
+  const maxTargets = userDoc.maxTargets ?? DEFAULT_RISK_LIMITS.maxTargets;
 
   if (targetDistribution && !isValidDistribution(targetDistribution)) {
     console.warn(
@@ -111,11 +115,31 @@ export async function getUserRiskLimits(userId: Types.ObjectId | string): Promis
     targetDistribution = undefined; // Force fallback to default
   }
 
+  // Ensure targetDistribution length matches maxTargets
+  if (targetDistribution && targetDistribution.length !== maxTargets) {
+    console.warn(
+      `[Risk Manager] User ${userIdStr} targetDistribution length (${targetDistribution.length}) ` +
+      `doesn't match maxTargets (${maxTargets}). Adjusting...`
+    );
+
+    if (targetDistribution.length > maxTargets) {
+      // Trim and normalize
+      const trimmed = targetDistribution.slice(0, maxTargets);
+      const sum = trimmed.reduce((a, b) => a + b, 0);
+      targetDistribution = trimmed.map(v => (v / sum) * 100);
+    } else {
+      // Pad with equal distribution
+      const equalPercentage = 100 / maxTargets;
+      targetDistribution = Array(maxTargets).fill(equalPercentage);
+    }
+  }
+
   return {
     maxPositionSize: userDoc.maxPositionSize ?? DEFAULT_RISK_LIMITS.maxPositionSize,
     maxDailyLoss: userDoc.maxDailyLoss ?? DEFAULT_RISK_LIMITS.maxDailyLoss,
     maxOpenPositions: userDoc.maxOpenPositions ?? DEFAULT_RISK_LIMITS.maxOpenPositions,
     requireApproval: userDoc.requireApproval ?? DEFAULT_RISK_LIMITS.requireApproval,
+    maxTargets: maxTargets,
     targetDistribution: targetDistribution ?? DEFAULT_RISK_LIMITS.targetDistribution,
   };
 }
