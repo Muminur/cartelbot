@@ -18,6 +18,7 @@ export async function GET(_req: NextRequest) {
 
     if (wsManager) {
       const connectionStatus = wsManager.getConnectionStatus();
+      const listenerInfo = wsManager.getListenerInfo();
 
       return NextResponse.json({
         success: true,
@@ -28,6 +29,12 @@ export async function GET(_req: NextRequest) {
           connectionState: session?.connectionState || "unknown",
           lastKeepAlive: session?.lastKeepAlive,
           errorMessage: session?.errorMessage,
+          // Include listener info for debugging (only in development)
+          ...(process.env.NODE_ENV === 'development' && {
+            debug: {
+              listeners: listenerInfo,
+            },
+          }),
         },
       });
     }

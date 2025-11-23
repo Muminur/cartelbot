@@ -80,15 +80,18 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Set up maxReconnectReached handler BEFORE starting
+    // This ensures we only register it once per manager instance
+    wsManager.once("maxReconnectReached", async () => {
+      console.log(`[WebSocket Start] Max reconnect attempts reached for user ${userId}, cleaning up connection`);
+      deleteConnection(userId);
+    });
+
     console.log(`[WebSocket Start] Starting WebSocket manager for user ${userId}`);
     const listenKey = await wsManager.start();
     console.log(`[WebSocket Start] WebSocket started successfully with listen key: ${listenKey?.substring(0, 10)}...`);
 
     setConnection(userId, wsManager);
-
-    wsManager.on("maxReconnectReached", async () => {
-      deleteConnection(userId);
-    });
 
     return NextResponse.json({
       success: true,

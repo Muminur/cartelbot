@@ -34,6 +34,12 @@ export class WebSocketManager extends EventEmitter {
 
   constructor(config: WebSocketManagerConfig) {
     super();
+
+    // Set max listeners to prevent memory leak warnings
+    // We expect: 1 event listener + 1 maxReconnectReached listener = 2 total
+    // Set to 5 to allow some flexibility without triggering false alarms
+    this.setMaxListeners(5);
+
     this.userId = config.userId;
     this.binanceClient = config.binanceClient;
     this.connection = {
@@ -47,6 +53,11 @@ export class WebSocketManager extends EventEmitter {
 
     if (config.onEvent) {
       this.on("event", config.onEvent);
+    }
+
+    // Log initial listener count for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[WebSocketManager ${this.userId}] Initialized with ${this.listenerCount('event')} event listeners`);
     }
   }
 
@@ -232,6 +243,15 @@ export class WebSocketManager extends EventEmitter {
   async stop(): Promise<void> {
     console.log(`Stopping WebSocket connection for user ${this.userId}`);
 
+    // Log listener counts before cleanup (for debugging)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[WebSocketManager ${this.userId}] Listeners before cleanup:`, {
+        event: this.listenerCount('event'),
+        maxReconnectReached: this.listenerCount('maxReconnectReached'),
+        total: this.eventNames().reduce((acc, name) => acc + this.listenerCount(name), 0),
+      });
+    }
+
     await this.cleanup();
 
     const listenKey = this.connection.listenKey;
@@ -250,7 +270,15 @@ export class WebSocketManager extends EventEmitter {
     this.connection.listenKey = "";
     this.connection.reconnectAttempts = 0;
 
+    // Remove all event listeners to prevent memory leaks
     this.removeAllListeners();
+
+    // Log final listener count (should be 0)
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[WebSocketManager ${this.userId}] Listeners after cleanup:`, {
+        total: this.eventNames().reduce((acc, name) => acc + this.listenerCount(name), 0),
+      });
+    }
   }
 
   private async updateSessionState(
@@ -294,6 +322,26 @@ export class WebSocketManager extends EventEmitter {
       isActive: this.connection.isActive,
       listenKey: this.connection.listenKey,
       reconnectAttempts: this.connection.reconnectAttempts,
+    };
+  }
+
+  /**
+   * Get current listener counts for debugging memory leaks
+   */
+  getListenerInfo(): {
+    event: number;
+    maxReconnectReached: number;
+    total: number;
+    maxListeners: number;
+    eventNames: string[];
+  } {
+    const eventNames = this.eventNames().map(String);
+    return {
+      event: this.listenerCount('event'),
+      maxReconnectReached: this.listenerCount('maxReconnectReached'),
+      total: eventNames.reduce((acc, name) => acc + this.listenerCount(name), 0),
+      maxListeners: this.getMaxListeners(),
+      eventNames,
     };
   }
 }
