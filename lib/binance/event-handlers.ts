@@ -2,7 +2,6 @@ import { Trade, Signal } from "@/lib/db/models";
 import { BinanceWebSocketEvent } from "./websocket-manager";
 import { markSignalCompleted } from "./signal-status-manager";
 import {
-  sendTradeExecutedNotification,
   sendTargetHitNotification,
   sendStopLossHitNotification,
 } from "@/lib/email/notifications";
@@ -100,20 +99,10 @@ export async function handleExecutionReport(event: BinanceWebSocketEvent): Promi
         const avgPrice = cummulativeQuoteQty / executedQty;
         trade.entryPrice = avgPrice;
 
-        // Send trade executed notification for BUY orders
-        sendTradeExecutedNotification({
-          userId: trade.userId,
-          tradeId: trade._id,
-          symbol: data.s,
-          side: "BUY",
-          quantity: executedQty,
-          price: avgPrice,
-          totalAmount: cummulativeQuoteQty,
-          timestamp: new Date(data.T),
-          orderId: data.i,
-        }).catch((error) => {
-          console.error("[Notification] Failed to send trade executed email:", error);
-        });
+        // NOTE: Buy order notification is already sent from the execute endpoint
+        // (app/api/trades/execute/route.ts line 100) after OCO creation succeeds.
+        // We do NOT send notification here to avoid duplicate emails.
+        // Only SELL orders (targets and stop loss) trigger notifications from WebSocket events.
       }
     } else {
       const sellOrderIndex = trade.sellOrders.findIndex(
@@ -397,3 +386,4 @@ export async function routeEvent(event: BinanceWebSocketEvent): Promise<void> {
     });
   }
 }
+
