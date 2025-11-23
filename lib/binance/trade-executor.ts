@@ -184,12 +184,22 @@ export async function executeSignalTrade(
     signal.status = "executing";
     await signal.save();
 
+    // CRITICAL: Capture pre-buy balance for settlement verification in createOCOOrders()
+    // This is captured BEFORE the buy order executes, so we can detect settlement completion
+    const baseAsset = symbolInfo.baseAsset || signal.symbol.replace(/USDT$/, '');
+    const preBuyAccountInfo = await client.getAccount();
+    const preBuyAssetBalance = preBuyAccountInfo.balances.find(b => b.asset === baseAsset);
+    const preBuyBalance = parseFloat(preBuyAssetBalance?.free || '0');
+
     console.log(`[Trade Executor] Executing buy order for ${signal.symbol}:`, {
       symbol: signal.symbol,
       investmentAmount: amount,
       estimatedQuantity: estimatedQuantity,
       currentPrice: currentPrice,
       testnet: testnet,
+      baseAsset: baseAsset,
+      preBuyBalance: preBuyBalance.toFixed(8),
+      note: "Pre-buy balance will be used for settlement verification in createOCOOrders()",
     });
 
     const buyOrder = await client.createMarketBuyOrder(signal.symbol, amount);
@@ -265,6 +275,7 @@ export async function executeSignalTrade(
       targets: signal.targets, // Store ORIGINAL targets from signal
       stopLoss: signal.stopLoss, // Store ORIGINAL stop loss from signal
       targetAdjustmentNotificationSent: false, // Flag for notification system
+      preBuyBalance: preBuyBalance, // CRITICAL: Balance before buy order for settlement verification
     });
 
     console.log(`[Trade Executor] Trade document created:`, {
@@ -662,17 +673,24 @@ export async function createOCOOrders(
     console.log(`[OCO] ${trade.symbol} - Initial balance check for ${baseAsset}...`);
     const initialAccountInfo = await client.getAccount();
     const initialAssetBalance = initialAccountInfo.balances.find(b => b.asset === baseAsset);
-    let initialAvailableBalance = parseFloat(initialAssetBalance?.free || '0'); // Use 'let' - may be updated after recheck
+    const currentAvailableBalance = parseFloat(initialAssetBalance?.free || '0'); // Current balance (may already include settlement)
     const initialLockedBalance = parseFloat(initialAssetBalance?.locked || '0');
+
+    // CRITICAL FIX: Use preBuyBalance from Trade document (captured BEFORE buy order)
+    // If not available (old trades), fall back to current balance (assumes no settlement yet)
+    const preBuyBalance = trade.preBuyBalance !== undefined
+      ? trade.preBuyBalance
+      : currentAvailableBalance;
 
     console.log(
       `[OCO] ${trade.symbol} - Initial balance:`,
-      `Available=${initialAvailableBalance.toFixed(8)},`,
+      `PreBuy=${preBuyBalance.toFixed(8)},`,
+      `Current=${currentAvailableBalance.toFixed(8)},`,
       `Locked=${initialLockedBalance.toFixed(8)},`,
       `Required (from buy order)=${trade.quantity.toFixed(8)},`,
       `Buy Order ID=${trade.buyOrder?.orderId || 'N/A'},`,
       `Buy Order Executed Qty=${trade.buyOrder?.executedQty?.toFixed(8) || 'N/A'},`,
-      `Shortfall=${Math.max(0, trade.quantity - initialAvailableBalance).toFixed(8)}`
+      `AlreadySettled=${currentAvailableBalance > preBuyBalance ? 'YES' : 'NO'}`
     );
 
     // Critical diagnostic: Verify trade.quantity matches buyOrder.executedQty
@@ -689,32 +707,46 @@ export async function createOCOOrders(
     // Use actual executed quantity (may differ from trade.quantity due to partial fills)
     const actualQuantity = trade.buyOrder?.executedQty || trade.quantity;
 
-    // IMPORTANT: After the proactive settlement delay (2-3 seconds), the balance should already
-    // contain the purchased coins. We check if balance >= required quantity, NOT if it increased.
-    // The "beforeSettlementBalance" is the balance BEFORE the buy order (captured in initial balance check).
+    // CRITICAL FIX: Use PRE-BUY balance for settlement verification
+    // The preBuyBalance was captured BEFORE the buy order executed
+    // We check if current balance >= preBuyBalance + actualQuantity to detect settlement
+    const expectedBalanceAfterSettlement = preBuyBalance + actualQuantity;
+
     console.log(
-      `[OCO] ${trade.symbol} - Verifying settlement: ` +
-      `Current balance=${initialAvailableBalance.toFixed(8)}, ` +
-      `Required quantity=${actualQuantity.toFixed(8)}, ` +
-      `Sufficient=${initialAvailableBalance >= actualQuantity ? 'YES' : 'NO'}`
+      `[OCO] ${trade.symbol} - Settlement verification: ` +
+      `Pre-buy balance=${preBuyBalance.toFixed(8)}, ` +
+      `Current balance=${currentAvailableBalance.toFixed(8)}, ` +
+      `Bought quantity=${actualQuantity.toFixed(8)}, ` +
+      `Expected after settlement=${expectedBalanceAfterSettlement.toFixed(8)}`
     );
 
-    // Check if balance is already sufficient (settlement likely already complete due to proactive delay)
-    if (initialAvailableBalance >= (actualQuantity - TRADE_EXECUTION.BALANCE_TOLERANCE)) {
+    // Check if settlement already completed during the proactive delay (route.ts line 89)
+    const initialBalanceIncrease = currentAvailableBalance - preBuyBalance;
+    const settlementAlreadyComplete = currentAvailableBalance >= (expectedBalanceAfterSettlement - TRADE_EXECUTION.BALANCE_TOLERANCE);
+
+    let settlementVerified = false;
+
+    if (settlementAlreadyComplete) {
+      // Settlement completed during the 2-3 second proactive delay - no polling needed!
+      settlementVerified = true;
       console.log(
-        `[OCO] ${trade.symbol} - Balance already sufficient for OCO orders ` +
-        `(${initialAvailableBalance.toFixed(8)} >= ${actualQuantity.toFixed(8)}). Proceeding immediately.`
+        `[OCO] ${trade.symbol} - Settlement already complete (detected during proactive delay): ` +
+        `Pre-buy balance=${preBuyBalance.toFixed(8)}, ` +
+        `Current balance=${currentAvailableBalance.toFixed(8)}, ` +
+        `Increase=${initialBalanceIncrease.toFixed(8)}, ` +
+        `Expected increase=${actualQuantity.toFixed(8)}. ` +
+        `Skipping polling - proceeding immediately with OCO creation.`
       );
     } else {
-      // Balance not yet sufficient - poll until it reaches required amount
-      console.log(
-        `[OCO] ${trade.symbol} - Balance insufficient (${initialAvailableBalance.toFixed(8)} < ${actualQuantity.toFixed(8)}). ` +
-        `Polling for settlement...`
-      );
-
+      // Settlement not yet complete - poll for balance update
       const maxPolls = testnet ? 20 : 10; // Testnet needs more time (up to 20 seconds)
       const pollInterval = 1000; // 1 second between polls
-      let settlementVerified = false;
+
+      console.log(
+        `[OCO] ${trade.symbol} - Settlement NOT yet complete. Starting polling... ` +
+        `(Pre-buy=${preBuyBalance.toFixed(8)}, Current=${currentAvailableBalance.toFixed(8)}, ` +
+        `Expected=${expectedBalanceAfterSettlement.toFixed(8)})`
+      );
 
       const pollStartTime = Date.now();
       for (let poll = 1; poll <= maxPolls; poll++) {
@@ -723,23 +755,26 @@ export async function createOCOOrders(
           currentAccount.balances.find(b => b.asset === baseAsset)?.free || '0'
         );
 
-        const settlementComplete = currentBalance >= (actualQuantity - TRADE_EXECUTION.BALANCE_TOLERANCE);
+        // Check if balance increased by the purchased amount (indicating settlement complete)
+        const balanceIncrease = currentBalance - preBuyBalance;
+        const settlementComplete = currentBalance >= (expectedBalanceAfterSettlement - TRADE_EXECUTION.BALANCE_TOLERANCE);
 
         console.log(
           `[OCO] ${trade.symbol} - Settlement poll ${poll}/${maxPolls}:`,
           `Current=${currentBalance.toFixed(8)},`,
-          `Required=${actualQuantity.toFixed(8)},`,
-          `Sufficient=${settlementComplete ? 'YES' : 'NO'}`
+          `Expected=${expectedBalanceAfterSettlement.toFixed(8)},`,
+          `Increase=${balanceIncrease.toFixed(8)},`,
+          `Complete=${settlementComplete ? 'YES' : 'NO'}`
         );
 
         if (settlementComplete) {
           settlementVerified = true;
-          initialAvailableBalance = currentBalance;
           const elapsedTime = Date.now() - pollStartTime;
           const savedTime = (maxPolls - poll) * pollInterval;
           console.log(
             `[OCO] ${trade.symbol} - Settlement verified after ${poll}/${maxPolls} polls ` +
-            `(${elapsedTime}ms elapsed, ${savedTime}ms saved)`
+            `(${elapsedTime}ms elapsed, ${savedTime}ms saved). ` +
+            `Balance increased by ${balanceIncrease.toFixed(8)} ${baseAsset}`
           );
           break;
         }
@@ -757,18 +792,26 @@ export async function createOCOOrders(
           finalAccount.balances.find(b => b.asset === baseAsset)?.free || '0'
         );
 
-        if (finalBalance >= (actualQuantity - TRADE_EXECUTION.BALANCE_TOLERANCE)) {
+        const finalIncrease = finalBalance - preBuyBalance;
+        const finalSettled = finalBalance >= (expectedBalanceAfterSettlement - TRADE_EXECUTION.BALANCE_TOLERANCE);
+
+        if (finalSettled) {
           console.warn(
-            `[OCO] ${trade.symbol} - Final check passed: balance is sufficient ` +
-            `(${finalBalance.toFixed(8)} >= ${actualQuantity.toFixed(8)}). Proceeding...`
+            `[OCO] ${trade.symbol} - Final check passed: settlement detected ` +
+            `(${finalBalance.toFixed(8)} >= ${expectedBalanceAfterSettlement.toFixed(8)}). ` +
+            `Balance increased by ${finalIncrease.toFixed(8)}. Proceeding...`
           );
-          initialAvailableBalance = finalBalance;
+          settlementVerified = true;
         } else {
           throw new ValidationError(
             `Balance settlement verification failed after ${maxPolls} polls. ` +
-            `Final balance: ${finalBalance.toFixed(8)}, Required: ${actualQuantity.toFixed(8)}, ` +
-            `Shortfall: ${(actualQuantity - finalBalance).toFixed(8)}. ` +
-            `This indicates persistent testnet settlement delays or balance sync issues.`
+            `Pre-buy balance: ${preBuyBalance.toFixed(8)}, ` +
+            `Current balance: ${finalBalance.toFixed(8)}, ` +
+            `Expected balance: ${expectedBalanceAfterSettlement.toFixed(8)}, ` +
+            `Actual increase: ${finalIncrease.toFixed(8)}, ` +
+            `Expected increase: ${actualQuantity.toFixed(8)}, ` +
+            `Shortfall: ${(expectedBalanceAfterSettlement - finalBalance).toFixed(8)}. ` +
+            `This indicates the buy order hasn't settled yet or balance sync issues.`
           );
         }
       }

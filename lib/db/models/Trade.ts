@@ -165,6 +165,12 @@ const tradeSchema = new Schema<ITrade>(
       default: false,
       // Flag to track if user has been notified about target adjustments
     },
+    preBuyBalance: {
+      type: Number,
+      min: [0, "Pre-buy balance must be non-negative"],
+      // Balance of base asset BEFORE the buy order - used for settlement verification
+      // Helps detect if settlement already completed during proactive delay
+    },
     testnet: {
       type: Boolean,
       default: false,

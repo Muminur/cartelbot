@@ -107,6 +107,7 @@ export interface ITrade extends Document {
   stopLoss?: number;
   targetAdjustmentReason?: string; // Records why targets were adjusted (e.g., market moved above targets)
   targetAdjustmentNotificationSent?: boolean; // Flag to track if user has been notified about target adjustments
+  preBuyBalance?: number; // Balance of base asset BEFORE the buy order (for settlement verification)
   testnet?: boolean;
   lastError?: {
     message?: string;
