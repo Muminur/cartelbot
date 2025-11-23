@@ -21,6 +21,9 @@ import { SubscriptionSection } from "@/components/settings/SubscriptionSection";
 import { Loader2, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import { TIER_CONFIGS, type SubscriptionTier } from "@/lib/subscription/constants";
 
+// Constants for target distribution validation
+const DISTRIBUTION_SUM_TOLERANCE = 0.01; // Allow 0.01% variance for floating point precision
+
 interface TestConnectionResult {
   connected: boolean;
   canTrade?: boolean;
@@ -242,6 +245,10 @@ export default function SettingsPage() {
 
   // Handle maxTargets change - adjust distribution array length
   const handleMaxTargetsChange = (newMaxTargets: number) => {
+    // Early return if selecting same value (prevents unnecessary toast)
+    if (newMaxTargets === maxTargets) return;
+
+    const oldMaxTargets = maxTargets;
     setMaxTargets(newMaxTargets);
 
     // Adjust targetDistribution array length to match maxTargets
@@ -249,16 +256,36 @@ export default function SettingsPage() {
       // Add more targets - distribute evenly
       const equalPercentage = 100 / newMaxTargets;
       setTargetDistribution(Array(newMaxTargets).fill(parseFloat(equalPercentage.toFixed(2))));
+
+      // Notify user to verify the auto-generated distribution
+      toast.info(
+        `Max targets changed from ${oldMaxTargets} to ${newMaxTargets}. Please verify the target distribution percentages below (must sum to 100%).`,
+        { duration: 5000 }
+      );
     } else if (newMaxTargets < targetDistribution.length) {
       // Remove targets - keep first N, normalize to 100%
       const sliced = targetDistribution.slice(0, newMaxTargets);
       const sum = sliced.reduce((a, b) => a + b, 0);
-      if (Math.abs(sum - 100) > 0.01) {
+      const wasNormalized = Math.abs(sum - 100) > DISTRIBUTION_SUM_TOLERANCE;
+
+      if (wasNormalized) {
         // Normalize to 100%
         const normalized = sliced.map(v => (v / sum) * 100);
         setTargetDistribution(normalized);
+
+        // Only notify user if distribution was actually modified
+        toast.info(
+          `Max targets reduced from ${oldMaxTargets} to ${newMaxTargets}. Distribution was adjusted to sum to 100%. Please verify the percentages below.`,
+          { duration: 5000 }
+        );
       } else {
         setTargetDistribution(sliced);
+
+        // Distribution already valid, just inform about the change
+        toast.info(
+          `Max targets reduced from ${oldMaxTargets} to ${newMaxTargets}. Distribution percentages unchanged.`,
+          { duration: 3000 }
+        );
       }
     }
   };
@@ -281,7 +308,7 @@ export default function SettingsPage() {
 
     // Validate target distribution sums to 100%
     const distributionSum = targetDistribution.reduce((a, b) => a + b, 0);
-    if (Math.abs(distributionSum - 100) > 0.01) {
+    if (Math.abs(distributionSum - 100) > DISTRIBUTION_SUM_TOLERANCE) {
       toast.error(`Target distribution must sum to 100% (currently ${distributionSum.toFixed(2)}%)`);
       return;
     }
@@ -607,9 +634,19 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label className="text-base md:text-sm">
                   Target Distribution (%)
-                  <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                    Current sum: {targetDistribution.reduce((a, b) => a + b, 0).toFixed(2)}%
-                  </span>
+                  {(() => {
+                    const sum = targetDistribution.reduce((a, b) => a + b, 0);
+                    const isValid = Math.abs(sum - 100) <= DISTRIBUTION_SUM_TOLERANCE;
+                    return (
+                      <span className={`ml-2 text-xs font-semibold ${
+                        isValid
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}>
+                        Current sum: {sum.toFixed(2)}% {isValid ? '✓' : '✗ Must equal 100%'}
+                      </span>
+                    );
+                  })()}
                 </Label>
                 <div className={`grid gap-2 ${
                   maxTargets === 1 ? 'grid-cols-1' :
@@ -714,7 +751,15 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              <Button onClick={handleSaveTradeSettings} disabled={savingTradeSettings} className="w-full h-12 md:h-10 text-base md:text-sm">
+              <Button
+                onClick={handleSaveTradeSettings}
+                disabled={
+                  savingTradeSettings ||
+                  Math.abs(targetDistribution.reduce((a, b) => a + b, 0) - 100) > DISTRIBUTION_SUM_TOLERANCE ||
+                  targetDistribution.length !== maxTargets
+                }
+                className="w-full h-12 md:h-10 text-base md:text-sm"
+              >
                 {savingTradeSettings ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
