@@ -817,34 +817,116 @@ export async function createOCOOrders(
       }
     }
 
-    // TODO: Implement safe phantom order cleanup
-    // CRITICAL ISSUE: Cannot safely cancel ALL sell orders - this would destroy stop losses from other trades!
-    //
-    // Problem: When OCO creation fails after Binance accepts the request, we get phantom orders that lock balance.
-    // Previous solution: Cancel ALL sell orders for this symbol - DANGEROUS! This cancels legitimate OCO orders
-    // from other active trades, removing their stop loss protection.
-    //
-    // Safe Solution (to be implemented):
-    // 1. When createOCOOrder() is called, capture the orderListId even if the response parsing fails
-    // 2. Store failed orderListIds in the Trade document (e.g., trade.failedOCOAttempts: [orderListId])
-    // 3. Only cancel orders that match our stored failed orderListIds
-    // 4. Never touch orders from other trades
-    //
-    // Temporary Workaround:
-    // - Removed dangerous cleanup logic entirely
-    // - Accept that balance may be locked temporarily by phantom orders
-    // - Users can manually cancel phantom orders via Binance UI if needed
-    // - Binance's own order expiry (GTC/IOC) will eventually clean up
-    //
-    // References:
-    // - createOCOOrder() in lib/binance/client.ts returns { orderListId, orderReports }
-    // - Trade model needs new field: failedOCOAttempts: [{ orderListId: number, timestamp: Date }]
-    // - Cleanup should query: getOpenOrders() and filter by orderListId match only
-    //
-    console.log(
-      `[OCO] ${trade.symbol} - Skipping phantom order cleanup (disabled for safety). ` +
-      `If balance appears locked, check for phantom orders manually via Binance UI.`
-    );
+    // SAFE PHANTOM ORDER CLEANUP
+    // Only cancels orders that aren't tracked in our database - never touches legitimate OCO orders
+    console.log(`[OCO] ${trade.symbol} - Checking for phantom orders...`);
+
+    try {
+      // 1. Get all open SELL orders for this symbol from Binance
+      const openOrders = await client.getOpenOrders(trade.symbol);
+      const openSellOrders = openOrders.filter(order => order.side === "SELL");
+
+      console.log(
+        `[OCO] ${trade.symbol} - Found ${openSellOrders.length} open SELL orders on Binance`
+      );
+
+      if (openSellOrders.length > 0) {
+        // 2. Get all legitimate orderListIds from our database for this user and symbol
+        const userTrades = await Trade.find({
+          userId: trade.userId,
+          symbol: trade.symbol,
+          status: { $in: ["open", "partial"] }, // Only active trades
+          "sellOrders.0": { $exists: true }, // Has at least one sell order
+        }).select("sellOrders").lean();
+
+        // Extract all legitimate orderListIds (filter out -1 which means no order list)
+        const legitimateOrderListIds = new Set<number>();
+        userTrades.forEach(t => {
+          const sellOrders = t.sellOrders as Array<{ orderListId?: number }> | undefined;
+          sellOrders?.forEach(order => {
+            if (order.orderListId && order.orderListId !== -1) {
+              legitimateOrderListIds.add(order.orderListId);
+            }
+          });
+        });
+
+        console.log(
+          `[OCO] ${trade.symbol} - Legitimate orderListIds in database: ` +
+          `[${Array.from(legitimateOrderListIds).join(", ")}]`
+        );
+
+        // CRITICAL SAFETY CHECK: If database returns empty but Binance has orders,
+        // this could indicate database inconsistency. Skip cleanup to avoid deleting
+        // legitimate orders. This prevents data loss if database is temporarily out of sync.
+        if (legitimateOrderListIds.size === 0 && openSellOrders.length > 0) {
+          console.warn(
+            `[OCO] ${trade.symbol} - SAFETY: Skipping phantom cleanup. ` +
+            `Database shows no legitimate orders but Binance has ${openSellOrders.length} open SELL orders. ` +
+            `This indicates potential database inconsistency. Manual cleanup recommended.`
+          );
+          // Continue with OCO creation despite potential phantom orders
+          // This is safer than accidentally canceling legitimate orders
+        } else {
+          // 3. Identify phantom orders (orders not in our database)
+          const phantomOrders = openSellOrders.filter(order => {
+            // Skip orders without orderListId or with -1 (not part of OCO)
+            if (!order.orderListId || order.orderListId === -1) {
+              return false;
+            }
+            // Phantom = orderListId exists but not in our database
+            return !legitimateOrderListIds.has(order.orderListId);
+          });
+
+          console.log(
+            `[OCO] ${trade.symbol} - Found ${phantomOrders.length} phantom orders ` +
+            `(orderListIds: [${phantomOrders.map(o => o.orderListId).filter((v, i, a) => a.indexOf(v) === i).join(", ")}])`
+          );
+
+          // 4. Cancel phantom orders by orderListId (cancels entire OCO group)
+          const canceledOrderListIds = new Set<number>();
+          for (const order of phantomOrders) {
+            // Skip if we already canceled this orderListId
+            if (canceledOrderListIds.has(order.orderListId!)) {
+              continue;
+            }
+
+            try {
+              console.log(
+                `[OCO] ${trade.symbol} - Canceling phantom orderListId ${order.orderListId} ` +
+                `(orderId: ${order.orderId})`
+              );
+              await client.cancelOCOOrder(trade.symbol, order.orderListId!);
+              canceledOrderListIds.add(order.orderListId!);
+              console.log(
+                `[OCO] ${trade.symbol} - Successfully canceled phantom orderListId ${order.orderListId}`
+              );
+            } catch (cancelError: unknown) {
+              // Log but don't fail - phantom order cleanup is best-effort
+              console.warn(
+                `[OCO] ${trade.symbol} - Failed to cancel phantom orderListId ${order.orderListId}:`,
+                cancelError instanceof Error ? cancelError.message : String(cancelError)
+              );
+            }
+          }
+
+          if (canceledOrderListIds.size > 0) {
+            console.log(
+              `[OCO] ${trade.symbol} - Phantom order cleanup complete. ` +
+              `Canceled ${canceledOrderListIds.size} orderListId(s): ` +
+              `[${Array.from(canceledOrderListIds).join(", ")}]`
+            );
+          } else {
+            console.log(`[OCO] ${trade.symbol} - No phantom orders to clean up`);
+          }
+        }
+      }
+    } catch (cleanupError: unknown) {
+      // Log but don't fail - phantom order cleanup is best-effort
+      console.warn(
+        `[OCO] ${trade.symbol} - Phantom order cleanup failed:`,
+        cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+      );
+    }
 
     // Diagnostic: Log if locked balance is unexpectedly high
     if (initialLockedBalance > 0) {
