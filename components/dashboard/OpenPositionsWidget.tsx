@@ -4,14 +4,17 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { ColumnDef } from "@tanstack/react-table";
-import { Badge } from "@/components/ui/badge";
 import { TrendingUp } from "lucide-react";
 import { formatCurrency, formatNumber } from "@/lib/utils/format";
 
 interface TradeData {
   _id: string;
   symbol: string;
-  side: string;
+  buyOrder: {
+    side: "BUY" | "SELL";
+    orderId: number;
+    symbol: string;
+  };
   entryPrice: number;
   quantity: number;
   currentPrice?: number;
@@ -45,15 +48,6 @@ export function OpenPositionsWidget() {
     {
       accessorKey: "symbol",
       header: "Symbol",
-    },
-    {
-      accessorKey: "side",
-      header: "Side",
-      cell: ({ row }) => (
-        <Badge variant={row.original.side === "buy" ? "default" : "destructive"}>
-          {row.original.side.toUpperCase()}
-        </Badge>
-      ),
     },
     {
       accessorKey: "entryPrice",
