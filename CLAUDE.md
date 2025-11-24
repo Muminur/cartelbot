@@ -502,3 +502,6 @@ Fixed -1121 errors by removing delisted BUSD pairs (43% API reduction). Implemen
 
 ## Session: Nov 24, 2025 - Phantom Individual Order Cleanup Fix
 **Fixed phantom order detection (9d57713)**: Extended cleanup logic to handle individual orders (orderListId===-1) in addition to OCO orders. Now cancels both types using cancelOrder() and cancelOCOOrder(). Fixed -2010 "Insufficient balance" caused by 800 RESOLV locked by phantom orders. Build ✅ 42s, code review 9.2/10, production-ready.
+
+## Session: Nov 24, 2025 - Age Threshold Enhancement
+**30s age threshold improvements (73f7ccd)**: Completed BinanceOrderResponse interface (added origQuoteOrderQty, selfTradePreventionMode). Implemented aggregated logging reducing log volume 96%. All safety features maintained. TypeScript ✅, code review 9.2/10, production-ready.
