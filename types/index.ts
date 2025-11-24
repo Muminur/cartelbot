@@ -177,6 +177,9 @@ export interface BinanceOrderResponse {
   orderListId: number;
   clientOrderId: string;
   transactTime: number;
+  time: number; // Order creation timestamp (milliseconds) - REQUIRED by Binance API
+  updateTime?: number; // Last update timestamp (milliseconds)
+  workingTime?: number; // Time when order started working on order book (milliseconds)
   price: string;
   origQty: string;
   executedQty: string;
@@ -186,6 +189,10 @@ export interface BinanceOrderResponse {
   type: string;
   side: string;
   stopPrice?: string;
+  icebergQty?: string;
+  isWorking?: boolean;
+  origQuoteOrderQty?: string; // Original quote order quantity (used for MARKET orders)
+  selfTradePreventionMode?: string; // STP mode (NONE, EXPIRE_TAKER, EXPIRE_MAKER, EXPIRE_BOTH)
   fills?: Array<{
     price: string;
     qty: string;

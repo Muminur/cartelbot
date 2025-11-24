@@ -884,25 +884,118 @@ export async function createOCOOrders(
           // Continue with OCO creation despite potential phantom orders
           // This is safer than accidentally canceling legitimate orders
         } else {
-          // 3. Identify phantom OCO orders
+          // 3. Identify phantom OCO orders (with 30s age threshold)
+          const AGE_THRESHOLD_MS = 30000; // 30 seconds
+          const now = Date.now();
+
+          // Track skipped orders for aggregated logging
+          const skippedOCOOrders: { orderId: number; orderListId: number; reason: string }[] = [];
+          const skippedIndividualOrders: { orderId: number; reason: string }[] = [];
+
           const phantomOCOOrders = openSellOrders.filter(order => {
             // Only check orders that are part of an OCO
             if (!order.orderListId || order.orderListId === -1) {
               return false;
             }
+
+            // Safety: Skip orders with missing time field (data integrity issue)
+            if (!order.time) {
+              console.warn(
+                `[OCO] ${trade.symbol} - SAFETY: Skipping order ${order.orderId} ` +
+                `(orderListId: ${order.orderListId}) - missing 'time' field. ` +
+                `This may indicate API issues or incomplete data.`
+              );
+              skippedOCOOrders.push({ orderId: order.orderId, orderListId: order.orderListId, reason: 'missing_time' });
+              return false;
+            }
+
+            // Safety: Skip recent orders (prevents race condition)
+            const orderAge = now - order.time;
+
+            // Detect clock skew (future timestamps)
+            if (orderAge < 0) {
+              console.warn(
+                `[OCO] ${trade.symbol} - Clock skew detected! Order ${order.orderId} ` +
+                `(orderListId: ${order.orderListId}) has future timestamp. ` +
+                `Age: ${(orderAge/1000).toFixed(1)}s. Skipping for safety.`
+              );
+              skippedOCOOrders.push({ orderId: order.orderId, orderListId: order.orderListId, reason: 'clock_skew' });
+              return false;
+            }
+
+            if (orderAge < AGE_THRESHOLD_MS) {
+              skippedOCOOrders.push({
+                orderId: order.orderId,
+                orderListId: order.orderListId,
+                reason: `age_${(orderAge/1000).toFixed(1)}s`
+              });
+              return false;
+            }
+
             // Phantom = orderListId exists but not in our database
             return !legitimateOrderListIds.has(order.orderListId);
           });
 
-          // 4. Identify phantom individual orders
+          // 4. Identify phantom individual orders (with 30s age threshold)
           const phantomIndividualOrders = openSellOrders.filter(order => {
             // Only check individual orders (not part of OCO)
             if (order.orderListId && order.orderListId !== -1) {
               return false;
             }
+
+            // Safety: Skip orders with missing time field (data integrity issue)
+            if (!order.time) {
+              console.warn(
+                `[OCO] ${trade.symbol} - SAFETY: Skipping individual order ${order.orderId} ` +
+                `- missing 'time' field. This may indicate API issues or incomplete data.`
+              );
+              skippedIndividualOrders.push({ orderId: order.orderId, reason: 'missing_time' });
+              return false;
+            }
+
+            // Safety: Skip recent orders (prevents race condition)
+            const orderAge = now - order.time;
+
+            // Detect clock skew (future timestamps)
+            if (orderAge < 0) {
+              console.warn(
+                `[OCO] ${trade.symbol} - Clock skew detected! Individual order ${order.orderId} ` +
+                `has future timestamp. Age: ${(orderAge/1000).toFixed(1)}s. Skipping for safety.`
+              );
+              skippedIndividualOrders.push({ orderId: order.orderId, reason: 'clock_skew' });
+              return false;
+            }
+
+            if (orderAge < AGE_THRESHOLD_MS) {
+              skippedIndividualOrders.push({
+                orderId: order.orderId,
+                reason: `age_${(orderAge/1000).toFixed(1)}s`
+              });
+              return false;
+            }
+
             // Phantom = orderId exists on Binance but not in our database
             return !legitimateIndividualOrderIds.has(order.orderId);
           });
+
+          // Aggregated logging for skipped orders (reduces log verbosity)
+          if (skippedOCOOrders.length > 0) {
+            const recentCount = skippedOCOOrders.filter(o => o.reason.startsWith('age_')).length;
+            console.log(
+              `[OCO] ${trade.symbol} - Skipped ${skippedOCOOrders.length} OCO orders ` +
+              `(${recentCount} recent, ${skippedOCOOrders.length - recentCount} other reasons): ` +
+              `[${skippedOCOOrders.map(o => o.orderId).join(", ")}]`
+            );
+          }
+
+          if (skippedIndividualOrders.length > 0) {
+            const recentCount = skippedIndividualOrders.filter(o => o.reason.startsWith('age_')).length;
+            console.log(
+              `[OCO] ${trade.symbol} - Skipped ${skippedIndividualOrders.length} individual orders ` +
+              `(${recentCount} recent, ${skippedIndividualOrders.length - recentCount} other reasons): ` +
+              `[${skippedIndividualOrders.map(o => o.orderId).join(", ")}]`
+            );
+          }
 
           console.log(
             `[OCO] ${trade.symbol} - Found ${phantomOCOOrders.length} phantom OCO orders ` +
