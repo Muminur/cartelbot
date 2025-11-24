@@ -14,6 +14,7 @@ import { PnLChartWidget } from "@/components/dashboard/PnLChartWidget";
 import { RecentTradesWidget } from "@/components/dashboard/RecentTradesWidget";
 import SubscriptionStatusWidget from "@/components/dashboard/SubscriptionStatusWidget";
 import { useWebSocketStream } from "@/hooks/useWebSocketStream";
+import { useSession } from "@/contexts/SessionContext";
 import { TrendingUp, Signal, Wallet, Award } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
 
@@ -29,6 +30,7 @@ interface DashboardStats {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { showSessionExpired } = useSession();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,6 +56,10 @@ export default function DashboardPage() {
         // Mark that we need to refresh, but don't do it immediately
         setPendingRefresh(true);
       }
+    },
+    onAuthenticationError: () => {
+      // Show session expired modal when WebSocket authentication fails
+      showSessionExpired();
     },
   });
 

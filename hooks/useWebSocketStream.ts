@@ -11,10 +11,11 @@ interface WebSocketEvent {
 interface UseWebSocketStreamOptions {
   autoConnect?: boolean;
   onEvent?: (event: WebSocketEvent) => void;
+  onAuthenticationError?: () => void;
 }
 
 export function useWebSocketStream(options: UseWebSocketStreamOptions = {}) {
-  const { autoConnect = false, onEvent } = options;
+  const { autoConnect = false, onEvent, onAuthenticationError } = options;
   const [isConnected, setIsConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<WebSocketEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -27,12 +28,21 @@ export function useWebSocketStream(options: UseWebSocketStreamOptions = {}) {
       });
 
       if (!startResponse.ok) {
+        // Handle 401 authentication errors specially
+        if (startResponse.status === 401) {
+          console.warn('[WebSocketStream] Session expired - authentication required');
+          setError("Authentication required");
+          onAuthenticationError?.();
+          return () => {};
+        }
+
+        // Handle other errors
         try {
           const { safeJsonParse } = await import('@/lib/utils/api');
           const errorData = await safeJsonParse<{ error?: any }>(startResponse, 'WebSocket Start');
           setError(errorData.error?.message || "Failed to start WebSocket connection");
         } catch (parseError) {
-          console.error('[WebSocketStream] Failed to parse error response:', parseError);
+          // Don't log parsing errors to console - just set internal error state
           setError(`Failed to start WebSocket connection (HTTP ${startResponse.status})`);
         }
         return () => {};
@@ -79,7 +89,7 @@ export function useWebSocketStream(options: UseWebSocketStreamOptions = {}) {
       setError(err instanceof Error ? err.message : "Failed to connect");
       return () => {};
     }
-  }, [onEvent]);
+  }, [onEvent, onAuthenticationError]);
 
   useEffect(() => {
     if (autoConnect) {

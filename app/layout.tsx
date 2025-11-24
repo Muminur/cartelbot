@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "@/styles/globals.css";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { SessionProvider } from "@/contexts/SessionContext";
 
 export const metadata: Metadata = {
   title: "CartelBot - Automated Binance Trading Bot",
@@ -22,7 +23,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange={false}
         >
-          <ErrorBoundary>{children}</ErrorBoundary>
+          <SessionProvider>
+            <ErrorBoundary>{children}</ErrorBoundary>
+          </SessionProvider>
         </ThemeProvider>
       </body>
     </html>

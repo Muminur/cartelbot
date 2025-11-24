@@ -18,10 +18,12 @@ import { UserProfile } from "@/types";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PortfolioWidget } from "@/components/dashboard/PortfolioWidget";
 import { useWebSocketStream } from "@/hooks/useWebSocketStream";
+import { useSession } from "@/contexts/SessionContext";
 import { RefreshCw } from "lucide-react";
 
 export default function PortfolioPage() {
   const router = useRouter();
+  const { showSessionExpired } = useSession();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [needsRefresh, setNeedsRefresh] = useState(false);
@@ -35,6 +37,10 @@ export default function PortfolioPage() {
       if (event.type === "executionReport" || event.type === "outboundAccountPosition") {
         setNeedsRefresh(true);
       }
+    },
+    onAuthenticationError: () => {
+      // Show session expired modal when WebSocket authentication fails
+      showSessionExpired();
     },
   });
 
