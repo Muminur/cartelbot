@@ -818,7 +818,7 @@ export async function createOCOOrders(
     }
 
     // SAFE PHANTOM ORDER CLEANUP
-    // Only cancels orders that aren't tracked in our database - never touches legitimate OCO orders
+    // Cancels both OCO orders and individual orders that aren't tracked in our database
     console.log(`[OCO] ${trade.symbol} - Checking for phantom orders...`);
 
     try {
@@ -831,7 +831,7 @@ export async function createOCOOrders(
       );
 
       if (openSellOrders.length > 0) {
-        // 2. Get all legitimate orderListIds from our database for this user and symbol
+        // 2. Get all legitimate orders from our database for this user and symbol
         const userTrades = await Trade.find({
           userId: trade.userId,
           symbol: trade.symbol,
@@ -839,13 +839,24 @@ export async function createOCOOrders(
           "sellOrders.0": { $exists: true }, // Has at least one sell order
         }).select("sellOrders").lean();
 
-        // Extract all legitimate orderListIds (filter out -1 which means no order list)
+        // Extract all legitimate orderListIds AND individual orderIds
         const legitimateOrderListIds = new Set<number>();
+        const legitimateIndividualOrderIds = new Set<number>();
+
         userTrades.forEach(t => {
-          const sellOrders = t.sellOrders as Array<{ orderListId?: number }> | undefined;
+          const sellOrders = t.sellOrders as Array<{
+            orderId: number;
+            orderListId?: number;
+          }> | undefined;
+
           sellOrders?.forEach(order => {
+            // Track OCO orders
             if (order.orderListId && order.orderListId !== -1) {
               legitimateOrderListIds.add(order.orderListId);
+            }
+            // Track individual orders (orderListId is -1, undefined, or missing)
+            if (!order.orderListId || order.orderListId === -1) {
+              legitimateIndividualOrderIds.add(order.orderId);
             }
           });
         });
@@ -854,11 +865,17 @@ export async function createOCOOrders(
           `[OCO] ${trade.symbol} - Legitimate orderListIds in database: ` +
           `[${Array.from(legitimateOrderListIds).join(", ")}]`
         );
+        console.log(
+          `[OCO] ${trade.symbol} - Legitimate individual orderIds in database: ` +
+          `[${Array.from(legitimateIndividualOrderIds).join(", ")}]`
+        );
 
         // CRITICAL SAFETY CHECK: If database returns empty but Binance has orders,
         // this could indicate database inconsistency. Skip cleanup to avoid deleting
         // legitimate orders. This prevents data loss if database is temporarily out of sync.
-        if (legitimateOrderListIds.size === 0 && openSellOrders.length > 0) {
+        if (legitimateOrderListIds.size === 0 &&
+            legitimateIndividualOrderIds.size === 0 &&
+            openSellOrders.length > 0) {
           console.warn(
             `[OCO] ${trade.symbol} - SAFETY: Skipping phantom cleanup. ` +
             `Database shows no legitimate orders but Binance has ${openSellOrders.length} open SELL orders. ` +
@@ -867,9 +884,9 @@ export async function createOCOOrders(
           // Continue with OCO creation despite potential phantom orders
           // This is safer than accidentally canceling legitimate orders
         } else {
-          // 3. Identify phantom orders (orders not in our database)
-          const phantomOrders = openSellOrders.filter(order => {
-            // Skip orders without orderListId or with -1 (not part of OCO)
+          // 3. Identify phantom OCO orders
+          const phantomOCOOrders = openSellOrders.filter(order => {
+            // Only check orders that are part of an OCO
             if (!order.orderListId || order.orderListId === -1) {
               return false;
             }
@@ -877,14 +894,28 @@ export async function createOCOOrders(
             return !legitimateOrderListIds.has(order.orderListId);
           });
 
+          // 4. Identify phantom individual orders
+          const phantomIndividualOrders = openSellOrders.filter(order => {
+            // Only check individual orders (not part of OCO)
+            if (order.orderListId && order.orderListId !== -1) {
+              return false;
+            }
+            // Phantom = orderId exists on Binance but not in our database
+            return !legitimateIndividualOrderIds.has(order.orderId);
+          });
+
           console.log(
-            `[OCO] ${trade.symbol} - Found ${phantomOrders.length} phantom orders ` +
-            `(orderListIds: [${phantomOrders.map(o => o.orderListId).filter((v, i, a) => a.indexOf(v) === i).join(", ")}])`
+            `[OCO] ${trade.symbol} - Found ${phantomOCOOrders.length} phantom OCO orders ` +
+            `(orderListIds: [${phantomOCOOrders.map(o => o.orderListId).filter((v, i, a) => a.indexOf(v) === i).join(", ")}])`
+          );
+          console.log(
+            `[OCO] ${trade.symbol} - Found ${phantomIndividualOrders.length} phantom individual orders ` +
+            `(orderIds: [${phantomIndividualOrders.map(o => o.orderId).join(", ")}])`
           );
 
-          // 4. Cancel phantom orders by orderListId (cancels entire OCO group)
+          // 5. Cancel phantom OCO orders by orderListId (cancels entire OCO group)
           const canceledOrderListIds = new Set<number>();
-          for (const order of phantomOrders) {
+          for (const order of phantomOCOOrders) {
             // Skip if we already canceled this orderListId
             if (canceledOrderListIds.has(order.orderListId!)) {
               continue;
@@ -892,28 +923,58 @@ export async function createOCOOrders(
 
             try {
               console.log(
-                `[OCO] ${trade.symbol} - Canceling phantom orderListId ${order.orderListId} ` +
+                `[OCO] ${trade.symbol} - Canceling phantom OCO orderListId ${order.orderListId} ` +
                 `(orderId: ${order.orderId})`
               );
               await client.cancelOCOOrder(trade.symbol, order.orderListId!);
               canceledOrderListIds.add(order.orderListId!);
               console.log(
-                `[OCO] ${trade.symbol} - Successfully canceled phantom orderListId ${order.orderListId}`
+                `[OCO] ${trade.symbol} - Successfully canceled phantom OCO orderListId ${order.orderListId}`
               );
+
+              // Rate limiting: wait 100ms between OCO cancellations
+              await new Promise(resolve => setTimeout(resolve, 100));
             } catch (cancelError: unknown) {
               // Log but don't fail - phantom order cleanup is best-effort
               console.warn(
-                `[OCO] ${trade.symbol} - Failed to cancel phantom orderListId ${order.orderListId}:`,
+                `[OCO] ${trade.symbol} - Failed to cancel phantom OCO orderListId ${order.orderListId}:`,
                 cancelError instanceof Error ? cancelError.message : String(cancelError)
               );
             }
           }
 
-          if (canceledOrderListIds.size > 0) {
+          // 6. Cancel phantom individual orders by orderId
+          const canceledIndividualOrderIds: number[] = [];
+          for (const order of phantomIndividualOrders) {
+            try {
+              console.log(
+                `[OCO] ${trade.symbol} - Canceling phantom individual orderId ${order.orderId}`
+              );
+              await client.cancelOrder(trade.symbol, order.orderId);
+              canceledIndividualOrderIds.push(order.orderId);
+              console.log(
+                `[OCO] ${trade.symbol} - Successfully canceled phantom individual orderId ${order.orderId}`
+              );
+
+              // Rate limiting: wait 100ms between individual order cancellations
+              await new Promise(resolve => setTimeout(resolve, 100));
+            } catch (cancelError: unknown) {
+              // Log but don't fail - phantom order cleanup is best-effort
+              console.warn(
+                `[OCO] ${trade.symbol} - Failed to cancel phantom individual orderId ${order.orderId}:`,
+                cancelError instanceof Error ? cancelError.message : String(cancelError)
+              );
+            }
+          }
+
+          // 7. Summary logging
+          if (canceledOrderListIds.size > 0 || canceledIndividualOrderIds.length > 0) {
             console.log(
               `[OCO] ${trade.symbol} - Phantom order cleanup complete. ` +
-              `Canceled ${canceledOrderListIds.size} orderListId(s): ` +
-              `[${Array.from(canceledOrderListIds).join(", ")}]`
+              `Canceled ${canceledOrderListIds.size} OCO group(s): ` +
+              `[${Array.from(canceledOrderListIds).join(", ")}], ` +
+              `${canceledIndividualOrderIds.length} individual order(s): ` +
+              `[${canceledIndividualOrderIds.join(", ")}]`
             );
           } else {
             console.log(`[OCO] ${trade.symbol} - No phantom orders to clean up`);
