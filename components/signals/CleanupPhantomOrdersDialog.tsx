@@ -37,6 +37,7 @@ interface PhantomOrder {
 
 interface PreviewData {
   phantomOrders: PhantomOrder[];
+  completedOrders?: PhantomOrder[]; // Orders that are already filled/cancelled
   totalOrders: number;
   totalQuantity: string;
   baseAsset: string;
@@ -202,13 +203,101 @@ export default function CleanupPhantomOrdersDialog({
           {preview && !result && !loading && (
             <>
               {preview.totalOrders === 0 ? (
-                <Alert>
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  <AlertDescription>
-                    No phantom orders found. All orders have been properly closed or
-                    there are no open orders for this signal.
-                  </AlertDescription>
-                </Alert>
+                <>
+                  <Alert>
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <AlertDescription>
+                      No phantom orders found. All orders have been properly closed or
+                      there are no open orders for this signal.
+                    </AlertDescription>
+                  </Alert>
+
+                  {/* Show completed orders if available */}
+                  {preview.completedOrders && preview.completedOrders.length > 0 && (
+                    <>
+                      <Alert className="border-blue-500 bg-blue-50">
+                        <AlertDescription className="text-blue-900">
+                          <strong>Order Status:</strong> Found{" "}
+                          <strong>{preview.completedOrders.length}</strong> completed order
+                          {preview.completedOrders.length !== 1 ? "s" : ""} for this trade.
+                          These orders have already been filled or cancelled.
+                        </AlertDescription>
+                      </Alert>
+
+                      <div className="border rounded-lg">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Order ID</TableHead>
+                              <TableHead>Type</TableHead>
+                              <TableHead>Side</TableHead>
+                              <TableHead>Quantity</TableHead>
+                              <TableHead>Price</TableHead>
+                              <TableHead>Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {preview.completedOrders.map((order) => (
+                              <TableRow key={order.orderId}>
+                                <TableCell className="font-mono text-sm">
+                                  {order.orderId}
+                                  {order.orderListId && (
+                                    <div className="text-xs text-gray-500">
+                                      OCO: {order.orderListId}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="text-xs">
+                                    {order.type}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge
+                                    variant={order.side === "BUY" ? "default" : "secondary"}
+                                    className={
+                                      order.side === "BUY"
+                                        ? "bg-green-500"
+                                        : "bg-red-500"
+                                    }
+                                  >
+                                    {order.side}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="font-medium">
+                                  {parseFloat(order.quantity).toFixed(8)}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="text-sm">
+                                    {parseFloat(order.price).toFixed(4)}
+                                    {order.stopPrice && (
+                                      <div className="text-xs text-gray-500">
+                                        Stop: {parseFloat(order.stopPrice).toFixed(4)}
+                                      </div>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge
+                                    className={
+                                      order.status === "FILLED"
+                                        ? "bg-green-600"
+                                        : order.status === "CANCELED"
+                                        ? "bg-gray-600"
+                                        : "bg-yellow-600"
+                                    }
+                                  >
+                                    {order.status}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </>
+                  )}
+                </>
               ) : (
                 <>
                   <Alert className="border-yellow-500 bg-yellow-50">

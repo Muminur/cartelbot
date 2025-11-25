@@ -7,6 +7,7 @@ import { User } from "@/lib/db/models/User";
 import { BinanceClient } from "@/lib/binance";
 import { decrypt } from "@/lib/encryption";
 import { BinanceOrderResponse } from "@/types";
+import mongoose from "mongoose";
 
 interface PhantomOrder {
   orderId: number;
@@ -36,6 +37,25 @@ interface CleanupResult {
 }
 
 /**
+ * FIX E1: Extract base asset from symbol supporting all Binance quote assets
+ * Handles USDT, BUSD, USDC, FDUSD, BTC, ETH, BNB pairs
+ */
+const QUOTE_ASSETS = ['USDT', 'BUSD', 'USDC', 'FDUSD', 'BTC', 'ETH', 'BNB'] as const;
+
+function extractBaseAsset(symbol: string): string {
+  // Try each quote asset in order of likelihood
+  for (const quoteAsset of QUOTE_ASSETS) {
+    if (symbol.endsWith(quoteAsset)) {
+      return symbol.slice(0, -quoteAsset.length);
+    }
+  }
+
+  // Fallback: return the symbol as-is if no quote asset matched
+  // This shouldn't happen for valid Binance symbols, but prevents empty strings
+  return symbol;
+}
+
+/**
  * GET /api/signals/[id]/cleanup-phantom-orders
  * Preview phantom orders that will be cancelled
  */
@@ -59,6 +79,17 @@ export async function GET(
     }
 
     const user = userResult.user;
+
+    // FIX B2: Validate signal ID to prevent NoSQL injection
+    if (!mongoose.Types.ObjectId.isValid(signalId)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: { message: "Invalid signal ID format" },
+        },
+        { status: 400 }
+      );
+    }
 
     // 1. Fetch the signal
     const signal = await Signal.findById(signalId);
@@ -138,8 +169,9 @@ export async function GET(
       testnet: useTestnet,
     });
 
-    // 7. Fetch all open orders for this symbol
-    const openOrders = await binanceClient.getOpenOrders(signal.symbol);
+    // 7. Fetch all orders for this symbol (including filled/cancelled)
+    // This allows users to see what happened to their orders
+    const allOrders = await binanceClient.getAllOrders(signal.symbol, 500);
 
     // 8. Filter orders that belong to THIS trade
     const tradeOrderIds = new Set<number>();
@@ -158,8 +190,8 @@ export async function GET(
       });
     }
 
-    // Filter open orders to only those belonging to this trade
-    const phantomOrders: PhantomOrder[] = openOrders
+    // Filter all orders to only those belonging to this trade
+    const tradeOrders: PhantomOrder[] = allOrders
       .filter((order) => tradeOrderIds.has(order.orderId))
       .map((order) => ({
         orderId: order.orderId,
@@ -172,19 +204,40 @@ export async function GET(
         stopPrice: order.stopPrice,
       }));
 
-    // 9. Calculate total quantity that will be freed
-    const totalQuantity = phantomOrders.reduce(
-      (sum, order) => sum + parseFloat(order.quantity),
-      0
+    // Separate orders by status - only NEW/PARTIALLY_FILLED can be cancelled
+    const phantomOrders = tradeOrders.filter(
+      (order) => order.status === "NEW" || order.status === "PARTIALLY_FILLED"
+    );
+    const completedOrders = tradeOrders.filter(
+      (order) => order.status !== "NEW" && order.status !== "PARTIALLY_FILLED"
     );
 
-    // Extract base asset from symbol (e.g., BNBUSDT -> BNB)
-    const baseAsset = signal.symbol.replace("USDT", "");
+    // 9. Calculate total quantity that will be freed (only from phantom orders)
+    // FIX C3: OCO orders have 2 legs with same quantity - only count once per OCO group
+    const processedOCOGroups = new Set<number>();
+    const totalQuantity = phantomOrders.reduce((sum, order) => {
+      // If this is an OCO order (has orderListId)
+      if (order.orderListId && order.orderListId > 0) {
+        // Only count the first leg of each OCO group
+        if (processedOCOGroups.has(order.orderListId)) {
+          return sum; // Skip - already counted this OCO group
+        }
+        processedOCOGroups.add(order.orderListId);
+        return sum + parseFloat(order.quantity);
+      }
+
+      // Regular order (not OCO) - count normally
+      return sum + parseFloat(order.quantity);
+    }, 0);
+
+    // FIX E1: Extract base asset from symbol supporting all quote assets
+    const baseAsset = extractBaseAsset(signal.symbol);
 
     return NextResponse.json({
       success: true,
       data: {
         phantomOrders,
+        completedOrders, // Include completed orders so user can see what happened
         totalOrders: phantomOrders.length,
         totalQuantity: totalQuantity.toFixed(8),
         baseAsset,
@@ -243,6 +296,17 @@ export async function POST(
 
     const user = userResult.user;
 
+    // FIX B2: Validate signal ID to prevent NoSQL injection
+    if (!mongoose.Types.ObjectId.isValid(signalId)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: { message: "Invalid signal ID format" },
+        },
+        { status: 400 }
+      );
+    }
+
     // 1. Fetch the signal
     const signal = await Signal.findById(signalId);
 
@@ -321,8 +385,9 @@ export async function POST(
       testnet: useTestnet,
     });
 
-    // 7. Fetch all open orders for this symbol
-    const openOrders = await binanceClient.getOpenOrders(signal.symbol);
+    // 7. Fetch all orders for this symbol (FIX C2: Use getAllOrders to match GET endpoint)
+    // This prevents race conditions where orders might be missed between GET and POST calls
+    const allOrders = await binanceClient.getAllOrders(signal.symbol, 500);
 
     // 8. Filter orders that belong to THIS trade
     const tradeOrderIds = new Set<number>();
@@ -339,8 +404,11 @@ export async function POST(
       });
     }
 
-    const phantomOrders = openOrders.filter((order) =>
-      tradeOrderIds.has(order.orderId)
+    // FIX C2: Filter by trade orders AND status (only NEW/PARTIALLY_FILLED can be cancelled)
+    const phantomOrders = allOrders.filter(
+      (order) =>
+        tradeOrderIds.has(order.orderId) &&
+        (order.status === "NEW" || order.status === "PARTIALLY_FILLED")
     );
 
     if (phantomOrders.length === 0) {
@@ -351,7 +419,7 @@ export async function POST(
           cancelledOrders: [],
           failedOrders: [],
           totalFreedQuantity: "0",
-          baseAsset: signal.symbol.replace("USDT", ""),
+          baseAsset: extractBaseAsset(signal.symbol), // FIX E1
         },
       });
     }
@@ -362,7 +430,7 @@ export async function POST(
       cancelledOrders: [],
       failedOrders: [],
       totalFreedQuantity: "0",
-      baseAsset: signal.symbol.replace("USDT", ""),
+      baseAsset: extractBaseAsset(signal.symbol), // FIX E1
     };
 
     let totalFreed = 0;
