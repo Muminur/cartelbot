@@ -70,3 +70,10 @@ validate-*.js
 *.backup
 # Local documentation (tracked but not pushed)
 CLAUDE_Details.md
+
+# All markdown files except README.md
+*.md
+!README.md
+
+# Null files (Windows artifact)
+nul

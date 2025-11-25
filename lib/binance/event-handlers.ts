@@ -238,12 +238,23 @@ export async function handleListStatus(event: BinanceWebSocketEvent): Promise<vo
   try {
     const data = event.data as unknown as ListStatusEvent;
 
+    // Track processed trade IDs to avoid duplicate processing
+    // (data.O contains multiple orders that may belong to the same trade)
+    const processedTradeIds = new Set<string>();
+
     for (const order of data.O as Array<{ s: string; i: number; c: string }>) {
       const trade = await Trade.findOne({
         "sellOrders.orderId": order.i,
       });
 
       if (trade) {
+        // Skip if we've already processed this trade in this event
+        const tradeIdStr = trade._id.toString();
+        if (processedTradeIds.has(tradeIdStr)) {
+          continue;
+        }
+        processedTradeIds.add(tradeIdStr);
+
         if (data.l === "ALL_DONE") {
           const allFilled = trade.sellOrders.every(
             (sellOrder: { status: string }) =>
@@ -281,59 +292,15 @@ export async function handleListStatus(event: BinanceWebSocketEvent): Promise<vo
               if (isStopLoss) {
                 trade.closeReason = "stop_loss";
                 trade.closeReasonDetail = "Stop Loss Hit";
-
-                // Send stop loss notification (OCO complete)
-                const stopLossOrder = filledOrders.find(
-                  (order: { type: string }) => order.type === "STOP_LOSS_LIMIT"
-                );
-                if (stopLossOrder) {
-                  // Calculate proportional loss for the stop loss order executed quantity
-                  const avgBuyPrice = trade.buyOrder.cummulativeQuoteQty / trade.buyOrder.executedQty;
-                  const stopLossExecutedQty = parseFloat(stopLossOrder.executedQty);
-                  const stopLossCost = avgBuyPrice * stopLossExecutedQty;
-                  const stopLossRevenue = parseFloat(stopLossOrder.cummulativeQuoteQty);
-                  const stopLossLoss = stopLossRevenue - stopLossCost;
-
-                  sendStopLossHitNotification({
-                    userId: trade.userId,
-                    tradeId: trade._id,
-                    symbol: trade.symbol,
-                    stopLossPrice: stopLossOrder.stopPrice || stopLossOrder.price,
-                    executedQuantity: stopLossExecutedQty,
-                    loss: stopLossLoss,
-                    timestamp: new Date(data.T),
-                    orderId: stopLossOrder.orderId,
-                  }).catch((error) => {
-                    console.error("[Notification] Failed to send stop loss email:", error);
-                  });
-                }
+                // NOTE: Stop loss notification is already sent from handleExecutionReport
+                // when the individual STOP_LOSS_LIMIT order is FILLED.
+                // We do NOT send notification here to avoid duplicate emails.
               } else {
                 trade.closeReason = "target";
                 trade.closeReasonDetail = "Target Hit";
-
-                // Send final target hit notification (OCO complete - all targets hit)
-                // Calculate proportional profit for all filled target orders
-                const avgBuyPrice = trade.buyOrder.cummulativeQuoteQty / trade.buyOrder.executedQty;
-                const buyCostForExecutedQty = avgBuyPrice * totalExecutedQty;
-                const profit = sellRevenue - buyCostForExecutedQty;
-
-                const lastTarget = filledOrders.filter(
-                  (order: { type: string }) => order.type !== "STOP_LOSS_LIMIT"
-                ).length;
-                sendTargetHitNotification({
-                  userId: trade.userId,
-                  tradeId: trade._id,
-                  symbol: trade.symbol,
-                  targetNumber: lastTarget,
-                  targetPrice: trade.exitPrice,
-                  executedQuantity: totalExecutedQty,
-                  revenue: profit,
-                  timestamp: new Date(data.T),
-                  orderId: filledOrders[filledOrders.length - 1].orderId,
-                  remainingTargets: 0,
-                }).catch((error) => {
-                  console.error("[Notification] Failed to send target hit email:", error);
-                });
+                // NOTE: Target hit notification is already sent from handleExecutionReport
+                // when each individual target order is FILLED.
+                // We do NOT send notification here to avoid duplicate emails.
               }
 
               await trade.save();
