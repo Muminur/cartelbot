@@ -505,3 +505,9 @@ Fixed -1121 errors by removing delisted BUSD pairs (43% API reduction). Implemen
 
 ## Session: Nov 24, 2025 - Age Threshold Enhancement
 **30s age threshold improvements (73f7ccd)**: Completed BinanceOrderResponse interface (added origQuoteOrderQty, selfTradePreventionMode). Implemented aggregated logging reducing log volume 96%. All safety features maintained. TypeScript ✅, code review 9.2/10, production-ready.
+
+## Session: Nov 24, 2025 - Phantom Order Detection Enhancement
+**Enhanced phantom cleanup (c51d11a)**: Changed from getOpenOrders to getAllOrders showing FILLED/CANCELLED/NEW statuses. Fixed OCO double-counting (800→1600 bug), added NoSQL injection protection, support 7 quote assets (USDT/BUSD/USDC/BTC/ETH/BNB/FDUSD). Displays completed orders table for transparency. Code review 9.5/10, production-ready.
+
+## Session: Nov 25, 2025 - Triple TP/SL Email Notification Fix
+**Fixed duplicate emails (a4d3ed9)**: Removed duplicate notification calls from handleListStatus (OCO complete handler) - notifications now only sent from handleExecutionReport. Added processedTradeIds Set to prevent loop duplicate processing. Code review 7.5/10, build ✅, TypeScript clean, production-ready.
