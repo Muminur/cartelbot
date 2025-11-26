@@ -161,6 +161,12 @@ export default function SignalDetailModal({
   const [pollingAttempts, setPollingAttempts] = useState(0);
   const [pollingFailed, setPollingFailed] = useState(false);
 
+  // Two-tier polling: Tier 1 for Trade creation, Tier 2 for OCO orders
+  const [pollingForTrade, setPollingForTrade] = useState(false);
+  const [tradePollingAttempts, setTradePollingAttempts] = useState(0);
+  const [tradePollingFailed, setTradePollingFailed] = useState(false);
+  const MAX_TRADE_POLLING_ATTEMPTS = 20; // 60 seconds total (3s interval)
+
   // Live price state
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [priceLoading, setPriceLoading] = useState(false);
@@ -178,6 +184,9 @@ export default function SignalDetailModal({
       setPollingAttempts(0);
       setPollingFailed(false);
       setTrade(null);
+      setPollingForTrade(false);
+      setTradePollingAttempts(0);
+      setTradePollingFailed(false);
       setLivePrice(null);
       setPriceChange(0);
       setPriceError(null);
@@ -369,10 +378,13 @@ export default function SignalDetailModal({
         if (!isMounted) return;
 
         if (data.success && data.data && data.data.length > 0) {
-          // Get the most recent trade for this signal
+          // TIER 2: Trade exists, check for OCO orders
           const latestTrade = data.data[0];
           setTrade(latestTrade);
+          setPollingForTrade(false);
+          setTradePollingAttempts(0); // Reset trade polling counter
 
+          // Existing OCO polling logic (unchanged)
           // If trade exists but has no OCO orders yet, poll again after 3 seconds
           // This handles the race condition where OCO orders are still being created
           // Limit to MAX_POLLING_ATTEMPTS (30 seconds total) to prevent infinite loop
@@ -400,6 +412,42 @@ export default function SignalDetailModal({
             );
             setPollingFailed(true);
           }
+        } else if (
+          // TIER 1: Trade doesn't exist yet - poll for Trade creation (only for executing signals)
+          signal.status === "executing" &&
+          tradePollingAttempts < MAX_TRADE_POLLING_ATTEMPTS
+        ) {
+          if (process.env.NODE_ENV === "development") {
+            console.log(
+              `[SignalDetailModal] Waiting for Trade creation... (attempt ${tradePollingAttempts + 1}/${MAX_TRADE_POLLING_ATTEMPTS})`
+            );
+          }
+          setPollingForTrade(true);
+          timeoutId = setTimeout(() => {
+            if (isMounted) {
+              setTradePollingAttempts((prev) => prev + 1);
+            }
+          }, POLLING_INTERVAL_MS);
+        } else if (
+          signal.status === "completed" &&
+          !trade &&
+          data.data?.length === 0
+        ) {
+          // Completed signal with no trade = execution failed
+          if (process.env.NODE_ENV === "development") {
+            console.error("[SignalDetailModal] Signal marked completed but no Trade found");
+          }
+          setPollingForTrade(false);
+          setTradePollingFailed(true);
+        } else if (
+          tradePollingAttempts >= MAX_TRADE_POLLING_ATTEMPTS
+        ) {
+          // Failed to find Trade after max attempts
+          console.error(
+            `[SignalDetailModal] Failed to load Trade after ${MAX_TRADE_POLLING_ATTEMPTS} attempts (${(MAX_TRADE_POLLING_ATTEMPTS * POLLING_INTERVAL_MS) / 1000}s)`
+          );
+          setPollingForTrade(false);
+          setTradePollingFailed(true);
         }
       } catch (error) {
         // Only log error if not an abort error
@@ -428,7 +476,8 @@ export default function SignalDetailModal({
     // FIX #4: Removed loadingTrade from dependencies - it's a guard, not a trigger
     //         Having it in dependencies causes the effect to re-run when setLoadingTrade(true) is called,
     //         but the guard check (line 120) prevents execution, leaving loadingTrade stuck at true
-  }, [signal?._id, isOpen, pollingAttempts]);
+    // TWO-TIER POLLING: Added tradePollingAttempts to trigger polling for Trade creation
+  }, [signal?._id, isOpen, pollingAttempts, tradePollingAttempts]);
 
   // Fetch real-time OCO status from Binance API (NOT computed from market prices)
   const fetchOCOStatuses = useCallback(async () => {
@@ -1342,7 +1391,9 @@ export default function SignalDetailModal({
                 {loadingTrade ? (
                   <div className="text-sm text-muted-foreground flex items-center gap-2">
                     <Clock className="h-4 w-4 animate-spin" />
-                    Loading trade details...
+                    {pollingForTrade
+                      ? `Waiting for trade execution to complete... (${tradePollingAttempts}/${MAX_TRADE_POLLING_ATTEMPTS})`
+                      : 'Loading trade details...'}
                   </div>
                 ) : trade ? (
                   <div className="space-y-4">
@@ -1819,6 +1870,54 @@ export default function SignalDetailModal({
                       </div>
                     </div>
                   </div>
+                ) : (signal.status === "executing" || signal.status === "completed") ? (
+                  tradePollingFailed ? (
+                    <div className="bg-red-50 dark:bg-red-950/30 p-3 rounded-lg border border-red-200 dark:border-red-800">
+                      <div className="flex items-center gap-2 text-sm text-red-800 dark:text-red-300">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span className="font-medium">Trade creation failed</span>
+                      </div>
+                      <p className="text-xs text-red-700 dark:text-red-400 mt-2">
+                        No trade record found after {(MAX_TRADE_POLLING_ATTEMPTS * POLLING_INTERVAL_MS) / 1000} seconds.
+                        The execution may have failed.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-3 border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900"
+                        onClick={() => {
+                          setTradePollingFailed(false);
+                          setTradePollingAttempts(0);
+                          setPollingForTrade(false);
+                        }}
+                      >
+                        <RefreshCw className="h-3 w-3 mr-2" />
+                        Retry Loading
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="bg-yellow-50 dark:bg-yellow-950/30 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                      <div className="flex items-center gap-2 text-sm text-yellow-800 dark:text-yellow-300">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span className="font-medium">Trade data not available</span>
+                      </div>
+                      <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-2">
+                        The trade may still be processing or there was an error during execution.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-3 border-yellow-300 dark:border-yellow-700 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-900"
+                        onClick={() => {
+                          setTradePollingAttempts(0);
+                          setPollingForTrade(false);
+                        }}
+                      >
+                        <RefreshCw className="h-3 w-3 mr-2" />
+                        Retry Loading
+                      </Button>
+                    </div>
+                  )
                 ) : (
                   <div className="text-sm text-muted-foreground">No trade data available for this signal.</div>
                 )}
