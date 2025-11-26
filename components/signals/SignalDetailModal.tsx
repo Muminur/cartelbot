@@ -889,8 +889,10 @@ export default function SignalDetailModal({
   };
 
   // Helper to check if stop loss was hit
+  // Shows real-time Binance data regardless of database signal status
   const isStopLossHit = (): boolean => {
     if (!trade || !trade.sellOrders) return false;
+
     return trade.sellOrders.some((order: IOrder) => {
       // FIX: Use real-time status from Binance API if available
       const ocoStatus = order.orderListId ? ocoStatuses.get(order.orderListId) : null;
@@ -901,6 +903,17 @@ export default function SignalDetailModal({
 
       return displayStatus === "FILLED" && order.type === "STOP_LOSS_LIMIT";
     });
+  };
+
+  // Helper to check if signal status is syncing (database not updated yet)
+  const isStatusSyncing = (): boolean => {
+    // If stop loss is filled but signal still shows "executing"/"pending"/"parsed"
+    // then status update is in progress
+    return isStopLossHit() && (
+      signal.status === "executing" ||
+      signal.status === "pending" ||
+      signal.status === "parsed"
+    );
   };
 
   // Helper to get trade close details (which TP hit or SL hit)
@@ -1194,12 +1207,20 @@ export default function SignalDetailModal({
                 Target Prices
               </div>
               {trade && (
-                <>
+                <div className="flex gap-2 items-center">
                   {isStopLossHit() ? (
-                    <Badge variant="destructive" className="text-xs bg-red-100 text-red-800 border-red-300">
-                      <AlertTriangle className="h-3 w-3 mr-1 inline" />
-                      SL Hit
-                    </Badge>
+                    <>
+                      <Badge variant="destructive" className="text-xs bg-red-100 text-red-800 border-red-300">
+                        <AlertTriangle className="h-3 w-3 mr-1 inline" />
+                        SL Hit
+                      </Badge>
+                      {isStatusSyncing() && (
+                        <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-300">
+                          <RefreshCw className="h-3 w-3 mr-1 inline animate-spin" />
+                          Syncing...
+                        </Badge>
+                      )}
+                    </>
                   ) : (
                     <Badge
                       variant="outline"
@@ -1213,7 +1234,7 @@ export default function SignalDetailModal({
                       {getFilledTargets().size}/{signal.targets.length} Hit
                     </Badge>
                   )}
-                </>
+                </div>
               )}
             </div>
             <div className="flex flex-wrap gap-2">
