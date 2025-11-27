@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
                     apiKeys.encryptedApiSecret;
 
     if (!hasKeys) {
-      console.log(`User ${user.email} attempted to fetch account without API keys configured`, {
+      if (process.env.NODE_ENV !== 'production') console.log(`User ${user.email} attempted to fetch account without API keys configured`, {
         timestamp: new Date().toISOString(),
         hasApiKeys: false,
       });
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
     try {
       const account = await client.getAccount();
 
-      console.log(`Successfully fetched account for user ${user.email}`, {
+      if (process.env.NODE_ENV !== 'production') console.log(`Successfully fetched account for user ${user.email}`, {
         timestamp: new Date().toISOString(),
         canTrade: account.canTrade,
         testnet: useTestnet,

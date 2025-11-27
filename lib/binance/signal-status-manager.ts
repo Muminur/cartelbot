@@ -26,7 +26,7 @@ export async function markSignalCompleted(
     );
 
     if (result) {
-      console.log(`Signal ${signalId} marked as completed (reason: ${reason}, trade: ${tradeId})`);
+      if (process.env.NODE_ENV !== 'production') console.log(`Signal ${signalId} marked as completed (reason: ${reason}, trade: ${tradeId})`);
     } else {
       const signal = await Signal.findById(signalId);
       if (!signal) {

@@ -36,7 +36,7 @@ export async function GET(
       );
     }
 
-    console.log(`[Orphaned Coins] Fetching for user ${user.email}`);
+    if (process.env.NODE_ENV !== 'production') console.log(`[Orphaned Coins] Fetching for user ${user.email}`);
 
     // 2. Connect to database
     await connectDB();
@@ -134,7 +134,7 @@ export async function GET(
       }
     }
 
-    console.log(`[Orphaned Coins] Found ${coinsWithPrices.length} orphaned coins`);
+    if (process.env.NODE_ENV !== 'production') console.log(`[Orphaned Coins] Found ${coinsWithPrices.length} orphaned coins`);
 
     return NextResponse.json({
       success: true,

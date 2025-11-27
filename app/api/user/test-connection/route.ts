@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
           locked: b.locked,
         }));
 
-      console.log(`API connection test successful for user ${user.email}`, {
+      if (process.env.NODE_ENV !== 'production') console.log(`API connection test successful for user ${user.email}`, {
         timestamp: new Date().toISOString(),
         canTrade: accountInfo.canTrade,
         balancesCount: balances.length,

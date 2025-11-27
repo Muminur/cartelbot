@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
     const trades = tradesResult as unknown as LeanTrade[];
 
     const queryTime = Date.now() - startTime;
-    console.log(`[OCO API] Fetched ${trades.length} trades in ${queryTime}ms`, {
+    if (process.env.NODE_ENV !== 'production') console.log(`[OCO API] Fetched ${trades.length} trades in ${queryTime}ms`, {
       userId: String(user._id),
       filters: { symbol, statusFilter, network },
       pagination: { page, limit },
@@ -247,7 +247,7 @@ export async function GET(request: NextRequest) {
     });
 
     const transformTime = Date.now() - startTime - queryTime;
-    console.log(
+    if (process.env.NODE_ENV !== 'production') console.log(
       `[OCO API] Transformed to ${allOCOOrders.length} OCO orders in ${transformTime}ms`
     );
 
@@ -271,7 +271,7 @@ export async function GET(request: NextRequest) {
     const skip = Math.max(0, (page - 1) * limit);
     const paginatedOrders = filteredOrders.slice(skip, skip + limit);
 
-    console.log(
+    if (process.env.NODE_ENV !== 'production') console.log(
       `[OCO API] Returning ${paginatedOrders.length} orders (page ${page}/${totalPages})`
     );
 

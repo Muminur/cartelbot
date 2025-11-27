@@ -39,6 +39,9 @@ export function verifyMagicLinkToken(token: string): JWTPayload {
     }
     return payload;
   } catch (error) {
+    if (error instanceof Error && error.message === "Invalid token type") {
+      throw error;
+    }
     if (error instanceof jwt.TokenExpiredError) {
       throw new Error("Magic link has expired");
     }
@@ -59,6 +62,9 @@ export function verifySessionToken(token: string): SessionPayload {
     }
     return payload;
   } catch (error) {
+    if (error instanceof Error && error.message === "Invalid token type") {
+      throw error;
+    }
     if (error instanceof jwt.TokenExpiredError) {
       throw new Error("Session has expired");
     }

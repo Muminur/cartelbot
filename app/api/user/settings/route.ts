@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      console.log("[Settings API] Target distribution validated successfully:", {
+      if (process.env.NODE_ENV !== 'production') console.log("[Settings API] Target distribution validated successfully:", {
         distribution: targetDistribution,
         sum: targetDistribution.reduce((a, b) => a + b, 0).toFixed(2) + "%",
       });

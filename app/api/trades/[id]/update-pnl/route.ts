@@ -77,7 +77,7 @@ export async function POST(
     trade.realizedPnL = realizedPnL;
     await trade.save();
 
-    console.log("[Update P&L API] Updated trade P&L:", {
+    if (process.env.NODE_ENV !== 'production') console.log("[Update P&L API] Updated trade P&L:", {
       tradeId: trade._id,
       userId: authResult.user._id,
       oldPnL: trade.realizedPnL,

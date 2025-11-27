@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     const { rawSignal, isImageSignal = false } = body;
 
-    console.log("POST /api/signals - Request received:", {
+    if (process.env.NODE_ENV !== 'production') console.log("POST /api/signals - Request received:", {
       userId: user._id,
       isImageSignal,
       rawSignalLength: rawSignal?.length,
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     const parsed = parseSignal(rawSignal);
 
-    console.log("POST /api/signals - Parsed signal:", {
+    if (process.env.NODE_ENV !== 'production') console.log("POST /api/signals - Parsed signal:", {
       symbol: parsed.symbol,
       entries: parsed.entries,
       targets: parsed.targets,
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
 
     if (!currentMarketPrice && parsed.symbol) {
       try {
-        console.log(`[Signal Creation] Fetching current market price for ${parsed.symbol} from mainnet...`);
+        if (process.env.NODE_ENV !== 'production') console.log(`[Signal Creation] Fetching current market price for ${parsed.symbol} from mainnet...`);
         const mainnetClient = new BinanceClient({
           apiKey: "", // Public endpoint - no auth needed
           apiSecret: "",
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
         ]);
         currentMarketPrice = parseFloat(ticker.lastPrice);
 
-        console.log(`[Signal Creation] Current market price for ${parsed.symbol}: ${currentMarketPrice}`);
+        if (process.env.NODE_ENV !== 'production') console.log(`[Signal Creation] Current market price for ${parsed.symbol}: ${currentMarketPrice}`);
       } catch (priceError) {
         console.warn(
           `[Signal Creation] Failed to fetch current price for ${parsed.symbol}:`,
@@ -128,14 +128,14 @@ export async function POST(request: NextRequest) {
     const limitedTargets = await limitSignalTargets(originalTargets, String(user._id));
 
     if (limitedTargets.length < originalTargets.length) {
-      console.log(
+      if (process.env.NODE_ENV !== 'production') console.log(
         `[Signal Creation] Limited targets from ${originalTargets.length} to ${limitedTargets.length} ` +
         `based on user's maxTargets setting. Original: [${originalTargets.map(t => t.toFixed(8)).join(", ")}], ` +
         `Limited: [${limitedTargets.map(t => t.toFixed(8)).join(", ")}]`
       );
     }
 
-    console.log("POST /api/signals - Creating signal document:", {
+    if (process.env.NODE_ENV !== 'production') console.log("POST /api/signals - Creating signal document:", {
       userId: user._id,
       symbol: parsed.symbol,
       entries: parsed.entries,

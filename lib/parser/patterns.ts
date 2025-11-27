@@ -1,4 +1,4 @@
-export const SYMBOL_PATTERN = /(?:Buying\s+)?[\$\s]*([A-Z]{2,10})(?:\s+Buying)?/i;
+export const SYMBOL_PATTERN = /(?:Buying\s+)?\$\s*([A-Z]{2,10})(?:\s+Buying)?/i;
 
 export const ENTRY_PATTERNS = [
   /(?:First\s+buying|Entry):\s*([0-9.]+)\s*[-–—]\s*([0-9.]+)/i,

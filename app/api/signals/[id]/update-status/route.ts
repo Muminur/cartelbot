@@ -118,7 +118,7 @@ export async function POST(
     // - "partial" = some targets filled, but position still has remaining quantity
     // When ALL stop losses fill (even on a partial trade), the entire position is closed
     if (signal.status === "executing" && (trade.status === "open" || trade.status === "partial")) {
-      console.log("[Signal Status Update] Processing update:", {
+      if (process.env.NODE_ENV !== 'production') console.log("[Signal Status Update] Processing update:", {
         signalId: signal._id,
         tradeId: trade._id,
         currentTradeStatus: trade.status,
@@ -173,7 +173,7 @@ export async function POST(
       }
 
       if (allTargetsFilled || stopLossTriggered) {
-        console.log("[Signal Status Update] Closing trade:", {
+        if (process.env.NODE_ENV !== 'production') console.log("[Signal Status Update] Closing trade:", {
           signalId: signal._id,
           tradeId: trade._id,
           previousStatus: trade.status,
@@ -208,7 +208,7 @@ export async function POST(
             closeReasonDetail = "Stop Loss Hit";
           }
 
-          console.log("[Signal Status Update] Stop loss triggered:", {
+          if (process.env.NODE_ENV !== 'production') console.log("[Signal Status Update] Stop loss triggered:", {
             closeReasonDetail,
             filledCount: stopLossFillCount,
             totalCount: totalStopLossOrders,
@@ -257,7 +257,7 @@ export async function POST(
 
         updated = true;
 
-        console.log("[Signal Status Update] Updated signal and trade:", {
+        if (process.env.NODE_ENV !== 'production') console.log("[Signal Status Update] Updated signal and trade:", {
           signalId: signal._id,
           tradeId: trade._id,
           oldSignalStatus: "executing",
@@ -276,7 +276,7 @@ export async function POST(
         });
       }
     } else {
-      console.log("[Signal Status Update] No update needed:", {
+      if (process.env.NODE_ENV !== 'production') console.log("[Signal Status Update] No update needed:", {
         signalId: signal._id,
         currentSignalStatus: signal.status,
         currentTradeStatus: trade.status,

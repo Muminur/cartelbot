@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     const testnet = testnetParam ?? user.useTestnet ?? false;
 
     // Debug logging to trace testnet resolution
-    console.log("[Trade Execute] Testnet configuration:", {
+    if (process.env.NODE_ENV !== 'production') console.log("[Trade Execute] Testnet configuration:", {
       testnetParam,
       userUseTestnet: user.useTestnet,
       resolvedTestnet: testnet,
@@ -82,19 +82,19 @@ export async function POST(request: NextRequest) {
         ? TRADE_EXECUTION.TESTNET_SETTLEMENT_DELAY_MS
         : TRADE_EXECUTION.MAINNET_SETTLEMENT_DELAY_MS;
 
-      console.log(
+      if (process.env.NODE_ENV !== 'production') console.log(
         `[Trade Execute] Waiting ${settlementDelay}ms for balance settlement ` +
         `(${testnet ? 'testnet' : 'mainnet'}) before creating OCO orders (tradeId: ${result.tradeId})`
       );
       await new Promise(resolve => setTimeout(resolve, settlementDelay));
-      console.log(`[Trade Execute] Settlement delay complete, proceeding with OCO creation`);
+      if (process.env.NODE_ENV !== 'production') console.log(`[Trade Execute] Settlement delay complete, proceeding with OCO creation`);
 
       const ocoStartTime = Date.now();
       ocoResult = await createOCOOrders(result.tradeId, testnet);
       const ocoTotalTime = Date.now() - ocoStartTime;
 
       if (ocoResult.success) {
-        console.log(`[Trade Execute] OCO orders created successfully in ${ocoTotalTime}ms`);
+        if (process.env.NODE_ENV !== 'production') console.log(`[Trade Execute] OCO orders created successfully in ${ocoTotalTime}ms`);
 
         // Send trade execution notification asynchronously (don't block response)
         sendTradeExecutedNotification({

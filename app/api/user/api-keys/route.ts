@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`API keys saved for user ${user.email}`, {
+    if (process.env.NODE_ENV !== 'production') console.log(`API keys saved for user ${user.email}`, {
       timestamp: new Date().toISOString(),
       hasApiKey: !!encryptedApiKey,
       hasApiSecret: !!encryptedApiSecret,
@@ -171,7 +171,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    console.log(`API keys removed for user ${user.email}`, {
+    if (process.env.NODE_ENV !== 'production') console.log(`API keys removed for user ${user.email}`, {
       timestamp: new Date().toISOString(),
     });
 

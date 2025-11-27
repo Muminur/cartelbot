@@ -66,11 +66,11 @@ export async function POST(req: NextRequest) {
     // Use testnet parameter if provided, otherwise use user preference
     const testnet = body.testnet ?? userDoc.useTestnet ?? false;
 
-    console.log(`[WebSocket Start] Creating Binance client for user ${userId}, testnet: ${testnet}`);
+    if (process.env.NODE_ENV !== 'production') console.log(`[WebSocket Start] Creating Binance client for user ${userId}, testnet: ${testnet}`);
 
     const binanceClient = createBinanceClient(apiKey, apiSecret, testnet);
 
-    console.log(`[WebSocket Start] Creating WebSocket manager for user ${userId}`);
+    if (process.env.NODE_ENV !== 'production') console.log(`[WebSocket Start] Creating WebSocket manager for user ${userId}`);
 
     const wsManager = new WebSocketManager({
       userId,
@@ -83,13 +83,13 @@ export async function POST(req: NextRequest) {
     // Set up maxReconnectReached handler BEFORE starting
     // This ensures we only register it once per manager instance
     wsManager.once("maxReconnectReached", async () => {
-      console.log(`[WebSocket Start] Max reconnect attempts reached for user ${userId}, cleaning up connection`);
+      if (process.env.NODE_ENV !== 'production') console.log(`[WebSocket Start] Max reconnect attempts reached for user ${userId}, cleaning up connection`);
       deleteConnection(userId);
     });
 
-    console.log(`[WebSocket Start] Starting WebSocket manager for user ${userId}`);
+    if (process.env.NODE_ENV !== 'production') console.log(`[WebSocket Start] Starting WebSocket manager for user ${userId}`);
     const listenKey = await wsManager.start();
-    console.log(`[WebSocket Start] WebSocket started successfully with listen key: ${listenKey?.substring(0, 10)}...`);
+    if (process.env.NODE_ENV !== 'production') console.log(`[WebSocket Start] WebSocket started successfully with listen key: ${listenKey?.substring(0, 10)}...`);
 
     setConnection(userId, wsManager);
 

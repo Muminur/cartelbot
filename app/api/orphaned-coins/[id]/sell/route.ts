@@ -37,7 +37,7 @@ export async function POST(
       );
     }
 
-    console.log(`[Sell Orphaned Coin] User ${user.email} selling coin ${orphanedCoinId}`);
+    if (process.env.NODE_ENV !== 'production') console.log(`[Sell Orphaned Coin] User ${user.email} selling coin ${orphanedCoinId}`);
 
     // 2. Connect to database
     await connectDB();
@@ -111,7 +111,7 @@ export async function POST(
     const apiSecret = decrypt(userWithKeys.encryptedApiSecret);
     const testnet = userWithKeys.useTestnet ?? false;
 
-    console.log(
+    if (process.env.NODE_ENV !== 'production') console.log(
       `[Sell Orphaned Coin] Using ${testnet ? "testnet" : "mainnet"} for ${orphanedCoin.symbol}`
     );
 
@@ -128,7 +128,7 @@ export async function POST(
         orphanedCoin.quantity
       );
 
-      console.log(`[Sell Orphaned Coin] Sold ${orphanedCoin.quantity} ${orphanedCoin.symbol}`, {
+      if (process.env.NODE_ENV !== 'production') console.log(`[Sell Orphaned Coin] Sold ${orphanedCoin.quantity} ${orphanedCoin.symbol}`, {
         orderId: sellOrderResponse.orderId,
         executedQty: sellOrderResponse.executedQty,
       });

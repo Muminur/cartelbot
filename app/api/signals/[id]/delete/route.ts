@@ -45,7 +45,7 @@ export async function DELETE(
     const body = (await request.json()) as DeleteSignalRequest;
     const { sellRemaining } = body;
 
-    console.log(`[Delete Signal] User ${user.email} deleting signal ${signalId}`, {
+    if (process.env.NODE_ENV !== 'production') console.log(`[Delete Signal] User ${user.email} deleting signal ${signalId}`, {
       sellRemaining,
     });
 
@@ -82,7 +82,7 @@ export async function DELETE(
       signal.status = "cancelled";
       await signal.save();
 
-      console.log(`[Delete Signal] No trade found for signal ${signalId}, marked as cancelled`);
+      if (process.env.NODE_ENV !== 'production') console.log(`[Delete Signal] No trade found for signal ${signalId}, marked as cancelled`);
 
       return NextResponse.json({
         success: true,
@@ -121,7 +121,7 @@ export async function DELETE(
     const apiSecret = decrypt(userWithKeys.encryptedApiSecret);
     const testnet = userWithKeys.useTestnet ?? false;
 
-    console.log(`[Delete Signal] Using ${testnet ? "testnet" : "mainnet"} for ${signal.symbol}`);
+    if (process.env.NODE_ENV !== 'production') console.log(`[Delete Signal] Using ${testnet ? "testnet" : "mainnet"} for ${signal.symbol}`);
 
     // 8. Initialize Binance client
     const binanceClient = new BinanceClient({
@@ -145,7 +145,7 @@ export async function DELETE(
             if (sellOrder.orderListId && sellOrder.orderListId > 0) {
               // Skip if already processed (multiple sell orders can have same orderListId)
               if (processedOrderListIds.has(sellOrder.orderListId)) {
-                console.log(
+                if (process.env.NODE_ENV !== 'production') console.log(
                   `[Delete Signal] Skipping duplicate orderListId ${sellOrder.orderListId}`
                 );
                 continue;
@@ -155,7 +155,7 @@ export async function DELETE(
               cancelledOCOs.push(sellOrder.orderListId);
               processedOrderListIds.add(sellOrder.orderListId);
 
-              console.log(
+              if (process.env.NODE_ENV !== 'production') console.log(
                 `[Delete Signal] Cancelled OCO order ${sellOrder.orderListId} for ${signal.symbol} (stored orderListId)`
               );
             } else {
@@ -171,7 +171,7 @@ export async function DELETE(
               if (ocoOrder && ocoOrder.orderListId > 0) {
                 // Skip if already processed
                 if (processedOrderListIds.has(ocoOrder.orderListId)) {
-                  console.log(
+                  if (process.env.NODE_ENV !== 'production') console.log(
                     `[Delete Signal] Skipping duplicate orderListId ${ocoOrder.orderListId} (fallback)`
                   );
                   continue;
@@ -181,7 +181,7 @@ export async function DELETE(
                 cancelledOCOs.push(ocoOrder.orderListId);
                 processedOrderListIds.add(ocoOrder.orderListId);
 
-                console.log(
+                if (process.env.NODE_ENV !== 'production') console.log(
                   `[Delete Signal] Cancelled OCO order ${ocoOrder.orderListId} for ${signal.symbol} (fallback method)`
                 );
               } else {
@@ -193,7 +193,7 @@ export async function DELETE(
           } catch (error) {
             // Handle case where order is already filled or cancelled
             if (error instanceof BinanceAPIError && error.binanceCode === -2011) {
-              console.log(
+              if (process.env.NODE_ENV !== 'production') console.log(
                 `[Delete Signal] OCO order ${sellOrder.orderListId || sellOrder.orderId} already filled/cancelled`
               );
               continue;
@@ -223,7 +223,7 @@ export async function DELETE(
       }
     }
 
-    console.log(`[Delete Signal] Remaining quantity: ${remainingQuantity} ${signal.symbol}`);
+    if (process.env.NODE_ENV !== 'production') console.log(`[Delete Signal] Remaining quantity: ${remainingQuantity} ${signal.symbol}`);
 
     // 11. Handle user choice: sell remaining or keep as orphaned
     if (sellRemaining && remainingQuantity > 0) {
@@ -234,7 +234,7 @@ export async function DELETE(
           remainingQuantity
         );
 
-        console.log(
+        if (process.env.NODE_ENV !== 'production') console.log(
           `[Delete Signal] Sold ${remainingQuantity} ${signal.symbol} at market price`,
           {
             orderId: sellOrderResponse.orderId,
@@ -302,7 +302,7 @@ export async function DELETE(
             error.code === 11000;
 
           if (isDuplicateKeyError) {
-            console.log(
+            if (process.env.NODE_ENV !== 'production') console.log(
               `[Delete Signal] Orphaned coin already exists for trade ${trade._id}, updating existing record`
             );
 
@@ -365,7 +365,7 @@ export async function DELETE(
             status: "active",
           });
 
-          console.log(
+          if (process.env.NODE_ENV !== 'production') console.log(
             `[Delete Signal] Created orphaned coin record: ${remainingQuantity} ${signal.symbol}`,
             {
               orphanedCoinId: String(orphanedCoin._id),
@@ -379,7 +379,7 @@ export async function DELETE(
             error.code === 11000;
 
           if (isDuplicateKeyError) {
-            console.log(
+            if (process.env.NODE_ENV !== 'production') console.log(
               `[Delete Signal] Orphaned coin already exists for trade ${trade._id}, updating existing record`
             );
 

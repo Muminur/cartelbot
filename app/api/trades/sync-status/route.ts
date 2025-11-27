@@ -234,11 +234,11 @@ export async function POST() {
             );
           }
 
-          console.log(`Synced trade ${trade._id}: ${trade.status} (${trade.closeReasonDetail})`);
+          if (process.env.NODE_ENV !== 'production') console.log(`Synced trade ${trade._id}: ${trade.status} (${trade.closeReasonDetail})`);
         } else {
           // Just update the sell orders
           await trade.save();
-          console.log(`Updated sell orders for trade ${trade._id}`);
+          if (process.env.NODE_ENV !== 'production') console.log(`Updated sell orders for trade ${trade._id}`);
         }
       } catch (tradeError) {
         const errorMessage =

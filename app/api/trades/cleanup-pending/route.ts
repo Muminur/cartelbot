@@ -67,7 +67,7 @@ export async function DELETE(request: NextRequest) {
       .filter((id): id is NonNullable<typeof id> => id !== null && id !== undefined);
 
     // Audit log before deletion
-    console.log("[Audit] Cleanup Pending Trades - BEFORE DELETE:", {
+    if (process.env.NODE_ENV !== 'production') console.log("[Audit] Cleanup Pending Trades - BEFORE DELETE:", {
       userId: String(userId),
       timestamp: new Date().toISOString(),
       count: pendingTrades.length,
@@ -99,7 +99,7 @@ export async function DELETE(request: NextRequest) {
     // Commit transaction
     await session.commitTransaction();
 
-    console.log("[Cleanup Pending Trades] Successfully deleted pending approval trades:", {
+    if (process.env.NODE_ENV !== 'production') console.log("[Cleanup Pending Trades] Successfully deleted pending approval trades:", {
       userId: String(userId),
       deletedCount: deleteResult.deletedCount,
       updatedSignals: updateResult.modifiedCount,

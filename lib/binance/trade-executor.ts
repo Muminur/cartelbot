@@ -191,7 +191,7 @@ export async function executeSignalTrade(
     const preBuyAssetBalance = preBuyAccountInfo.balances.find(b => b.asset === baseAsset);
     const preBuyBalance = parseFloat(preBuyAssetBalance?.free || '0');
 
-    console.log(`[Trade Executor] Executing buy order for ${signal.symbol}:`, {
+    if (process.env.NODE_ENV !== 'production') console.log(`[Trade Executor] Executing buy order for ${signal.symbol}:`, {
       symbol: signal.symbol,
       investmentAmount: amount,
       estimatedQuantity: estimatedQuantity,
@@ -204,7 +204,7 @@ export async function executeSignalTrade(
 
     const buyOrder = await client.createMarketBuyOrder(signal.symbol, amount);
 
-    console.log(`[Trade Executor] Buy order executed successfully:`, {
+    if (process.env.NODE_ENV !== 'production') console.log(`[Trade Executor] Buy order executed successfully:`, {
       orderId: buyOrder.orderId,
       symbol: buyOrder.symbol,
       status: buyOrder.status,
@@ -229,7 +229,7 @@ export async function executeSignalTrade(
       );
     }
 
-    console.log(`[Trade Executor] Buy order processed:`, {
+    if (process.env.NODE_ENV !== 'production') console.log(`[Trade Executor] Buy order processed:`, {
       executedQuantity: executedQty,
       executedPrice: executedPrice,
       totalCost: parseFloat(buyOrder.cummulativeQuoteQty || "0"),
@@ -237,7 +237,7 @@ export async function executeSignalTrade(
 
     // CRITICAL FIX: Store ORIGINAL targets - filtering will happen in createOCOOrders()
     // This prevents race condition where price changes between buy order and OCO creation
-    console.log(`[Trade Executor] Storing ORIGINAL targets for ${signal.symbol}:`, {
+    if (process.env.NODE_ENV !== 'production') console.log(`[Trade Executor] Storing ORIGINAL targets for ${signal.symbol}:`, {
       targets: signal.targets.map((t: number) => t.toFixed(8)),
       stopLoss: signal.stopLoss,
       note: "Target filtering will occur in createOCOOrders() with fresh market price",
@@ -278,7 +278,7 @@ export async function executeSignalTrade(
       preBuyBalance: preBuyBalance, // CRITICAL: Balance before buy order for settlement verification
     });
 
-    console.log(`[Trade Executor] Trade document created:`, {
+    if (process.env.NODE_ENV !== 'production') console.log(`[Trade Executor] Trade document created:`, {
       tradeId: trade._id,
       symbol: trade.symbol,
       quantity: trade.quantity,
@@ -294,7 +294,7 @@ export async function executeSignalTrade(
     signal.status = "executing";
     await signal.save();
 
-    console.log(`[Trade Executor] Trade execution successful - ready for OCO creation`, {
+    if (process.env.NODE_ENV !== 'production') console.log(`[Trade Executor] Trade execution successful - ready for OCO creation`, {
       tradeId: trade._id,
       executedQuantity: executedQty,
       symbol: signal.symbol,
@@ -327,7 +327,7 @@ export async function executeSignalTrade(
       failureReason: failureReason,
     });
 
-    console.log(`[Trade Executor] Signal ${signalId} marked as failed:`, {
+    if (process.env.NODE_ENV !== 'production') console.log(`[Trade Executor] Signal ${signalId} marked as failed:`, {
       errorCode,
       failureReason,
       errorMessage: errorMessage.substring(0, 100),
@@ -380,13 +380,13 @@ async function retryOCOCreation<T>(
     }
 
     try {
-      console.log(`[OCO] ${symbol} - Attempt ${attempt}/${maxRetries} (elapsed: ${elapsed}ms)`);
+      if (process.env.NODE_ENV !== 'production') console.log(`[OCO] ${symbol} - Attempt ${attempt}/${maxRetries} (elapsed: ${elapsed}ms)`);
 
       // Optional balance check on retry attempts (diagnostic)
       // Note: Balance already verified before OCO loop starts, this is for diagnostics during retries
       if (balanceCheckFn && attempt > 1) {
         const balanceCheck = await balanceCheckFn();
-        console.log(
+        if (process.env.NODE_ENV !== 'production') console.log(
           `[OCO] ${symbol} - Balance diagnostic on retry ${attempt - 1}:`,
           `Available=${balanceCheck.available.toFixed(8)},`,
           `Required=${balanceCheck.required.toFixed(8)},`,
@@ -395,7 +395,7 @@ async function retryOCOCreation<T>(
       }
 
       const result = await fn();
-      console.log(`[OCO] ${symbol} - Success on attempt ${attempt} (total time: ${Date.now() - startTime}ms)`);
+      if (process.env.NODE_ENV !== 'production') console.log(`[OCO] ${symbol} - Success on attempt ${attempt} (total time: ${Date.now() - startTime}ms)`);
       return result;
     } catch (error: unknown) {
       const isInsufficientBalance =
@@ -441,7 +441,7 @@ export async function createOCOOrders(
       throw new ValidationError("Trade not found");
     }
 
-    console.log(`[OCO Creation] Starting OCO order creation:`, {
+    if (process.env.NODE_ENV !== 'production') console.log(`[OCO Creation] Starting OCO order creation:`, {
       tradeId: trade._id,
       symbol: trade.symbol,
       buyQuantity: trade.quantity,
@@ -476,7 +476,7 @@ export async function createOCOOrders(
     const ticker = await client.get24hrTicker(trade.symbol);
     const currentPrice = parseFloat(ticker.lastPrice);
 
-    console.log(`[OCO Creation] Current market state for ${trade.symbol}:`, {
+    if (process.env.NODE_ENV !== 'production') console.log(`[OCO Creation] Current market state for ${trade.symbol}:`, {
       currentPrice: currentPrice.toFixed(8),
       entryPrice: trade.entryPrice.toFixed(8),
       priceDifference: ((currentPrice - trade.entryPrice) / trade.entryPrice * 100).toFixed(2) + '%',
@@ -490,7 +490,7 @@ export async function createOCOOrders(
     const validTargets = trade.targets.filter((target: number) => target > currentPrice);
     const invalidTargets = trade.targets.filter((target: number) => target <= currentPrice);
 
-    console.log(`[OCO Creation] Target validation for ${trade.symbol}:`, {
+    if (process.env.NODE_ENV !== 'production') console.log(`[OCO Creation] Target validation for ${trade.symbol}:`, {
       currentPrice: currentPrice.toFixed(8),
       validTargets: validTargets.map((t: number) => t.toFixed(8)),
       invalidTargets: invalidTargets.map((t: number) => t.toFixed(8)),
@@ -537,14 +537,14 @@ export async function createOCOOrders(
 
         // Use fallback 1% target with adjusted price if needed
         emergencyTarget = fallbackValidation.adjustedPrice || emergencyTarget;
-        console.log(
+        if (process.env.NODE_ENV !== 'production') console.log(
           `[OCO Creation] ${trade.symbol} - Using fallback 1% emergency target: ${emergencyTarget.toFixed(8)} ` +
           `(adjusted from filters: ${fallbackValidation.adjustedPrice ? 'YES' : 'NO'})`
         );
       } else {
         // Use 1.5% target with adjusted price if needed
         emergencyTarget = emergencyValidation.adjustedPrice || emergencyTarget;
-        console.log(
+        if (process.env.NODE_ENV !== 'production') console.log(
           `[OCO Creation] ${trade.symbol} - Using 1.5% emergency target: ${emergencyTarget.toFixed(8)} ` +
           `(adjusted from filters: ${emergencyValidation.adjustedPrice ? 'YES' : 'NO'})`
         );
@@ -559,14 +559,14 @@ export async function createOCOOrders(
 
       if (emergencyStopLoss > originalStopLoss) {
         adjustedStopLoss = emergencyStopLoss;
-        console.log(
+        if (process.env.NODE_ENV !== 'production') console.log(
           `[OCO Creation] ${trade.symbol} - Emergency stop loss applied: ` +
           `${emergencyStopLoss.toFixed(8)} (2% max loss) vs original ${originalStopLoss.toFixed(8)}. ` +
           `Using TIGHTER stop loss: ${adjustedStopLoss.toFixed(8)}`
         );
       } else {
         adjustedStopLoss = originalStopLoss;
-        console.log(
+        if (process.env.NODE_ENV !== 'production') console.log(
           `[OCO Creation] ${trade.symbol} - Original stop loss ${originalStopLoss.toFixed(8)} ` +
           `is already tighter than emergency stop loss ${emergencyStopLoss.toFixed(8)}. Keeping original.`
         );
@@ -615,7 +615,7 @@ export async function createOCOOrders(
     const userDistribution = riskLimits.targetDistribution; // From user settings or default [75, 15, 10]
     let distribution: number[];
 
-    console.log(
+    if (process.env.NODE_ENV !== 'production') console.log(
       `[OCO] ${trade.symbol} - User's target distribution setting: ${userDistribution.join(", ")}%`,
       `(${userDistribution.length} values for ${targets.length} targets)`
     );
@@ -624,7 +624,7 @@ export async function createOCOOrders(
     if (targets.length === userDistribution.length) {
       // Perfect match - use as-is (validation already ensures sum is 100%)
       distribution = userDistribution;
-      console.log(`[OCO] ${trade.symbol} - Distribution length matches target count - using as-is`);
+      if (process.env.NODE_ENV !== 'production') console.log(`[OCO] ${trade.symbol} - Distribution length matches target count - using as-is`);
     } else if (targets.length < userDistribution.length) {
       // Fewer targets than distribution values - slice and normalize to 100%
       // Example: 3 targets but distribution is [75, 15, 10] → use [75, 15, 10]
@@ -635,13 +635,13 @@ export async function createOCOOrders(
       if (Math.abs(sum - 100) < 0.01) {
         // Already sums to 100% (within tolerance)
         distribution = baseDist;
-        console.log(
+        if (process.env.NODE_ENV !== 'production') console.log(
           `[OCO] ${trade.symbol} - Sliced distribution already sums to 100%: ${baseDist.join(", ")}%`
         );
       } else {
         // Normalize to 100%
         distribution = baseDist.map((pct) => (pct / sum) * 100);
-        console.log(
+        if (process.env.NODE_ENV !== 'production') console.log(
           `[OCO] ${trade.symbol} - Normalized sliced distribution from ${baseDist.join(", ")}% ` +
           `(sum=${sum.toFixed(2)}%) to ${distribution.map((d) => d.toFixed(2)).join(", ")}%`
         );
@@ -651,14 +651,14 @@ export async function createOCOOrders(
       // Example: 5 targets but distribution is [75, 15, 10] → use [20, 20, 20, 20, 20]
       const percentagePerTarget = 100 / targets.length;
       distribution = Array(targets.length).fill(percentagePerTarget);
-      console.log(
+      if (process.env.NODE_ENV !== 'production') console.log(
         `[OCO] ${trade.symbol} - More targets than distribution values ` +
         `(${targets.length} > ${userDistribution.length}). Using equal distribution: ` +
         `${percentagePerTarget.toFixed(2)}% per target`
       );
     }
 
-    console.log(
+    if (process.env.NODE_ENV !== 'production') console.log(
       `[OCO] ${trade.symbol} - Final distribution for ${targets.length} targets: ` +
       `${distribution.map((d) => d.toFixed(2)).join(", ")}% (sum=${distribution.reduce((a, b) => a + b, 0).toFixed(2)}%)`
     );
@@ -670,7 +670,7 @@ export async function createOCOOrders(
     }
 
     // Initial balance check (will be updated if additional settlement delay needed)
-    console.log(`[OCO] ${trade.symbol} - Initial balance check for ${baseAsset}...`);
+    if (process.env.NODE_ENV !== 'production') console.log(`[OCO] ${trade.symbol} - Initial balance check for ${baseAsset}...`);
     const initialAccountInfo = await client.getAccount();
     const initialAssetBalance = initialAccountInfo.balances.find(b => b.asset === baseAsset);
     const currentAvailableBalance = parseFloat(initialAssetBalance?.free || '0'); // Current balance (may already include settlement)
@@ -682,7 +682,7 @@ export async function createOCOOrders(
       ? trade.preBuyBalance
       : currentAvailableBalance;
 
-    console.log(
+    if (process.env.NODE_ENV !== 'production') console.log(
       `[OCO] ${trade.symbol} - Initial balance:`,
       `PreBuy=${preBuyBalance.toFixed(8)},`,
       `Current=${currentAvailableBalance.toFixed(8)},`,
@@ -712,7 +712,7 @@ export async function createOCOOrders(
     // We check if current balance >= preBuyBalance + actualQuantity to detect settlement
     const expectedBalanceAfterSettlement = preBuyBalance + actualQuantity;
 
-    console.log(
+    if (process.env.NODE_ENV !== 'production') console.log(
       `[OCO] ${trade.symbol} - Settlement verification: ` +
       `Pre-buy balance=${preBuyBalance.toFixed(8)}, ` +
       `Current balance=${currentAvailableBalance.toFixed(8)}, ` +
@@ -729,7 +729,7 @@ export async function createOCOOrders(
     if (settlementAlreadyComplete) {
       // Settlement completed during the 2-3 second proactive delay - no polling needed!
       settlementVerified = true;
-      console.log(
+      if (process.env.NODE_ENV !== 'production') console.log(
         `[OCO] ${trade.symbol} - Settlement already complete (detected during proactive delay): ` +
         `Pre-buy balance=${preBuyBalance.toFixed(8)}, ` +
         `Current balance=${currentAvailableBalance.toFixed(8)}, ` +
@@ -742,7 +742,7 @@ export async function createOCOOrders(
       const maxPolls = testnet ? 20 : 10; // Testnet needs more time (up to 20 seconds)
       const pollInterval = 1000; // 1 second between polls
 
-      console.log(
+      if (process.env.NODE_ENV !== 'production') console.log(
         `[OCO] ${trade.symbol} - Settlement NOT yet complete. Starting polling... ` +
         `(Pre-buy=${preBuyBalance.toFixed(8)}, Current=${currentAvailableBalance.toFixed(8)}, ` +
         `Expected=${expectedBalanceAfterSettlement.toFixed(8)})`
@@ -759,7 +759,7 @@ export async function createOCOOrders(
         const balanceIncrease = currentBalance - preBuyBalance;
         const settlementComplete = currentBalance >= (expectedBalanceAfterSettlement - TRADE_EXECUTION.BALANCE_TOLERANCE);
 
-        console.log(
+        if (process.env.NODE_ENV !== 'production') console.log(
           `[OCO] ${trade.symbol} - Settlement poll ${poll}/${maxPolls}:`,
           `Current=${currentBalance.toFixed(8)},`,
           `Expected=${expectedBalanceAfterSettlement.toFixed(8)},`,
@@ -771,7 +771,7 @@ export async function createOCOOrders(
           settlementVerified = true;
           const elapsedTime = Date.now() - pollStartTime;
           const savedTime = (maxPolls - poll) * pollInterval;
-          console.log(
+          if (process.env.NODE_ENV !== 'production') console.log(
             `[OCO] ${trade.symbol} - Settlement verified after ${poll}/${maxPolls} polls ` +
             `(${elapsedTime}ms elapsed, ${savedTime}ms saved). ` +
             `Balance increased by ${balanceIncrease.toFixed(8)} ${baseAsset}`
@@ -780,7 +780,7 @@ export async function createOCOOrders(
         }
 
         if (poll < maxPolls) {
-          console.log(`[OCO] ${trade.symbol} - Waiting ${pollInterval}ms before next poll...`);
+          if (process.env.NODE_ENV !== 'production') console.log(`[OCO] ${trade.symbol} - Waiting ${pollInterval}ms before next poll...`);
           await new Promise(resolve => setTimeout(resolve, pollInterval));
         }
       }
@@ -819,14 +819,14 @@ export async function createOCOOrders(
 
     // SAFE PHANTOM ORDER CLEANUP
     // Cancels both OCO orders and individual orders that aren't tracked in our database
-    console.log(`[OCO] ${trade.symbol} - Checking for phantom orders...`);
+    if (process.env.NODE_ENV !== 'production') console.log(`[OCO] ${trade.symbol} - Checking for phantom orders...`);
 
     try {
       // 1. Get all open SELL orders for this symbol from Binance
       const openOrders = await client.getOpenOrders(trade.symbol);
       const openSellOrders = openOrders.filter(order => order.side === "SELL");
 
-      console.log(
+      if (process.env.NODE_ENV !== 'production') console.log(
         `[OCO] ${trade.symbol} - Found ${openSellOrders.length} open SELL orders on Binance`
       );
 
@@ -861,11 +861,11 @@ export async function createOCOOrders(
           });
         });
 
-        console.log(
+        if (process.env.NODE_ENV !== 'production') console.log(
           `[OCO] ${trade.symbol} - Legitimate orderListIds in database: ` +
           `[${Array.from(legitimateOrderListIds).join(", ")}]`
         );
-        console.log(
+        if (process.env.NODE_ENV !== 'production') console.log(
           `[OCO] ${trade.symbol} - Legitimate individual orderIds in database: ` +
           `[${Array.from(legitimateIndividualOrderIds).join(", ")}]`
         );
@@ -981,7 +981,7 @@ export async function createOCOOrders(
           // Aggregated logging for skipped orders (reduces log verbosity)
           if (skippedOCOOrders.length > 0) {
             const recentCount = skippedOCOOrders.filter(o => o.reason.startsWith('age_')).length;
-            console.log(
+            if (process.env.NODE_ENV !== 'production') console.log(
               `[OCO] ${trade.symbol} - Skipped ${skippedOCOOrders.length} OCO orders ` +
               `(${recentCount} recent, ${skippedOCOOrders.length - recentCount} other reasons): ` +
               `[${skippedOCOOrders.map(o => o.orderId).join(", ")}]`
@@ -990,18 +990,18 @@ export async function createOCOOrders(
 
           if (skippedIndividualOrders.length > 0) {
             const recentCount = skippedIndividualOrders.filter(o => o.reason.startsWith('age_')).length;
-            console.log(
+            if (process.env.NODE_ENV !== 'production') console.log(
               `[OCO] ${trade.symbol} - Skipped ${skippedIndividualOrders.length} individual orders ` +
               `(${recentCount} recent, ${skippedIndividualOrders.length - recentCount} other reasons): ` +
               `[${skippedIndividualOrders.map(o => o.orderId).join(", ")}]`
             );
           }
 
-          console.log(
+          if (process.env.NODE_ENV !== 'production') console.log(
             `[OCO] ${trade.symbol} - Found ${phantomOCOOrders.length} phantom OCO orders ` +
             `(orderListIds: [${phantomOCOOrders.map(o => o.orderListId).filter((v, i, a) => a.indexOf(v) === i).join(", ")}])`
           );
-          console.log(
+          if (process.env.NODE_ENV !== 'production') console.log(
             `[OCO] ${trade.symbol} - Found ${phantomIndividualOrders.length} phantom individual orders ` +
             `(orderIds: [${phantomIndividualOrders.map(o => o.orderId).join(", ")}])`
           );
@@ -1015,13 +1015,13 @@ export async function createOCOOrders(
             }
 
             try {
-              console.log(
+              if (process.env.NODE_ENV !== 'production') console.log(
                 `[OCO] ${trade.symbol} - Canceling phantom OCO orderListId ${order.orderListId} ` +
                 `(orderId: ${order.orderId})`
               );
               await client.cancelOCOOrder(trade.symbol, order.orderListId!);
               canceledOrderListIds.add(order.orderListId!);
-              console.log(
+              if (process.env.NODE_ENV !== 'production') console.log(
                 `[OCO] ${trade.symbol} - Successfully canceled phantom OCO orderListId ${order.orderListId}`
               );
 
@@ -1040,12 +1040,12 @@ export async function createOCOOrders(
           const canceledIndividualOrderIds: number[] = [];
           for (const order of phantomIndividualOrders) {
             try {
-              console.log(
+              if (process.env.NODE_ENV !== 'production') console.log(
                 `[OCO] ${trade.symbol} - Canceling phantom individual orderId ${order.orderId}`
               );
               await client.cancelOrder(trade.symbol, order.orderId);
               canceledIndividualOrderIds.push(order.orderId);
-              console.log(
+              if (process.env.NODE_ENV !== 'production') console.log(
                 `[OCO] ${trade.symbol} - Successfully canceled phantom individual orderId ${order.orderId}`
               );
 
@@ -1062,7 +1062,7 @@ export async function createOCOOrders(
 
           // 7. Summary logging
           if (canceledOrderListIds.size > 0 || canceledIndividualOrderIds.length > 0) {
-            console.log(
+            if (process.env.NODE_ENV !== 'production') console.log(
               `[OCO] ${trade.symbol} - Phantom order cleanup complete. ` +
               `Canceled ${canceledOrderListIds.size} OCO group(s): ` +
               `[${Array.from(canceledOrderListIds).join(", ")}], ` +
@@ -1070,7 +1070,7 @@ export async function createOCOOrders(
               `[${canceledIndividualOrderIds.join(", ")}]`
             );
           } else {
-            console.log(`[OCO] ${trade.symbol} - No phantom orders to clean up`);
+            if (process.env.NODE_ENV !== 'production') console.log(`[OCO] ${trade.symbol} - No phantom orders to clean up`);
           }
         }
       }
@@ -1092,7 +1092,7 @@ export async function createOCOOrders(
     }
 
     // Log distribution strategy being used
-    console.log(
+    if (process.env.NODE_ENV !== 'production') console.log(
       `[OCO] ${trade.symbol} - Using ${targets.length} target(s) with distribution: ` +
       `${distribution.map(d => d.toFixed(2)).join("%, ")}%`
     );
@@ -1104,13 +1104,13 @@ export async function createOCOOrders(
     for (let i = 0; i < targets.length; i++) {
       // CRITICAL FIX: Fetch fresh balance BEFORE each OCO creation
       // Previous OCO orders lock coins on Binance, reducing available balance
-      console.log(`[OCO] ${trade.symbol} - Fetching fresh balance before OCO ${i}...`);
+      if (process.env.NODE_ENV !== 'production') console.log(`[OCO] ${trade.symbol} - Fetching fresh balance before OCO ${i}...`);
       const currentAccountInfo = await client.getAccount();
       const currentAssetBalance = currentAccountInfo.balances.find(b => b.asset === baseAsset);
       const currentAvailableBalance = parseFloat(currentAssetBalance?.free || '0');
       const currentLockedBalance = parseFloat(currentAssetBalance?.locked || '0');
 
-      console.log(
+      if (process.env.NODE_ENV !== 'production') console.log(
         `[OCO] ${trade.symbol} - Fresh balance before OCO ${i}:`,
         `Available=${currentAvailableBalance.toFixed(8)},`,
         `Locked=${currentLockedBalance.toFixed(8)},`,
@@ -1187,7 +1187,7 @@ export async function createOCOOrders(
       const adjustedStopLimitPrice = stopLimitValidation.adjustedPrice || rawStopLimitPrice;
 
       // eslint-disable-next-line no-console
-      console.log(`[OCO] ${trade.symbol} - Creating OCO for target ${i + 1}/${targets.length}:`, {
+      if (process.env.NODE_ENV !== 'production') console.log(`[OCO] ${trade.symbol} - Creating OCO for target ${i + 1}/${targets.length}:`, {
         symbol: trade.symbol,
         targetPrice: targetPrice,
         adjustedPrice: adjustedPrice,
@@ -1283,7 +1283,7 @@ export async function createOCOOrders(
         totalAllocatedQty += adjustedQty;
 
         // Log successful OCO creation
-        console.log(
+        if (process.env.NODE_ENV !== 'production') console.log(
           `[OCO] ${trade.symbol} - OCO ${i} created successfully. ` +
           `Locked ${adjustedQty.toFixed(8)} ${baseAsset} (${percentage}% of position). ` +
           `Total allocated so far: ${totalAllocatedQty.toFixed(8)} / ${ALLOCATION_CAP.toFixed(8)} ${baseAsset} ` +
@@ -1361,7 +1361,7 @@ export async function createOCOOrders(
 
     // Send notification if targets were adjusted and user hasn't been notified yet
     if (targetAdjustmentReason && !trade.targetAdjustmentNotificationSent) {
-      console.log(`[OCO Creation] Sending target adjustment notification for ${trade.symbol}...`);
+      if (process.env.NODE_ENV !== 'production') console.log(`[OCO Creation] Sending target adjustment notification for ${trade.symbol}...`);
 
       // Send notification asynchronously (don't block OCO success response)
       sendTargetAdjustmentNotification({
@@ -1431,7 +1431,7 @@ export async function createOCOOrders(
         },
       });
 
-      console.log(`[OCO Creation] Error persisted to database:`, {
+      if (process.env.NODE_ENV !== 'production') console.log(`[OCO Creation] Error persisted to database:`, {
         signalId: failedTrade.signalId,
         tradeId: failedTrade._id,
         errorCode,

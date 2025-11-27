@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       "emailNotifications.dailySummary": true,
     }).select("_id email");
 
-    console.log(`[Daily Summary] Processing ${users.length} users`);
+    if (process.env.NODE_ENV !== 'production') console.log(`[Daily Summary] Processing ${users.length} users`);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
 
         // Skip if no activity today
         if (tradesOpened === 0 && tradesClosed === 0) {
-          console.log(`[Daily Summary] Skipping user ${user.email} - no activity`);
+          if (process.env.NODE_ENV !== 'production') console.log(`[Daily Summary] Skipping user ${user.email} - no activity`);
           results.skipped++;
           continue;
         }
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
           trades: tradesList,
         });
 
-        console.log(`[Daily Summary] Sent to ${user.email}`);
+        if (process.env.NODE_ENV !== 'production') console.log(`[Daily Summary] Sent to ${user.email}`);
         results.success++;
       } catch (error) {
         console.error(`[Daily Summary] Failed for user ${user.email}:`, error);
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log(`[Daily Summary] Completed:`, results);
+    if (process.env.NODE_ENV !== 'production') console.log(`[Daily Summary] Completed:`, results);
 
     return NextResponse.json({
       success: true,

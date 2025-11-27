@@ -224,7 +224,7 @@ export async function handleOutboundAccountPosition(event: BinanceWebSocketEvent
     data.B.forEach((balance: { a: string; f: string; l: string }) => {
       const free = parseFloat(balance.f);
       const locked = parseFloat(balance.l);
-      console.log(`Balance update: ${balance.a} - Free: ${free}, Locked: ${locked}`);
+      if (process.env.NODE_ENV !== 'production') console.log(`Balance update: ${balance.a} - Free: ${free}, Locked: ${locked}`);
     });
   } catch (error) {
     console.error("Error handling outboundAccountPosition:", {
@@ -342,7 +342,7 @@ export async function routeEvent(event: BinanceWebSocketEvent): Promise<void> {
         break;
 
       default:
-        console.log(`Unhandled event type: ${event.eventType}`);
+        if (process.env.NODE_ENV !== 'production') console.log(`Unhandled event type: ${event.eventType}`);
         break;
     }
   } catch (error) {

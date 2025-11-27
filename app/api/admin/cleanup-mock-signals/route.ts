@@ -65,7 +65,7 @@ async function analyzeSignals(): Promise<AnalysisResult> {
     .lean()
     .exec()) as unknown as LeanSignal[];
 
-  console.log(`🔍 [CLEANUP] Found ${signals.length} signals in database`);
+  if (process.env.NODE_ENV !== 'production') console.log(`🔍 [CLEANUP] Found ${signals.length} signals in database`);
 
   // Get all signal IDs for bulk query
   const signalIds = signals.map((s) => String(s._id));
@@ -78,7 +78,7 @@ async function analyzeSignals(): Promise<AnalysisResult> {
     .lean()
     .exec()) as unknown as LeanTrade[];
 
-  console.log(`🔍 [CLEANUP] Found ${trades.length} trades for these signals`);
+  if (process.env.NODE_ENV !== 'production') console.log(`🔍 [CLEANUP] Found ${trades.length} trades for these signals`);
 
   // Create lookup map for O(1) access
   const tradeMap = new Map<string, LeanTrade>(
@@ -211,7 +211,7 @@ async function deleteMockSignals(
       deletedTradesCount = deletedTrades.deletedCount || 0;
       deletedSignalsCount = deletedSignals.deletedCount || 0;
 
-      console.log(
+      if (process.env.NODE_ENV !== 'production') console.log(
         `✅ [CLEANUP] Transaction committed: ${deletedSignalsCount} signals, ${deletedTradesCount} trades`
       );
     });
@@ -237,11 +237,11 @@ export async function GET(request: NextRequest) {
   if (adminCheck.error) return adminCheck.response;
 
   try {
-    console.log("🔍 [CLEANUP] Starting analysis for mock signals...");
+    if (process.env.NODE_ENV !== 'production') console.log("🔍 [CLEANUP] Starting analysis for mock signals...");
 
     const analysis = await analyzeSignals();
 
-    console.log(`📊 [CLEANUP] Analysis complete:
+    if (process.env.NODE_ENV !== 'production') console.log(`📊 [CLEANUP] Analysis complete:
       - Total signals: ${analysis.totalSignals}
       - Real Binance orders: ${analysis.signalsWithRealBinanceOrders}
       - Mock signals found: ${analysis.mockSignals.length}
@@ -276,13 +276,13 @@ export async function POST(request: NextRequest) {
   if (adminCheck.error) return adminCheck.response;
 
   try {
-    console.log("🗑️  [CLEANUP] Starting mock signal deletion...");
+    if (process.env.NODE_ENV !== 'production') console.log("🗑️  [CLEANUP] Starting mock signal deletion...");
 
     // First, analyze to get the list
     const analysis = await analyzeSignals();
 
     if (analysis.mockSignals.length === 0) {
-      console.log("✅ [CLEANUP] No mock signals found");
+      if (process.env.NODE_ENV !== 'production') console.log("✅ [CLEANUP] No mock signals found");
       return NextResponse.json(
         {
           success: true,
@@ -297,14 +297,14 @@ export async function POST(request: NextRequest) {
     // Extract IDs
     const mockSignalIds = analysis.mockSignals.map((s) => s._id);
 
-    console.log(
+    if (process.env.NODE_ENV !== 'production') console.log(
       `🗑️  [CLEANUP] Preparing to delete ${mockSignalIds.length} mock signals...`
     );
 
     // Delete them using transaction
     const result = await deleteMockSignals(mockSignalIds);
 
-    console.log(`✅ [CLEANUP] Cleanup complete:
+    if (process.env.NODE_ENV !== 'production') console.log(`✅ [CLEANUP] Cleanup complete:
       - Signals deleted: ${result.deletedSignals}
       - Trades deleted: ${result.deletedTrades}
     `);
