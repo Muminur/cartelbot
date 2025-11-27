@@ -4,18 +4,18 @@ import { createSuccessResponse, parseRequestBody } from "@/lib/utils/api";
 import { generateMagicLinkToken } from "@/lib/auth";
 import { sendMagicLinkEmail } from "@/lib/email";
 import { REGEX_PATTERNS } from "@/lib/constants";
+import { rateLimit } from "@/lib/middleware";
+import { sanitizeEmail } from "@/lib/security";
+import { logAuthAction } from "@/lib/audit";
 
 const magicLinkSchema = z.object({
   email: z.string().email("Invalid email format").regex(REGEX_PATTERNS.EMAIL),
 });
 
-/**
- * Fix 3: Standardize Error Response Format
- * All errors return consistent structure: { success: false, error: { code, message, statusCode } }
- * This ensures reliable client-side error handling and prevents enumeration attacks.
- */
 export async function POST(request: NextRequest) {
   try {
+    const rateLimitError = await rateLimit(request.headers.get("x-forwarded-for") || "unknown", "auth");
+    if (rateLimitError) return rateLimitError;
     // Validate environment first to provide clear error
     if (!process.env.RESEND_API_KEY) {
       console.error("RESEND_API_KEY not configured - magic link will fail");
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { email } = result.data;
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = sanitizeEmail(email);
 
     const token = generateMagicLinkToken(normalizedEmail);
 
@@ -94,6 +94,8 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    await logAuthAction(request, "auth.magic_link", undefined, 200, { email: normalizedEmail });
 
     return createSuccessResponse(
       { message: "Magic link sent to your email" },

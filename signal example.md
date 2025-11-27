@@ -64,16 +64,16 @@ SL: 90000
 
 
 Buying $ETH
-First buying: 3042
-Second buying: 3042
-CMP: 3042
+First buying: 2900
+Second buying: 2900
+CMP: 2900
 Targets:
 4%
 8%
 12%
 20%
 30%
-Sl: 3000
+Sl: 1500
 
 
 $ROSE Buying Now
@@ -103,3 +103,24 @@ Targets:
 92400
 92500
 SL: 91700
+
+$BTC Buying Now
+Entry: 87621
+Targets:
+90000
+91000
+92000
+93000
+SL: 84000
+
+Buying $ETH
+First buying: 2838
+Second buying: 2838
+CMP: 2838
+Targets:
+4%
+8%
+12%
+20%
+30%
+Sl: 2700

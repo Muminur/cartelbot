@@ -44,7 +44,7 @@ const nextConfig = {
         },
         {
           key: "X-Frame-Options",
-          value: "SAMEORIGIN",
+          value: "DENY",
         },
         {
           key: "X-Content-Type-Options",
@@ -52,11 +52,11 @@ const nextConfig = {
         },
         {
           key: "Referrer-Policy",
-          value: "origin-when-cross-origin",
+          value: "strict-origin-when-cross-origin",
         },
         {
           key: "Strict-Transport-Security",
-          value: "max-age=31536000; includeSubDomains; preload",
+          value: "max-age=63072000; includeSubDomains; preload",
         },
         {
           key: "X-XSS-Protection",
@@ -64,7 +64,7 @@ const nextConfig = {
         },
         {
           key: "Permissions-Policy",
-          value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+          value: "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), interest-cohort=()",
         },
         {
           key: "Content-Security-Policy",
@@ -80,7 +80,24 @@ const nextConfig = {
             "frame-ancestors 'none'",
             "base-uri 'self'",
             "form-action 'self'",
+            "upgrade-insecure-requests",
           ].join("; "),
+        },
+        {
+          key: "X-Permitted-Cross-Domain-Policies",
+          value: "none",
+        },
+        {
+          key: "Cross-Origin-Embedder-Policy",
+          value: "require-corp",
+        },
+        {
+          key: "Cross-Origin-Opener-Policy",
+          value: "same-origin",
+        },
+        {
+          key: "Cross-Origin-Resource-Policy",
+          value: "same-origin",
         },
       ],
     },

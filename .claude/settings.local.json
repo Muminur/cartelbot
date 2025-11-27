@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs -I {} sh -c 'echo \"\"\"\"=== {} ===\"\"\"\" && grep -E \"\"\"\"export (async )?function (GET|POST|PUT|DELETE|PATCH)\"\"\"\" {} | head -5')",
+      "Bash(cat:*)",
+      "Bash(find:*)",
+      "Bash(npm ls:*)",
+      "Bash(node --version:*)",
+      "Bash(npm --version:*)",
+      "Bash(dir:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

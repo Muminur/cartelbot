@@ -8,19 +8,28 @@ import { BinanceClient } from "@/lib/binance";
 import { checkSignalLimit } from "@/lib/middleware/usage-limiter";
 import { serializeDocument, serializeDocuments, serializeResponse } from "@/lib/utils/serialize";
 import { limitSignalTargets } from "@/lib/parser/target-limiter";
+import { rateLimit } from "@/lib/middleware";
+import { sanitizeSignalText } from "@/lib/security";
+import { logSignalAction } from "@/lib/audit";
 
 export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth();
+
+    const rateLimitError = await rateLimit(String(user._id), "trading");
+    if (rateLimitError) return rateLimitError;
+
     const body = await request.json();
 
-    const { rawSignal, isImageSignal = false } = body;
+    const { rawSignal: unsanitizedSignal, isImageSignal = false } = body;
 
     if (process.env.NODE_ENV !== 'production') console.log("POST /api/signals - Request received:", {
       userId: user._id,
       isImageSignal,
-      rawSignalLength: rawSignal?.length,
+      rawSignalLength: unsanitizedSignal?.length,
     });
+
+    const rawSignal = sanitizeSignalText(unsanitizedSignal);
 
     // Check subscription usage limits
     const limitError = await checkSignalLimit(String(user._id));
@@ -152,7 +161,7 @@ export async function POST(request: NextRequest) {
       userId: user._id,
       symbol: parsed.symbol,
       entries: parsed.entries,
-      targets: limitedTargets, // Use limited targets instead of all parsed targets
+      targets: limitedTargets,
       stopLoss: parsed.stopLoss,
       currentMarketPrice: currentMarketPrice,
       status: parsed.errors.length === 0 ? "parsed" : "pending",
@@ -161,7 +170,11 @@ export async function POST(request: NextRequest) {
       parseErrors: parsed.errors,
     });
 
-    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in URLs)
+    await logSignalAction(request, "signal.create", String(user._id), String(signal._id), 200, {
+      symbol: parsed.symbol,
+      targets: limitedTargets.length,
+    });
+
     return NextResponse.json(
       {
         success: true,

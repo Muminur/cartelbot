@@ -5,6 +5,8 @@ import { User } from "@/lib/db/models/User";
 import { TIER_CONFIGS } from "@/lib/subscription/constants";
 import { isValidDistribution } from "@/lib/binance/risk-manager";
 import { z } from "zod";
+import { rateLimit } from "@/lib/middleware";
+import { logUserAction } from "@/lib/audit";
 
 const updateSettingsSchema = z.object({
   maxPositionSize: z.number().min(10).max(100000).optional(),
@@ -36,6 +38,9 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       );
     }
+
+    const rateLimitError = await rateLimit(user.email, "api");
+    if (rateLimitError) return rateLimitError;
 
     await connectDB();
 
@@ -88,6 +93,9 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
+
+    const rateLimitError = await rateLimit(user.email, "api");
+    if (rateLimitError) return rateLimitError;
 
     const body = await request.json();
     const validation = updateSettingsSchema.safeParse(body);
@@ -202,6 +210,10 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    await logUserAction(request, "user.settings.update", String(updatedUser._id), 200, {
+      updatedFields: Object.keys(validation.data),
+    });
 
     return NextResponse.json({
       success: true,

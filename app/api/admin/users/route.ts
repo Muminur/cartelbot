@@ -4,6 +4,9 @@ import { connectDB } from "@/lib/db";
 import { User } from "@/lib/db/models";
 import { escapeRegex, validatePagination, isValidObjectId } from "@/lib/utils/validation";
 import { serializeDocuments, serializeDocument } from "@/lib/utils/serialize";
+import { requireWhitelistedIp } from "@/lib/security";
+import { rateLimit } from "@/lib/middleware";
+import { logAdminAction } from "@/lib/audit";
 
 interface UserQuery {
   email?: { $regex: string; $options: string };
@@ -12,8 +15,14 @@ interface UserQuery {
 }
 
 export async function GET(request: Request) {
+  const ipCheck = await requireWhitelistedIp(request);
+  if (ipCheck) return ipCheck;
+
   const adminCheck = await requireAdmin(request);
   if (adminCheck.error) return adminCheck.response;
+
+  const rateLimitError = await rateLimit(adminCheck.user?.email || "unknown", "admin");
+  if (rateLimitError) return rateLimitError;
 
   try {
     await connectDB();
@@ -57,7 +66,11 @@ export async function GET(request: Request) {
       User.countDocuments(query),
     ]);
 
-    // Serialize MongoDB ObjectIds to strings (prevents [object Object] in admin UI)
+    await logAdminAction(request, "admin.user.view", String(adminCheck.user?._id), 200, {
+      totalUsers: total,
+      page,
+    });
+
     return NextResponse.json({
       success: true,
       data: serializeDocuments(users),

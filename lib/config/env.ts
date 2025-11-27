@@ -82,6 +82,11 @@ const envSchema = z.object({
     .regex(/^\d+$/, "TRON_MIN_CONFIRMATIONS must be a number")
     .transform((val) => parseInt(val, 10))
     .default("19"),
+
+  ADMIN_IP_WHITELIST: z
+    .string()
+    .optional()
+    .default(""),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -124,6 +129,7 @@ function getEnv(): Env {
       ADMIN_EMAILS: process.env.ADMIN_EMAILS,
       PAYMENT_WALLET_ADDRESS: process.env.PAYMENT_WALLET_ADDRESS,
       TRON_MIN_CONFIRMATIONS: process.env.TRON_MIN_CONFIRMATIONS,
+      ADMIN_IP_WHITELIST: process.env.ADMIN_IP_WHITELIST,
     };
 
     const parsed = envSchema.safeParse(env);
