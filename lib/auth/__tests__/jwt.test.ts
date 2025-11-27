@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 import {
   generateMagicLinkToken,
   generateSessionToken,

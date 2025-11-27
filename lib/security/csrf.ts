@@ -12,6 +12,9 @@ interface CsrfToken {
 }
 
 const tokenStore = new Map<string, CsrfToken>();
+const CLEANUP_INTERVAL = 300000;
+
+let cleanupTimer: NodeJS.Timeout | null = null;
 
 function cleanupExpiredTokens(): void {
   const now = Date.now();
@@ -22,13 +25,32 @@ function cleanupExpiredTokens(): void {
   }
 }
 
-setInterval(cleanupExpiredTokens, 300000);
+function startCleanup() {
+  if (cleanupTimer) return;
+
+  cleanupTimer = setInterval(cleanupExpiredTokens, CLEANUP_INTERVAL);
+
+  // Prevent timer from blocking Node.js exit
+  if (cleanupTimer.unref) {
+    cleanupTimer.unref();
+  }
+}
+
+export function stopCsrfCleanup(): void {
+  if (cleanupTimer) {
+    clearInterval(cleanupTimer);
+    cleanupTimer = null;
+  }
+}
 
 export function generateCsrfToken(sessionId: string): string {
   const token = crypto.randomBytes(CSRF_TOKEN_LENGTH).toString("hex");
   const expires = Date.now() + TOKEN_EXPIRY;
 
   tokenStore.set(sessionId, { token, expires });
+
+  // Start cleanup timer on first token generation
+  startCleanup();
 
   return token;
 }
@@ -42,7 +64,16 @@ export function verifyCsrfToken(sessionId: string, providedToken: string): boole
     return false;
   }
 
-  return crypto.timingSafeEqual(Buffer.from(stored.token), Buffer.from(providedToken));
+  // Validate token lengths match before timing-safe comparison
+  if (stored.token.length !== providedToken.length) {
+    return false;
+  }
+
+  try {
+    return crypto.timingSafeEqual(Buffer.from(stored.token), Buffer.from(providedToken));
+  } catch {
+    return false;
+  }
 }
 
 export function getCsrfTokenFromRequest(request: Request): string | null {

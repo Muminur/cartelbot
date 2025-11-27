@@ -9,14 +9,32 @@ const NONCE_HEADER = "x-nonce";
 const nonceCache = new Map<string, number>();
 const NONCE_CLEANUP_INTERVAL = 600000;
 
-setInterval(() => {
-  const now = Date.now();
-  for (const [nonce, timestamp] of nonceCache.entries()) {
-    if (now - timestamp > TIMESTAMP_TOLERANCE) {
-      nonceCache.delete(nonce);
+let cleanupTimer: NodeJS.Timeout | null = null;
+
+function startCleanup() {
+  if (cleanupTimer) return;
+
+  cleanupTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [nonce, timestamp] of nonceCache.entries()) {
+      if (now - timestamp > TIMESTAMP_TOLERANCE) {
+        nonceCache.delete(nonce);
+      }
     }
+  }, NONCE_CLEANUP_INTERVAL);
+
+  // Prevent timer from blocking Node.js exit
+  if (cleanupTimer.unref) {
+    cleanupTimer.unref();
   }
-}, NONCE_CLEANUP_INTERVAL);
+}
+
+export function stopNonceCleanup(): void {
+  if (cleanupTimer) {
+    clearInterval(cleanupTimer);
+    cleanupTimer = null;
+  }
+}
 
 function generateSignature(payload: string, secret: string, timestamp: string): string {
   const message = `${timestamp}.${payload}`;
@@ -97,7 +115,37 @@ export async function verifyRequestSignature(
 
   const expectedSignature = generateSignature(payload, secret, timestamp);
 
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
+  // Validate signature lengths match before timing-safe comparison
+  if (signature.length !== expectedSignature.length) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: "INVALID_SIGNATURE",
+          message: "Request signature is invalid",
+          statusCode: 401,
+        },
+      },
+      { status: 401 }
+    );
+  }
+
+  try {
+    const isValid = crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+    if (!isValid) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "INVALID_SIGNATURE",
+            message: "Request signature is invalid",
+            statusCode: 401,
+          },
+        },
+        { status: 401 }
+      );
+    }
+  } catch {
     return NextResponse.json(
       {
         success: false,
@@ -112,6 +160,9 @@ export async function verifyRequestSignature(
   }
 
   nonceCache.set(nonce, requestTime);
+
+  // Start cleanup timer on first request
+  startCleanup();
 
   return null;
 }

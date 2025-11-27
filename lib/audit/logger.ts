@@ -1,4 +1,4 @@
-import AuditLog, { IAuditLog } from "@/lib/db/models/AuditLog";
+import AuditLog from "@/lib/db/models/AuditLog";
 import { connectDB } from "@/lib/db/connection";
 
 interface AuditLogInput {
@@ -31,6 +31,7 @@ export async function createAuditLog(data: AuditLogInput): Promise<void> {
       metadata: data.metadata,
     });
   } catch (error) {
+    // Silent failure in production - audit logs should never break the application
     if (process.env.NODE_ENV === "development") {
       console.error("Failed to create audit log:", error);
     }

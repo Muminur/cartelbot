@@ -7,19 +7,33 @@ interface TokenBucket {
 
 const buckets = new Map<string, TokenBucket>();
 const CLEANUP_INTERVAL = 300000;
+const BUCKET_EXPIRY_TIME = 3600000;
 
 let cleanupTimer: NodeJS.Timeout | null = null;
 
 function startCleanup() {
   if (cleanupTimer) return;
+
   cleanupTimer = setInterval(() => {
     const now = Date.now();
     for (const [key, bucket] of buckets.entries()) {
-      if (now - bucket.lastRefill > 3600000) {
+      if (now - bucket.lastRefill > BUCKET_EXPIRY_TIME) {
         buckets.delete(key);
       }
     }
   }, CLEANUP_INTERVAL);
+
+  // Prevent timer from blocking Node.js exit
+  if (cleanupTimer.unref) {
+    cleanupTimer.unref();
+  }
+}
+
+export function stopCleanup(): void {
+  if (cleanupTimer) {
+    clearInterval(cleanupTimer);
+    cleanupTimer = null;
+  }
 }
 
 interface RateLimitConfig {
