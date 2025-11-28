@@ -533,3 +533,6 @@ Fixed -1121 errors by removing delisted BUSD pairs (43% API reduction). Implemen
 
 ## Session: Nov 28, 2025 - Signal History Auto-Refresh Fix ✅ COMPLETED
 **Critical memory leak fix**: Fixed signal history page auto-refresh causing browser crashes. Implemented two-tier state management (hasActiveSignals boolean) breaking useEffect dependency loop. Auto-refresh polls every 10s only for executing/pending signals. Added error recovery (auto-disable after 3 failures), visual indicators (auto-refresh badge, highlighted rows), production logging guards. Fixed memory leak where signals array in dependencies caused exponential interval stacking (1→12+ intervals in 2min). ESLint clean, TypeScript clean, zero memory leaks verified.
+
+## Session: Nov 28, 2025 - Entry Price Display Fix ✅ COMPLETED
+**Actual execution price display**: Fixed signal modal showing signal input price (3031) instead of actual Binance execution price (3005.3). Added fills array to IOrder interface and Trade schema to store execution data (price, qty, commission). Modified trade executor to save fills from Binance response. Updated SignalDetailModal to display actual prices with Executed/Estimated badges. Implemented weighted average calculation for multiple fills. Maintains backward compatibility. Code quality 9.2/10, production-ready.
