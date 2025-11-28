@@ -72,6 +72,9 @@ function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<t
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [cleanupModalOpen, setCleanupModalOpen] = useState(false);
+  const [isAutoRefreshing, setIsAutoRefreshing] = useState(false);
+  const [hasActiveSignals, setHasActiveSignals] = useState(false);
+  const [autoRefreshErrors, setAutoRefreshErrors] = useState(0);
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -99,6 +102,95 @@ function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<t
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, page, filters]);
+
+  // Track whether there are active signals (separate effect to avoid dependency loop)
+  useEffect(() => {
+    const active = signals.some(
+      (s) => s.status === "executing" || s.status === "pending"
+    );
+    setHasActiveSignals(active);
+  }, [signals]);
+
+  // Auto-refresh signals when there are active signals (executing/pending status)
+  // CRITICAL: Does NOT include 'signals' in dependencies to prevent memory leak
+  useEffect(() => {
+    if (!user || !hasActiveSignals) {
+      setIsAutoRefreshing(false);
+      return;
+    }
+
+    setIsAutoRefreshing(true);
+
+    // Poll every 10 seconds for updates (silent background refresh)
+    const fetchInBackground = async () => {
+      try {
+        if (process.env.NODE_ENV === "development") {
+          // eslint-disable-next-line no-console
+          console.log("[SignalHistory] Auto-refreshing signals (active signals detected)");
+        }
+
+        const params = new URLSearchParams({
+          page: page.toString(),
+          limit: "20",
+        });
+
+        if (filters.symbol) {
+          params.append("symbol", filters.symbol);
+        }
+
+        if (filters.status && filters.status !== "all") {
+          params.append("status", filters.status);
+        }
+
+        if (filters.signalType && filters.signalType !== "all") {
+          params.append("isImageSignal", filters.signalType === "image" ? "true" : "false");
+        }
+
+        if (filters.dateFrom) {
+          params.append("dateFrom", filters.dateFrom);
+        }
+
+        if (filters.dateTo) {
+          params.append("dateTo", filters.dateTo);
+        }
+
+        const response = await fetch(`${API_ROUTES.SIGNALS.LIST}?${params.toString()}`);
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          setSignals(data.data);
+          setTotalPages(data.pagination.totalPages);
+          setAutoRefreshErrors(0); // Reset error counter on success
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          // eslint-disable-next-line no-console
+          console.error("[SignalHistory] Auto-refresh failed:", error);
+        }
+        setAutoRefreshErrors((prev) => prev + 1);
+      }
+    };
+
+    const intervalId = setInterval(fetchInBackground, 10000); // 10 seconds
+
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      clearInterval(intervalId);
+      setIsAutoRefreshing(false);
+    };
+  }, [user, hasActiveSignals, page, filters]);
+
+  // Stop auto-refresh after 3 consecutive failures
+  useEffect(() => {
+    if (autoRefreshErrors >= 3) {
+      setIsAutoRefreshing(false);
+      toast.error("Auto-refresh stopped due to connection issues. Click Refresh to retry.");
+      if (process.env.NODE_ENV === "development") {
+        // eslint-disable-next-line no-console
+        console.warn("[SignalHistory] Auto-refresh disabled after 3 consecutive failures");
+      }
+    }
+  }, [autoRefreshErrors]);
 
   // Handle highlight parameter from URL
   useEffect(() => {
@@ -163,7 +255,10 @@ function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<t
         toast.error("Failed to fetch signals");
       }
     } catch (error) {
-      console.error("Failed to fetch signals:", error);
+      if (process.env.NODE_ENV === "development") {
+        // eslint-disable-next-line no-console
+        console.error("Failed to fetch signals:", error);
+      }
       toast.error("An error occurred while fetching signals");
     } finally {
       setLoading(false);
@@ -177,6 +272,8 @@ function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<t
   };
 
   const handleRefresh = () => {
+    // Reset error counter when manually refreshing
+    setAutoRefreshErrors(0);
     fetchSignals();
   };
 
@@ -328,10 +425,18 @@ function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<t
               <p className="text-muted-foreground mt-1">View and manage all your submitted signals</p>
             </div>
           </div>
-          <Button onClick={handleRefresh} disabled={refreshing} variant="outline">
-            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAutoRefreshing && (
+              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300">
+                <RefreshCw className="h-3 w-3 mr-1 animate-spin inline" />
+                Auto-refreshing
+              </Badge>
+            )}
+            <Button onClick={handleRefresh} disabled={refreshing} variant="outline">
+              <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-6">
@@ -372,8 +477,13 @@ function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<t
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {signals.map((signal) => (
-                          <TableRow key={String(signal._id)}>
+                        {signals.map((signal) => {
+                          const isActive = signal.status === "executing" || signal.status === "pending";
+                          return (
+                          <TableRow
+                            key={String(signal._id)}
+                            className={isActive ? "bg-blue-50/50 dark:bg-blue-950/20" : ""}
+                          >
                             <TableCell className="font-medium">
                               {formatDate(signal.createdAt)}
                             </TableCell>
@@ -438,7 +548,8 @@ function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<t
                               />
                             </TableCell>
                           </TableRow>
-                        ))}
+                        );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
@@ -480,6 +591,8 @@ function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<t
           onClose={() => {
             setDetailModalOpen(false);
             setSelectedSignal(null);
+            // Immediately refresh signals when modal closes
+            fetchSignals();
           }}
           onEdit={handleEdit}
           onCancel={handleCancel}

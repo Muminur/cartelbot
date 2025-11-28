@@ -91,7 +91,10 @@ export default function AdminSignalsPage() {
         toast.error(data.error?.message || "Failed to load signals");
       }
     } catch (error) {
-      console.error("Error fetching signals:", error);
+      if (process.env.NODE_ENV === "development") {
+        // eslint-disable-next-line no-console
+        console.error("Error fetching signals:", error);
+      }
       toast.error("Failed to load signals");
     } finally {
       setLoading(false);
