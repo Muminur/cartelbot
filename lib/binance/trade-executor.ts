@@ -266,6 +266,12 @@ export async function executeSignalTrade(
         cummulativeQuoteQty: parseFloat(buyOrder.cummulativeQuoteQty || "0"),
         status: buyOrder.status,
         timestamp: new Date(buyOrder.transactTime || Date.now()),
+        fills: buyOrder.fills?.map(f => ({
+          price: f.price,
+          qty: f.qty,
+          commission: f.commission,
+          commissionAsset: f.commissionAsset,
+        })),
       },
       entryPrice: executedPrice,
       quantity: executedQty,

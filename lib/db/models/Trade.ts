@@ -56,6 +56,16 @@ const orderSchema = new Schema<IOrder>(
       type: Date,
       required: true,
     },
+    fills: {
+      type: [{
+        price: { type: String, required: true },
+        qty: { type: String, required: true },
+        commission: { type: String, required: true },
+        commissionAsset: { type: String, required: true },
+      }],
+      // Optional - only for MARKET orders that were filled
+      // Contains actual execution prices from Binance (multiple fills possible)
+    },
   },
   { _id: false }
 );

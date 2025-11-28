@@ -76,6 +76,12 @@ export interface IOrder {
   cummulativeQuoteQty: number;
   status: string;
   timestamp: Date;
+  fills?: Array<{
+    price: string;
+    qty: string;
+    commission: string;
+    commissionAsset: string;
+  }>;
 }
 
 export interface ITradeError {

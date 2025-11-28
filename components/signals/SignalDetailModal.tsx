@@ -1239,14 +1239,68 @@ export default function SignalDetailModal({
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">
               <Target className="h-4 w-4" />
               Entry Prices
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {signal.entries.map((entry, i) => (
-                <Badge key={i} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                  {formatPrice(entry)}
+              {trade?.buyOrder?.fills && trade.buyOrder.fills.length > 0 && (
+                <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300">
+                  Executed
                 </Badge>
-              ))}
+              )}
+              {!trade && (
+                <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-300">
+                  Estimated
+                </Badge>
+              )}
             </div>
+            {/*
+              CRITICAL: Display ACTUAL execution prices from Binance, not signal input prices
+              - trade.buyOrder.fills[].price = actual execution price from Binance
+              - signal.entries[] = user input prices from signal parsing
+
+              Example:
+              - User inputs: "Entry: 3031" → signal.entries[0] = 3031
+              - Binance executes at: 3005.3 → trade.buyOrder.fills[0].price = "3005.30"
+              - Display: 3005.3 (executed), NOT 3031 (signal input)
+            */}
+            <div className="flex flex-wrap gap-2">
+              {trade?.buyOrder?.fills && trade.buyOrder.fills.length > 0 ? (
+                // Show ACTUAL execution prices from Binance fills
+                trade.buyOrder.fills.map((fill, i) => (
+                  <div key={i} className="flex flex-col gap-1">
+                    <Badge variant="default" className="bg-green-600 text-white">
+                      ${parseFloat(fill.price).toFixed(4)}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground text-center">
+                      {parseFloat(fill.qty).toFixed(6)} {signal.symbol.replace('USDT', '')}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                // Fallback: Show signal input prices (estimated) when no trade exists
+                signal.entries.map((entry, i) => (
+                  <Badge key={i} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                    {formatPrice(entry)}
+                  </Badge>
+                ))
+              )}
+            </div>
+            {/* Show weighted average entry price if multiple fills */}
+            {trade?.buyOrder?.fills && trade.buyOrder.fills.length > 1 && (
+              <div className="text-xs text-muted-foreground mt-1">
+                <span className="font-medium">Average Entry Price:</span>{" "}
+                <span className="font-bold text-foreground">
+                  ${(() => {
+                    const totalCost = trade.buyOrder.fills.reduce(
+                      (sum, fill) => sum + parseFloat(fill.price) * parseFloat(fill.qty),
+                      0
+                    );
+                    const totalQty = trade.buyOrder.fills.reduce(
+                      (sum, fill) => sum + parseFloat(fill.qty),
+                      0
+                    );
+                    return totalQty > 0 ? (totalCost / totalQty).toFixed(4) : "0.00";
+                  })()}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="space-y-3">
@@ -1458,7 +1512,7 @@ export default function SignalDetailModal({
                               <div>
                                 <span className="text-muted-foreground font-medium">Entry Price:</span>
                                 <div className="mt-1 font-medium text-foreground">
-                                  ${trade.buyOrder.price?.toFixed(6)}
+                                  ${trade.entryPrice.toFixed(6)}
                                 </div>
                               </div>
                               <div>
@@ -1496,6 +1550,29 @@ export default function SignalDetailModal({
                           <span className="text-muted-foreground">Invested:</span>
                           <span className="ml-2 font-medium text-foreground">${trade.investedAmount.toFixed(2)}</span>
                         </div>
+                        {trade.buyOrder.fills && trade.buyOrder.fills.length > 0 && (
+                          <div className="col-span-2 mt-2 pt-2 border-t border-blue-200 dark:border-blue-700">
+                            <div className="text-xs font-medium text-blue-900 dark:text-blue-300 mb-1">
+                              Execution Details ({trade.buyOrder.fills.length} fill{trade.buyOrder.fills.length > 1 ? 's' : ''}):
+                            </div>
+                            <div className="space-y-1">
+                              {trade.buyOrder.fills.map((fill, idx) => (
+                                <div key={idx} className="text-xs text-muted-foreground flex justify-between">
+                                  <span>
+                                    Fill #{idx + 1}: {parseFloat(fill.qty).toFixed(6)} @ ${parseFloat(fill.price).toFixed(4)}
+                                  </span>
+                                  <span className="text-foreground font-medium">
+                                    ${(parseFloat(fill.price) * parseFloat(fill.qty)).toFixed(2)}
+                                  </span>
+                                </div>
+                              ))}
+                              <div className="text-xs text-blue-700 dark:text-blue-400 flex justify-between pt-1 border-t border-blue-200 dark:border-blue-700">
+                                <span className="font-medium">Average Entry Price:</span>
+                                <span className="font-bold">${trade.entryPrice.toFixed(4)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
