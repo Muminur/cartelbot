@@ -107,6 +107,21 @@ export class BinanceClient {
         return "Invalid API key format.";
       case -1022:
         return "Invalid signature.";
+      case -1013:
+        // Filter failure - provide detailed explanation
+        if (defaultMsg.includes("PERCENT_PRICE_BY_SIDE")) {
+          return `Order price is too far from current market price. ${defaultMsg}. Please check your signal values.`;
+        }
+        if (defaultMsg.includes("LOT_SIZE")) {
+          return `Order quantity violates LOT_SIZE filter. ${defaultMsg}. Please adjust quantity.`;
+        }
+        if (defaultMsg.includes("PRICE_FILTER")) {
+          return `Order price violates PRICE_FILTER. ${defaultMsg}. Please adjust price.`;
+        }
+        if (defaultMsg.includes("MIN_NOTIONAL")) {
+          return `Order value too small (below minimum notional). ${defaultMsg}. Please increase investment amount.`;
+        }
+        return `Order filter validation failed: ${defaultMsg}`;
       case 429:
         return "Rate limit exceeded. Please wait before retrying.";
       default:

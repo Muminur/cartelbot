@@ -267,6 +267,12 @@ export interface BinanceSymbolFilter {
   stepSize?: string;
   minNotional?: string;
   maxNotional?: string;
+  // PERCENT_PRICE_BY_SIDE filter fields
+  bidMultiplierUp?: string;
+  bidMultiplierDown?: string;
+  askMultiplierUp?: string;
+  askMultiplierDown?: string;
+  avgPriceMins?: number;
 }
 
 export interface BinanceSymbolInfo {

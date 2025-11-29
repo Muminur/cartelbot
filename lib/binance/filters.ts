@@ -132,6 +132,95 @@ export function validateNotional(
   };
 }
 
+/**
+ * Validate PERCENT_PRICE_BY_SIDE filter
+ * Ensures order price is within allowed percentage range of market price
+ *
+ * @param orderPrice - The price of the order being placed
+ * @param currentMarketPrice - Current market price (last traded price or weighted avg)
+ * @param side - Order side (BUY or SELL)
+ * @param filters - Exchange filters for the symbol
+ * @returns Validation result with errors if price violates filter
+ */
+export function validatePercentPriceBySide(
+  orderPrice: number,
+  currentMarketPrice: number,
+  side: "BUY" | "SELL",
+  filters: BinanceSymbolFilter[]
+): FilterValidationResult {
+  const errors: string[] = [];
+
+  const percentPriceFilter = filters.find((f) => f.filterType === "PERCENT_PRICE_BY_SIDE");
+  if (!percentPriceFilter) {
+    // Filter not present - validation passes
+    return { isValid: true, errors: [] };
+  }
+
+  const {
+    bidMultiplierUp,
+    bidMultiplierDown,
+    askMultiplierUp,
+    askMultiplierDown,
+  } = percentPriceFilter;
+
+  if (side === "BUY") {
+    // For BUY orders: check against bid multipliers
+    if (bidMultiplierUp) {
+      const maxAllowedPrice = currentMarketPrice * parseFloat(bidMultiplierUp);
+      if (orderPrice > maxAllowedPrice) {
+        const percentAbove = ((orderPrice / currentMarketPrice - 1) * 100).toFixed(2);
+        errors.push(
+          `Buy order price ${orderPrice.toFixed(8)} is too high. ` +
+          `Maximum allowed: ${maxAllowedPrice.toFixed(8)} ` +
+          `(${percentAbove}% above market price ${currentMarketPrice.toFixed(8)})`
+        );
+      }
+    }
+
+    if (bidMultiplierDown) {
+      const minAllowedPrice = currentMarketPrice * parseFloat(bidMultiplierDown);
+      if (orderPrice < minAllowedPrice) {
+        const percentBelow = ((1 - orderPrice / currentMarketPrice) * 100).toFixed(2);
+        errors.push(
+          `Buy order price ${orderPrice.toFixed(8)} is too low. ` +
+          `Minimum allowed: ${minAllowedPrice.toFixed(8)} ` +
+          `(${percentBelow}% below market price ${currentMarketPrice.toFixed(8)})`
+        );
+      }
+    }
+  } else if (side === "SELL") {
+    // For SELL orders: check against ask multipliers
+    if (askMultiplierUp) {
+      const maxAllowedPrice = currentMarketPrice * parseFloat(askMultiplierUp);
+      if (orderPrice > maxAllowedPrice) {
+        const percentAbove = ((orderPrice / currentMarketPrice - 1) * 100).toFixed(2);
+        errors.push(
+          `Sell order price ${orderPrice.toFixed(8)} is too high. ` +
+          `Maximum allowed: ${maxAllowedPrice.toFixed(8)} ` +
+          `(${percentAbove}% above market price ${currentMarketPrice.toFixed(8)})`
+        );
+      }
+    }
+
+    if (askMultiplierDown) {
+      const minAllowedPrice = currentMarketPrice * parseFloat(askMultiplierDown);
+      if (orderPrice < minAllowedPrice) {
+        const percentBelow = ((1 - orderPrice / currentMarketPrice) * 100).toFixed(2);
+        errors.push(
+          `Sell order price ${orderPrice.toFixed(8)} is too low. ` +
+          `Minimum allowed: ${minAllowedPrice.toFixed(8)} ` +
+          `(${percentBelow}% below market price ${currentMarketPrice.toFixed(8)})`
+        );
+      }
+    }
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+}
+
 export function validateAllFilters(
   price: number,
   quantity: number,
@@ -156,5 +245,70 @@ export function validateAllFilters(
     errors: allErrors,
     adjustedPrice: priceValidation.adjustedPrice,
     adjustedQuantity: quantityValidation.adjustedQuantity,
+  };
+}
+
+/**
+ * Validate OCO order prices against all filters including PERCENT_PRICE_BY_SIDE
+ *
+ * @param takeProfitPrice - Price for the take profit (LIMIT_MAKER) order
+ * @param stopPrice - Stop price for the stop loss order
+ * @param stopLimitPrice - Limit price for the stop loss order
+ * @param quantity - Order quantity
+ * @param currentMarketPrice - Current market price
+ * @param filters - Exchange filters for the symbol
+ * @returns Validation result with detailed errors
+ */
+export function validateOCOFilters(
+  takeProfitPrice: number,
+  stopPrice: number,
+  stopLimitPrice: number,
+  quantity: number,
+  currentMarketPrice: number,
+  filters: BinanceSymbolFilter[]
+): FilterValidationResult {
+  const errors: string[] = [];
+
+  // Validate take profit price (SELL order above market)
+  const tpValidation = validatePercentPriceBySide(
+    takeProfitPrice,
+    currentMarketPrice,
+    "SELL",
+    filters
+  );
+  errors.push(...tpValidation.errors.map(e => `Take Profit: ${e}`));
+
+  // Validate stop price (SELL order below market)
+  const stopValidation = validatePercentPriceBySide(
+    stopPrice,
+    currentMarketPrice,
+    "SELL",
+    filters
+  );
+  errors.push(...stopValidation.errors.map(e => `Stop Loss: ${e}`));
+
+  // Validate stop limit price (SELL order below market)
+  const stopLimitValidation = validatePercentPriceBySide(
+    stopLimitPrice,
+    currentMarketPrice,
+    "SELL",
+    filters
+  );
+  errors.push(...stopLimitValidation.errors.map(e => `Stop Limit: ${e}`));
+
+  // Also run standard filter validation
+  const tpStandardValidation = validateAllFilters(takeProfitPrice, quantity, filters);
+  const stopStandardValidation = validateAllFilters(stopPrice, quantity, filters);
+  const stopLimitStandardValidation = validateAllFilters(stopLimitPrice, quantity, filters);
+
+  errors.push(
+    ...tpStandardValidation.errors,
+    ...stopStandardValidation.errors,
+    ...stopLimitStandardValidation.errors
+  );
+
+  return {
+    isValid: errors.length === 0,
+    errors,
   };
 }

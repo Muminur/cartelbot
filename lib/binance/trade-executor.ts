@@ -1,5 +1,5 @@
 import { BinanceClient } from "./client";
-import { validateAllFilters } from "./filters";
+import { validateAllFilters, validateOCOFilters } from "./filters";
 import { getUserApiKeys } from "@/lib/db/helpers";
 import { decrypt } from "@/lib/encryption";
 import { Signal, Trade } from "@/lib/db/models";
@@ -1192,9 +1192,57 @@ export async function createOCOOrders(
       const stopLimitValidation = validateAllFilters(rawStopLimitPrice, adjustedQty, filters);
       const adjustedStopLimitPrice = stopLimitValidation.adjustedPrice || rawStopLimitPrice;
 
+      // CRITICAL: Fetch fresh market price for PERCENT_PRICE_BY_SIDE validation
+      // This prevents stale price issues that can cause -1013 filter failures
+      const freshTicker = await client.get24hrTicker(trade.symbol);
+      const currentMarketPrice = parseFloat(freshTicker.lastPrice);
+
+      // Validate OCO prices against PERCENT_PRICE_BY_SIDE filter BEFORE API call
+      // This prevents wasting API calls and provides better error messages to users
+      const ocoFilterValidation = validateOCOFilters(
+        adjustedPrice,          // Take profit price
+        adjustedStopPrice,      // Stop loss stop price
+        adjustedStopLimitPrice, // Stop loss limit price
+        adjustedQty,            // Order quantity
+        currentMarketPrice,     // Fresh market price
+        filters
+      );
+
+      if (!ocoFilterValidation.isValid) {
+        const errorMsg = `OCO filter validation failed for target ${i + 1}: ${ocoFilterValidation.errors.join("; ")}`;
+        console.error(`[OCO] ${trade.symbol} - ${errorMsg}`);
+
+        // Update signal with detailed error
+        await Signal.findByIdAndUpdate(trade.signalId, {
+          status: "failed",
+          executionError: errorMsg,
+          executionErrorCode: "-1013",
+          executionErrorTimestamp: new Date(),
+          failureReason: "FILTER_VIOLATION",
+        });
+
+        // Update trade with error details
+        await Trade.findByIdAndUpdate(trade._id, {
+          status: "cancelled",
+          closeReason: "cancelled",
+          closeReasonDetail: errorMsg,
+          lastError: {
+            message: errorMsg,
+            code: "-1013",
+            timestamp: new Date(),
+          },
+        });
+
+        throw new ValidationError(
+          `${errorMsg}. Current market price: ${currentMarketPrice.toFixed(8)}. ` +
+          `Please check your signal and ensure target/stop loss prices are within allowed ranges.`
+        );
+      }
+
       // eslint-disable-next-line no-console
       if (process.env.NODE_ENV !== 'production') console.log(`[OCO] ${trade.symbol} - Creating OCO for target ${i + 1}/${targets.length}:`, {
         symbol: trade.symbol,
+        currentMarketPrice: currentMarketPrice,
         targetPrice: targetPrice,
         adjustedPrice: adjustedPrice,
         quantity: qtyForTarget.toFixed(8),
@@ -1206,6 +1254,7 @@ export async function createOCOOrders(
         adjustedStopPrice: adjustedStopPrice,
         rawStopLimitPrice: rawStopLimitPrice,
         adjustedStopLimitPrice: adjustedStopLimitPrice,
+        percentPriceValidation: "PASSED",
       });
 
       try {
