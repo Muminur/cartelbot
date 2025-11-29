@@ -10,6 +10,7 @@ import {
   Activity,
   Radio,
   CreditCard,
+  Trash2,
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -22,6 +23,7 @@ const ADMIN_NAV_ITEMS = [
   { name: "System", href: "/admin/system", icon: Activity },
   { name: "Signals", href: "/admin/signals", icon: Radio },
   { name: "Subscriptions", href: "/admin/subscriptions", icon: CreditCard },
+  { name: "Cleanup Orders", href: "/admin/cleanup-orders", icon: Trash2 },
 ];
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
