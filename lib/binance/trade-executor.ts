@@ -1116,20 +1116,27 @@ export async function createOCOOrders(
       timestamp: Date;
     }> = [];
 
-    for (let i = 0; i < targets.length; i++) {
-      // CRITICAL FIX: Fetch fresh balance BEFORE each OCO creation
-      // Previous OCO orders lock coins on Binance, reducing available balance
-      if (process.env.NODE_ENV !== 'production') console.log(`[OCO] ${trade.symbol} - Fetching fresh balance before OCO ${i}...`);
-      const currentAccountInfo = await client.getAccount();
-      const currentAssetBalance = currentAccountInfo.balances.find(b => b.asset === baseAsset);
-      const currentAvailableBalance = parseFloat(currentAssetBalance?.free || '0');
-      const currentLockedBalance = parseFloat(currentAssetBalance?.locked || '0');
+    // CRITICAL FIX: Client-side balance tracking to avoid Binance settlement lag
+    // Binance's /api/v3/account endpoint has 100-500ms delay in updating "locked" balance
+    // after OCO creation, causing "Insufficient balance" errors on subsequent OCOs
+    let trackedAvailableBalance = currentAvailableBalance; // Start with current balance
+    let trackedLockedBalance = 0; // Track cumulative locked balance from our OCOs
 
+    if (process.env.NODE_ENV !== 'production') console.log(
+      `[OCO] ${trade.symbol} - Starting OCO creation with client-side balance tracking:`,
+      `Initial available=${trackedAvailableBalance.toFixed(8)} ${baseAsset},`,
+      `Target count=${targets.length},`,
+      `Distribution=${distribution.map(d => d.toFixed(1)).join('%, ')}%`
+    );
+
+    for (let i = 0; i < targets.length; i++) {
+      // Use client-side tracked balance instead of fetching from Binance each iteration
+      // This prevents race condition where Binance hasn't updated locked balance yet
       if (process.env.NODE_ENV !== 'production') console.log(
-        `[OCO] ${trade.symbol} - Fresh balance before OCO ${i}:`,
-        `Available=${currentAvailableBalance.toFixed(8)},`,
-        `Locked=${currentLockedBalance.toFixed(8)},`,
-        `Locked by previous OCOs=${(currentLockedBalance - initialLockedBalance).toFixed(8)}`
+        `[OCO] ${trade.symbol} - Balance before OCO ${i}:`,
+        `Tracked available=${trackedAvailableBalance.toFixed(8)},`,
+        `Tracked locked=${trackedLockedBalance.toFixed(8)},`,
+        `Previous OCOs locked=${trackedLockedBalance.toFixed(8)}`
       );
 
       const targetPrice = targets[i];
@@ -1170,14 +1177,29 @@ export async function createOCOOrders(
       }
 
       // Check if we have enough free balance remaining for this OCO
-      // (previous OCO orders may have locked coins on Binance)
-      if (adjustedQty > currentAvailableBalance - TRADE_EXECUTION.BALANCE_TOLERANCE) {
+      // Use client-side tracked balance (prevents race condition with Binance API lag)
+      const availableForThisOCO = trackedAvailableBalance - trackedLockedBalance;
+
+      if (adjustedQty > availableForThisOCO + TRADE_EXECUTION.BALANCE_TOLERANCE) {
         const originalQty = adjustedQty;
-        adjustedQty = currentAvailableBalance;
+
+        // Check if we have ANY balance left
+        if (availableForThisOCO < TRADE_EXECUTION.BALANCE_TOLERANCE) {
+          console.warn(
+            `[OCO] ${trade.symbol} - No balance remaining for target ${i}. ` +
+            `Available: ${availableForThisOCO.toFixed(8)} ${baseAsset}, ` +
+            `Already locked: ${trackedLockedBalance.toFixed(8)} ${baseAsset}. ` +
+            `Skipping remaining targets.`
+          );
+          continue; // Skip this and remaining targets
+        }
+
+        // Adjust to use all remaining balance
+        adjustedQty = availableForThisOCO;
 
         console.warn(
-          `[OCO] ${trade.symbol} - Insufficient free balance for target ${i}. ` +
-          `Requested: ${originalQty.toFixed(8)}, Available: ${currentAvailableBalance.toFixed(8)}. ` +
+          `[OCO] ${trade.symbol} - Insufficient balance for target ${i}. ` +
+          `Requested: ${originalQty.toFixed(8)}, Available: ${availableForThisOCO.toFixed(8)} ${baseAsset}. ` +
           `Adjusting quantity to use all remaining balance.`
         );
 
@@ -1346,12 +1368,18 @@ export async function createOCOOrders(
 
         totalAllocatedQty += adjustedQty;
 
-        // Log successful OCO creation
+        // CRITICAL: Update client-side balance tracking immediately after OCO creation
+        // This prevents race condition - Binance API may take 100-500ms to reflect locked balance
+        trackedLockedBalance += adjustedQty;
+        const remainingBalance = trackedAvailableBalance - trackedLockedBalance;
+
+        // Log successful OCO creation with balance tracking
         if (process.env.NODE_ENV !== 'production') console.log(
           `[OCO] ${trade.symbol} - OCO ${i} created successfully. ` +
           `Locked ${adjustedQty.toFixed(8)} ${baseAsset} (${percentage}% of position). ` +
-          `Total allocated so far: ${totalAllocatedQty.toFixed(8)} / ${ALLOCATION_CAP.toFixed(8)} ${baseAsset} ` +
-          `(${(totalAllocatedQty / ALLOCATION_CAP * 100).toFixed(2)}%)`
+          `Total allocated: ${totalAllocatedQty.toFixed(8)} / ${ALLOCATION_CAP.toFixed(8)} ${baseAsset} ` +
+          `(${(totalAllocatedQty / ALLOCATION_CAP * 100).toFixed(2)}%). ` +
+          `Remaining available: ${remainingBalance.toFixed(8)} ${baseAsset}`
         );
 
         // Store both OCO orders (take profit LIMIT_MAKER and stop loss STOP_LOSS_LIMIT)
@@ -1409,6 +1437,40 @@ export async function createOCOOrders(
           timestamp: new Date(),
         });
       }
+    }
+
+    // Verify balance tracking against Binance (optional, for safety)
+    // This helps detect drift between client-side tracking and actual Binance state
+    try {
+      const finalAccount = await client.getAccount();
+      const finalAssetBalance = finalAccount.balances.find(b => b.asset === baseAsset);
+      const finalLockedBalance = parseFloat(finalAssetBalance?.locked || '0');
+      const actuallyLocked = finalLockedBalance - initialLockedBalance;
+
+      if (process.env.NODE_ENV !== 'production') console.log(
+        `[OCO] ${trade.symbol} - Balance verification after OCO creation:`,
+        `Client-side tracked locked: ${trackedLockedBalance.toFixed(8)} ${baseAsset},`,
+        `Binance reported locked: ${actuallyLocked.toFixed(8)} ${baseAsset},`,
+        `Difference: ${Math.abs(trackedLockedBalance - actuallyLocked).toFixed(8)} ${baseAsset}`
+      );
+
+      // Warn if significant drift (>1% difference)
+      const drift = Math.abs(trackedLockedBalance - actuallyLocked);
+      if (drift > actualQuantity * 0.01) {
+        console.warn(
+          `[OCO] ${trade.symbol} - Balance tracking drift detected! ` +
+          `Client tracked ${trackedLockedBalance.toFixed(8)}, ` +
+          `Binance shows ${actuallyLocked.toFixed(8)}. ` +
+          `Difference: ${drift.toFixed(8)} ${baseAsset} ` +
+          `(${(drift / actualQuantity * 100).toFixed(2)}%)`
+        );
+      }
+    } catch (verifyError) {
+      // Don't fail the entire process for verification error
+      console.warn(
+        `[OCO] ${trade.symbol} - Balance verification failed (non-critical):`,
+        verifyError instanceof Error ? verifyError.message : String(verifyError)
+      );
     }
 
     // Calculate allocation statistics (with division by zero protection)
