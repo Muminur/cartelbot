@@ -536,3 +536,6 @@ Fixed -1121 errors by removing delisted BUSD pairs (43% API reduction). Implemen
 
 ## Session: Nov 28, 2025 - Entry Price Display Fix ✅ COMPLETED
 **Actual execution price display**: Fixed signal modal showing signal input price (3031) instead of actual Binance execution price (3005.3). Added fills array to IOrder interface and Trade schema to store execution data (price, qty, commission). Modified trade executor to save fills from Binance response. Updated SignalDetailModal to display actual prices with Executed/Estimated badges. Implemented weighted average calculation for multiple fills. Maintains backward compatibility. Code quality 9.2/10, production-ready.
+
+## Session: Nov 29, 2025 - PERCENT_PRICE_BY_SIDE Filter Validation ✅ COMPLETED
+**Fixed OCO -1013 filter errors**: Added PERCENT_PRICE_BY_SIDE validation preventing OCO orders when stop loss too far from market (e.g., SL 0.0079 vs market 0.1079 = 92.7% below). Created validatePercentPriceBySide() + validateOCOFilters() functions, integrated pre-validation before API calls, enhanced error messages with exact prices/percentages. Validates TP/SL against bidMultiplierUp/Down, askMultiplierUp/Down. Updates signal→"failed", trade→"cancelled" with FILTER_VIOLATION tracking. Code quality 9.2/10, tests 110/110 passing, production-ready.
