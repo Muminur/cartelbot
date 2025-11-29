@@ -828,15 +828,36 @@ export async function createOCOOrders(
     if (process.env.NODE_ENV !== 'production') console.log(`[OCO] ${trade.symbol} - Checking for phantom orders...`);
 
     try {
-      // 1. Get all open SELL orders for this symbol from Binance
-      const openOrders = await client.getOpenOrders(trade.symbol);
-      const openSellOrders = openOrders.filter(order => order.side === "SELL");
+      // 1. Get ALL orders for this symbol from Binance (not just "open" ones)
+      // CRITICAL FIX: getOpenOrders() only returns NEW/PARTIALLY_FILLED status
+      // but Binance can have PENDING_CANCEL and other transitional states that STILL lock balance
+      // Using getAllOrders() ensures we detect ALL orders that might be locking balance
+      const allOrders = await client.getAllOrders(trade.symbol, 500);
 
-      if (process.env.NODE_ENV !== 'production') console.log(
-        `[OCO] ${trade.symbol} - Found ${openSellOrders.length} open SELL orders on Binance`
+      // Filter to SELL orders that can lock balance:
+      // - NEW: Active order locking balance
+      // - PARTIALLY_FILLED: Partially executed, remaining qty locked
+      // - PENDING_CANCEL: Being canceled but still locking balance temporarily
+      const BALANCE_LOCKING_STATUSES = ['NEW', 'PARTIALLY_FILLED', 'PENDING_CANCEL'];
+      const balanceLockingOrders = allOrders.filter(order =>
+        order.side === "SELL" &&
+        BALANCE_LOCKING_STATUSES.includes(order.status)
       );
 
-      if (openSellOrders.length > 0) {
+      // Log order status breakdown for diagnostics
+      const statusCounts = allOrders
+        .filter(o => o.side === "SELL")
+        .reduce((acc, order) => {
+          acc[order.status] = (acc[order.status] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
+      if (process.env.NODE_ENV !== 'production') console.log(
+        `[OCO] ${trade.symbol} - Found ${allOrders.length} total orders (${balanceLockingOrders.length} balance-locking SELL orders). ` +
+        `Status breakdown: ${JSON.stringify(statusCounts)}`
+      );
+
+      if (balanceLockingOrders.length > 0) {
         // 2. Get all legitimate orders from our database for this user and symbol
         const userTrades = await Trade.find({
           userId: trade.userId,
@@ -881,10 +902,10 @@ export async function createOCOOrders(
         // legitimate orders. This prevents data loss if database is temporarily out of sync.
         if (legitimateOrderListIds.size === 0 &&
             legitimateIndividualOrderIds.size === 0 &&
-            openSellOrders.length > 0) {
+            balanceLockingOrders.length > 0) {
           console.warn(
             `[OCO] ${trade.symbol} - SAFETY: Skipping phantom cleanup. ` +
-            `Database shows no legitimate orders but Binance has ${openSellOrders.length} open SELL orders. ` +
+            `Database shows no legitimate orders but Binance has ${balanceLockingOrders.length} balance-locking SELL orders. ` +
             `This indicates potential database inconsistency. Manual cleanup recommended.`
           );
           // Continue with OCO creation despite potential phantom orders
@@ -898,7 +919,7 @@ export async function createOCOOrders(
           const skippedOCOOrders: { orderId: number; orderListId: number; reason: string }[] = [];
           const skippedIndividualOrders: { orderId: number; reason: string }[] = [];
 
-          const phantomOCOOrders = openSellOrders.filter(order => {
+          const phantomOCOOrders = balanceLockingOrders.filter(order => {
             // Only check orders that are part of an OCO
             if (!order.orderListId || order.orderListId === -1) {
               return false;
@@ -943,7 +964,7 @@ export async function createOCOOrders(
           });
 
           // 4. Identify phantom individual orders (with 30s age threshold)
-          const phantomIndividualOrders = openSellOrders.filter(order => {
+          const phantomIndividualOrders = balanceLockingOrders.filter(order => {
             // Only check individual orders (not part of OCO)
             if (order.orderListId && order.orderListId !== -1) {
               return false;
@@ -1011,6 +1032,37 @@ export async function createOCOOrders(
             `[OCO] ${trade.symbol} - Found ${phantomIndividualOrders.length} phantom individual orders ` +
             `(orderIds: [${phantomIndividualOrders.map(o => o.orderId).join(", ")}])`
           );
+
+          // Enhanced diagnostics: Log detailed phantom order information
+          if (phantomOCOOrders.length > 0 || phantomIndividualOrders.length > 0) {
+            console.warn(
+              `[OCO] ${trade.symbol} - PHANTOM ORDER DETAILS:\n` +
+              `${phantomOCOOrders.map(o =>
+                `  OCO #${o.orderListId} Order ${o.orderId}: ` +
+                `Status=${o.status}, Qty=${o.origQty}, Price=${o.price}, ` +
+                `Type=${o.type}, Age=${((Date.now() - (o.time || 0)) / 1000).toFixed(1)}s`
+              ).join('\n')}${phantomOCOOrders.length > 0 && phantomIndividualOrders.length > 0 ? '\n' : ''}` +
+              `${phantomIndividualOrders.map(o =>
+                `  Individual Order ${o.orderId}: ` +
+                `Status=${o.status}, Qty=${o.origQty}, Price=${o.price}, ` +
+                `Type=${o.type}, Age=${((Date.now() - (o.time || 0)) / 1000).toFixed(1)}s`
+              ).join('\n')}`
+            );
+
+            // Calculate total locked by phantom orders
+            const totalPhantomLocked = [...phantomOCOOrders, ...phantomIndividualOrders]
+              .reduce((sum, order) => {
+                // For SELL orders, locked amount is the origQty - executedQty
+                const remaining = parseFloat(order.origQty) - parseFloat(order.executedQty);
+                return sum + remaining;
+              }, 0);
+
+            console.warn(
+              `[OCO] ${trade.symbol} - Total balance locked by phantom orders: ` +
+              `${totalPhantomLocked.toFixed(8)} ${baseAsset} ` +
+              `(${(totalPhantomLocked / currentAvailableBalance * 100).toFixed(2)}% of available balance)`
+            );
+          }
 
           // 5. Cancel phantom OCO orders by orderListId (cancels entire OCO group)
           const canceledOrderListIds = new Set<number>();
