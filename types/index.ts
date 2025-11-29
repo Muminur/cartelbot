@@ -91,6 +91,25 @@ export interface ITradeError {
   operation?: string;
 }
 
+// Tracks OCO targets that failed to create
+export interface IFailedTarget {
+  index: number;           // Target index (0-based)
+  price: number;           // Target price that failed
+  reason: string;          // Human-readable failure reason
+  code?: string;           // Binance error code (e.g., "-2010")
+  timestamp: Date;
+}
+
+// Summary of OCO creation process
+export interface IOCOCreationSummary {
+  createdCount: number;         // Successfully created OCO pairs
+  failedCount: number;          // Failed OCO targets
+  totalTargets: number;         // Original target count
+  allocatedQuantity: number;    // Total quantity allocated to OCOs
+  unallocatedQuantity: number;  // Remaining unallocated quantity
+  allocationPercentage: number; // Percentage of buy qty covered by OCOs
+}
+
 export interface ITrade extends Document {
   userId: string;
   signalId: string;
@@ -121,6 +140,8 @@ export interface ITrade extends Document {
     timestamp?: Date;
   };
   tradeErrors?: ITradeError[]; // Renamed from 'errors' to avoid conflict with Document.errors
+  failedTargets?: IFailedTarget[];      // Tracks OCO targets that failed to create
+  ocoCreationSummary?: IOCOCreationSummary; // Summary of OCO creation process
   createdAt: Date;
   updatedAt: Date;
 }

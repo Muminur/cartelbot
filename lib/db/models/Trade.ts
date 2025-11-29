@@ -196,6 +196,21 @@ const tradeSchema = new Schema<ITrade>(
       timestamp: { type: Date, default: Date.now },
       operation: String,
     }],
+    failedTargets: [{
+      index: { type: Number, required: true },
+      price: { type: Number, required: true },
+      reason: { type: String, required: true },
+      code: String,
+      timestamp: { type: Date, default: Date.now },
+    }],
+    ocoCreationSummary: {
+      createdCount: { type: Number, min: 0 },
+      failedCount: { type: Number, min: 0 },
+      totalTargets: { type: Number, min: 0 },
+      allocatedQuantity: { type: Number, min: 0 },
+      unallocatedQuantity: { type: Number, min: 0 },
+      allocationPercentage: { type: Number, min: 0, max: 100 },
+    },
   },
   {
     timestamps: true,

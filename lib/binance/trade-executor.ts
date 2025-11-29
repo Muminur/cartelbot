@@ -1107,6 +1107,15 @@ export async function createOCOOrders(
     // CRITICAL: Use actualQuantity (executed qty) not trade.quantity to prevent over-allocation on partial fills
     const ALLOCATION_CAP = actualQuantity; // Maximum we can allocate (100%)
 
+    // Track failed targets for UI display and cleanup OCO
+    const failedTargets: Array<{
+      index: number;
+      price: number;
+      reason: string;
+      code?: string;
+      timestamp: Date;
+    }> = [];
+
     for (let i = 0; i < targets.length; i++) {
       // CRITICAL FIX: Fetch fresh balance BEFORE each OCO creation
       // Previous OCO orders lock coins on Binance, reducing available balance
@@ -1381,33 +1390,211 @@ export async function createOCOOrders(
           });
         }
       } catch (error) {
-        console.error(`Failed to create OCO for target ${i}:`, error);
+        // Track failed target with details
+        const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        const errorCode = error instanceof BinanceAPIError ? String(error.code) : undefined;
+
+        console.error(`[OCO] ${trade.symbol} - Failed to create OCO for target ${i + 1}:`, {
+          targetPrice: targets[i],
+          error: errorMessage,
+          code: errorCode,
+        });
+
+        // Add to failed targets array (initialized below)
+        failedTargets.push({
+          index: i,
+          price: targets[i],
+          reason: errorMessage,
+          code: errorCode,
+          timestamp: new Date(),
+        });
       }
     }
 
-    // Validate that allocated quantity matches buy quantity
-    const unallocatedQty = trade.quantity - totalAllocatedQty;
-    const allocationPercentage = (totalAllocatedQty / trade.quantity) * 100;
+    // Calculate allocation statistics (with division by zero protection)
+    const unallocatedQty = actualQuantity - totalAllocatedQty;
+    const allocationPercentage = actualQuantity > 0
+      ? (totalAllocatedQty / actualQuantity) * 100
+      : 0;
+    const createdOCOCount = orders.length / 2; // Each OCO has 2 orders
 
-    if (Math.abs(unallocatedQty) > TRADE_EXECUTION.BALANCE_TOLERANCE) { // Floating point tolerance
+    // Store OCO creation summary
+    trade.ocoCreationSummary = {
+      createdCount: createdOCOCount,
+      failedCount: failedTargets.length,
+      totalTargets: targets.length,
+      allocatedQuantity: totalAllocatedQty,
+      unallocatedQuantity: Math.max(0, unallocatedQty),
+      allocationPercentage: parseFloat(allocationPercentage.toFixed(2)),
+    };
+
+    // Store failed targets for UI display
+    if (failedTargets.length > 0) {
+      trade.failedTargets = failedTargets;
+    }
+
+    // Log allocation mismatch if significant
+    if (unallocatedQty > TRADE_EXECUTION.BALANCE_TOLERANCE) {
       console.warn(
-        `OCO allocation mismatch for ${trade.symbol}:`,
+        `[OCO] ${trade.symbol} - Allocation mismatch:`,
         {
-          buyQuantity: trade.quantity.toFixed(8),
+          buyQuantity: actualQuantity.toFixed(8),
           allocatedQuantity: totalAllocatedQty.toFixed(8),
           unallocatedQuantity: unallocatedQty.toFixed(8),
           allocationPercentage: allocationPercentage.toFixed(2) + '%',
-          successfulOrders: orders.length,
-          totalTargets: trade.targets.length,
+          successfulOCOs: createdOCOCount,
+          failedTargets: failedTargets.length,
+          totalTargets: targets.length,
         }
       );
+
+      // CLEANUP OCO: Try to create one more OCO with remaining balance
+      // This prevents coins from being stranded when a target fails
+      if (createdOCOCount > 0 && unallocatedQty > 0) {
+        try {
+          if (process.env.NODE_ENV !== 'production') console.log(
+            `[OCO] ${trade.symbol} - Attempting cleanup OCO for ${unallocatedQty.toFixed(8)} unallocated coins...`
+          );
+
+          // Get fresh balance to verify we have the unallocated coins
+          const cleanupAccountInfo = await client.getAccount();
+          const cleanupAssetBalance = cleanupAccountInfo.balances.find(b => b.asset === baseAsset);
+          const cleanupAvailableBalance = parseFloat(cleanupAssetBalance?.free || '0');
+
+          // Only attempt cleanup if we have enough balance
+          const cleanupQty = Math.min(unallocatedQty, cleanupAvailableBalance);
+
+          if (cleanupQty > TRADE_EXECUTION.BALANCE_TOLERANCE) {
+            // Validate cleanup quantity against filters
+            const lastSuccessfulTargetIndex = targets.length - 1 - failedTargets.length;
+            const cleanupTargetPrice = targets[Math.max(0, lastSuccessfulTargetIndex)] || targets[0];
+
+            const cleanupValidation = validateAllFilters(cleanupTargetPrice, cleanupQty, filters);
+
+            if (cleanupValidation.isValid) {
+              const cleanupAdjustedQty = cleanupValidation.adjustedQuantity || cleanupQty;
+              const cleanupAdjustedPrice = cleanupValidation.adjustedPrice || cleanupTargetPrice;
+
+              // Validate stop loss for cleanup OCO
+              const cleanupStopValidation = validateAllFilters(adjustedStopLoss, cleanupAdjustedQty, filters);
+              const cleanupStopPrice = cleanupStopValidation.adjustedPrice || adjustedStopLoss;
+              const cleanupStopLimitPrice = cleanupStopPrice * 0.995;
+
+              // Create cleanup OCO
+              const cleanupOCO = await client.createOCOOrder(
+                trade.symbol,
+                cleanupAdjustedQty,
+                cleanupAdjustedPrice,
+                cleanupStopPrice,
+                cleanupStopLimitPrice
+              );
+
+              if (cleanupOCO.orderReports && cleanupOCO.orderReports.length === 2) {
+                const cleanupLimitMaker = cleanupOCO.orderReports.find(o => o.type === 'LIMIT_MAKER');
+                const cleanupStopLoss = cleanupOCO.orderReports.find(o => o.type === 'STOP_LOSS_LIMIT');
+
+                if (cleanupLimitMaker) {
+                  orders.push({
+                    orderId: cleanupLimitMaker.orderId,
+                    status: cleanupLimitMaker.status,
+                    transactTime: cleanupLimitMaker.transactTime,
+                  });
+                  trade.sellOrders.push({
+                    orderId: cleanupLimitMaker.orderId,
+                    orderListId: cleanupOCO.orderListId,
+                    symbol: trade.symbol,
+                    side: "SELL" as const,
+                    type: "LIMIT_MAKER" as const,
+                    quantity: parseFloat(cleanupLimitMaker.origQty),
+                    price: parseFloat(cleanupLimitMaker.price),
+                    stopPrice: cleanupStopPrice,
+                    executedQty: parseFloat(cleanupLimitMaker.executedQty),
+                    cummulativeQuoteQty: parseFloat(cleanupLimitMaker.cummulativeQuoteQty),
+                    status: cleanupLimitMaker.status,
+                    timestamp: new Date(cleanupLimitMaker.transactTime),
+                  });
+                }
+
+                if (cleanupStopLoss) {
+                  orders.push({
+                    orderId: cleanupStopLoss.orderId,
+                    status: cleanupStopLoss.status,
+                    transactTime: cleanupStopLoss.transactTime,
+                  });
+                  trade.sellOrders.push({
+                    orderId: cleanupStopLoss.orderId,
+                    orderListId: cleanupOCO.orderListId,
+                    symbol: trade.symbol,
+                    side: "SELL" as const,
+                    type: "STOP_LOSS_LIMIT" as const,
+                    quantity: parseFloat(cleanupStopLoss.origQty),
+                    price: parseFloat(cleanupStopLoss.price),
+                    stopPrice: parseFloat(cleanupStopLoss.stopPrice || String(cleanupStopPrice)),
+                    executedQty: parseFloat(cleanupStopLoss.executedQty),
+                    cummulativeQuoteQty: parseFloat(cleanupStopLoss.cummulativeQuoteQty),
+                    status: cleanupStopLoss.status,
+                    timestamp: new Date(cleanupStopLoss.transactTime),
+                  });
+                }
+
+                totalAllocatedQty += cleanupAdjustedQty;
+
+                // Update summary with cleanup success
+                trade.ocoCreationSummary = {
+                  ...trade.ocoCreationSummary,
+                  createdCount: (orders.length / 2),
+                  allocatedQuantity: totalAllocatedQty,
+                  unallocatedQuantity: Math.max(0, actualQuantity - totalAllocatedQty),
+                  allocationPercentage: parseFloat(((totalAllocatedQty / actualQuantity) * 100).toFixed(2)),
+                };
+
+                if (process.env.NODE_ENV !== 'production') console.log(
+                  `[OCO] ${trade.symbol} - Cleanup OCO created successfully. ` +
+                  `Allocated additional ${cleanupAdjustedQty.toFixed(8)} ${baseAsset}. ` +
+                  `New total: ${totalAllocatedQty.toFixed(8)} / ${actualQuantity.toFixed(8)} ` +
+                  `(${((totalAllocatedQty / actualQuantity) * 100).toFixed(2)}%)`
+                );
+              }
+            } else {
+              if (process.env.NODE_ENV !== 'production') console.log(
+                `[OCO] ${trade.symbol} - Cleanup OCO skipped: filter validation failed. ` +
+                `Errors: ${cleanupValidation.errors.join(", ")}`
+              );
+            }
+          } else {
+            if (process.env.NODE_ENV !== 'production') console.log(
+              `[OCO] ${trade.symbol} - Cleanup OCO skipped: insufficient balance. ` +
+              `Unallocated: ${unallocatedQty.toFixed(8)}, Available: ${cleanupAvailableBalance.toFixed(8)}`
+            );
+          }
+        } catch (cleanupError) {
+          console.warn(
+            `[OCO] ${trade.symbol} - Cleanup OCO failed:`,
+            cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+          );
+          // Don't fail the whole operation - cleanup is best-effort
+        }
+      }
     }
 
     // Ensure at least one OCO order was created
     if (orders.length === 0) {
+      // CRITICAL: Save failure summary BEFORE throwing so UI can show failure details
+      trade.ocoCreationSummary = {
+        createdCount: 0,
+        failedCount: failedTargets.length,
+        totalTargets: targets.length,
+        allocatedQuantity: 0,
+        unallocatedQuantity: actualQuantity,
+        allocationPercentage: 0,
+      };
+      trade.failedTargets = failedTargets;
+      await trade.save();
+
       throw new ValidationError(
         `Failed to create any OCO orders for ${trade.symbol}. ` +
-        `All ${trade.targets.length} target(s) failed filter validation. ` +
+        `All ${targets.length} target(s) failed. ` +
+        `Failed targets: ${failedTargets.map(f => `#${f.index + 1} (${f.reason})`).join(", ")}. ` +
         `Check signal prices against Binance exchange filters.`
       );
     }

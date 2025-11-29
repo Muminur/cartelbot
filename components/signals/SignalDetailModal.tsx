@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ISignal, ITrade, IOrder, BinanceOCOResponse, BinanceOCOOrderReport } from "@/types";
+import { ISignal, ITrade, IOrder, BinanceOCOResponse, BinanceOCOOrderReport, IFailedTarget, IOCOCreationSummary } from "@/types";
 import { formatDate, formatPrice } from "@/lib/utils/format";
 import { ErrorDetailCard } from "@/components/signals/ErrorDetailCard";
 import {
@@ -30,6 +30,8 @@ import {
   ListOrdered,
   RefreshCw,
   CheckCircle2,
+  Info,
+  AlertOctagon,
 } from "lucide-react";
 
 // Constants for polling configuration
@@ -1325,17 +1327,30 @@ export default function SignalDetailModal({
                       )}
                     </>
                   ) : (
-                    <Badge
-                      variant="outline"
-                      className={`text-xs ${
-                        getFilledTargets().size > 0
-                          ? 'bg-green-100 text-green-800 border-green-300'
-                          : 'bg-gray-100 text-muted-foreground border-gray-300'
-                      }`}
-                    >
-                      {getFilledTargets().size > 0 && <CheckCircle2 className="h-3 w-3 mr-1 inline" />}
-                      {getFilledTargets().size}/{signal.targets.length} Hit
-                    </Badge>
+                    <>
+                      <Badge
+                        variant="outline"
+                        className={`text-xs ${
+                          getFilledTargets().size > 0
+                            ? 'bg-green-100 text-green-800 border-green-300'
+                            : 'bg-gray-100 text-muted-foreground border-gray-300'
+                        }`}
+                      >
+                        {getFilledTargets().size > 0 && <CheckCircle2 className="h-3 w-3 mr-1 inline" />}
+                        {getFilledTargets().size}/{trade?.ocoCreationSummary?.createdCount || signal.targets?.length || 0} Hit
+                      </Badge>
+                      {/* Show warning if some targets failed to create OCO */}
+                      {trade?.failedTargets && trade.failedTargets.length > 0 && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs bg-orange-100 text-orange-800 border-orange-300"
+                          title={`${trade.failedTargets.length} target(s) failed to create OCO orders`}
+                        >
+                          <AlertOctagon className="h-3 w-3 mr-1 inline" />
+                          {trade.failedTargets.length} Failed
+                        </Badge>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -1597,6 +1612,84 @@ export default function SignalDetailModal({
                       </div>
                     ) : trade?.sellOrders && trade.sellOrders.length > 0 ? (
                       <div className="space-y-2">
+                        {/* Failed Targets Warning - Shows when some OCO targets failed to create */}
+                        {trade?.failedTargets && trade.failedTargets.length > 0 && (
+                          <div className="bg-orange-50 dark:bg-orange-950/30 p-4 rounded-lg border-2 border-orange-300 dark:border-orange-700 mb-4">
+                            <div className="flex items-center gap-2 text-sm text-orange-800 dark:text-orange-300 font-semibold mb-2">
+                              <AlertOctagon className="h-5 w-5" />
+                              <span>Some OCO Orders Failed to Create</span>
+                            </div>
+                            <div className="text-xs text-orange-700 dark:text-orange-400 space-y-2">
+                              <p>
+                                <strong>{trade.failedTargets.length} of {trade.ocoCreationSummary?.totalTargets || signal.targets.length} target(s)</strong> could not create OCO orders.
+                                {trade.ocoCreationSummary?.unallocatedQuantity && trade.ocoCreationSummary.unallocatedQuantity > 0 && (
+                                  <span className="ml-1">
+                                    ({trade.ocoCreationSummary.unallocatedQuantity.toFixed(4)} {signal.symbol.replace('USDT', '')} unprotected)
+                                  </span>
+                                )}
+                              </p>
+                              <div className="mt-2 space-y-1">
+                                {trade.failedTargets.map((failed: IFailedTarget, idx: number) => (
+                                  <div key={idx} className="flex items-start gap-2 bg-orange-100 dark:bg-orange-900/30 p-2 rounded">
+                                    <XCircle className="h-4 w-4 text-orange-600 dark:text-orange-400 mt-0.5 shrink-0" />
+                                    <div>
+                                      <span className="font-medium">Target #{failed.index + 1}</span> (${formatPrice(failed.price)}):
+                                      <span className="ml-1 text-orange-600 dark:text-orange-400">{failed.reason}</span>
+                                      {failed.code && (
+                                        <span className="ml-1 font-mono text-xs bg-orange-200 dark:bg-orange-800 px-1 rounded">
+                                          Code: {failed.code}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="mt-3 pt-2 border-t border-orange-300 dark:border-orange-700">
+                                <p className="font-semibold text-orange-800 dark:text-orange-300 mb-1">
+                                  <Info className="h-4 w-4 inline mr-1" />
+                                  How to fix:
+                                </p>
+                                <ul className="list-disc list-inside space-y-1 text-orange-700 dark:text-orange-400">
+                                  <li>Ensure you have BNB for trading fees (reduces balance deduction from coins)</li>
+                                  <li>Use fewer targets (3-4 recommended) to ensure full allocation</li>
+                                  <li>Reduce target distribution percentages for later targets</li>
+                                  <li>Check for existing open orders that may be locking balance</li>
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* OCO Creation Summary */}
+                        {trade?.ocoCreationSummary && (
+                          <div className={`p-3 rounded-lg border ${
+                            trade.ocoCreationSummary.allocationPercentage >= 99
+                              ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800'
+                              : trade.ocoCreationSummary.allocationPercentage >= 90
+                              ? 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 dark:border-yellow-800'
+                              : 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800'
+                          }`}>
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-muted-foreground">OCO Coverage:</span>
+                              <span className={`font-bold ${
+                                trade.ocoCreationSummary.allocationPercentage >= 99
+                                  ? 'text-green-700 dark:text-green-400'
+                                  : trade.ocoCreationSummary.allocationPercentage >= 90
+                                  ? 'text-yellow-700 dark:text-yellow-400'
+                                  : 'text-orange-700 dark:text-orange-400'
+                              }`}>
+                                {trade.ocoCreationSummary.allocationPercentage.toFixed(1)}% Protected
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs mt-1">
+                              <span className="text-muted-foreground">OCO Orders:</span>
+                              <span className="text-foreground">
+                                {trade.ocoCreationSummary.createdCount}/{trade.ocoCreationSummary.totalTargets} Targets
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="flex items-center justify-between">
                           <div className="text-xs font-semibold text-foreground">
                             OCO SELL ORDERS (Take Profit & Stop Loss)
