@@ -682,6 +682,14 @@ export async function createOCOOrders(
     const currentAvailableBalance = parseFloat(initialAssetBalance?.free || '0'); // Current balance (may already include settlement)
     const initialLockedBalance = parseFloat(initialAssetBalance?.locked || '0');
 
+    // DIAGNOSTIC: Log raw Binance API response to verify field values
+    if (process.env.NODE_ENV !== 'production') console.log(
+      `[OCO] ${trade.symbol} - RAW Binance API balance response for ${baseAsset}:`,
+      `free="${initialAssetBalance?.free || '0'}" (parsed: ${currentAvailableBalance.toFixed(8)}),`,
+      `locked="${initialAssetBalance?.locked || '0'}" (parsed: ${initialLockedBalance.toFixed(8)}),`,
+      `NOTE: "free" field already EXCLUDES locked balance - it is truly available for trading`
+    );
+
     // CRITICAL FIX: Use preBuyBalance from Trade document (captured BEFORE buy order)
     // If not available (old trades), fall back to current balance (assumes no settlement yet)
     const preBuyBalance = trade.preBuyBalance !== undefined
@@ -1171,8 +1179,8 @@ export async function createOCOOrders(
     // CRITICAL FIX: Client-side balance tracking to avoid Binance settlement lag
     // Binance's /api/v3/account endpoint has 100-500ms delay in updating "locked" balance
     // after OCO creation, causing "Insufficient balance" errors on subsequent OCOs
-    let trackedAvailableBalance = currentAvailableBalance; // Start with current balance
-    let trackedLockedBalance = 0; // Track cumulative locked balance from our OCOs
+    const trackedAvailableBalance = currentAvailableBalance; // Start with current balance (immutable)
+    let trackedLockedBalance = 0; // Track cumulative locked balance from our OCOs (mutable)
 
     if (process.env.NODE_ENV !== 'production') console.log(
       `[OCO] ${trade.symbol} - Starting OCO creation with client-side balance tracking:`,
@@ -1232,16 +1240,26 @@ export async function createOCOOrders(
       // Use client-side tracked balance (prevents race condition with Binance API lag)
       const availableForThisOCO = trackedAvailableBalance - trackedLockedBalance;
 
+      if (process.env.NODE_ENV !== 'production') console.log(
+        `[OCO] ${trade.symbol} - Balance check for target ${i}:`,
+        `Total free=${trackedAvailableBalance.toFixed(8)},`,
+        `Already locked=${trackedLockedBalance.toFixed(8)},`,
+        `Remaining available=${availableForThisOCO.toFixed(8)},`,
+        `Required for this OCO=${adjustedQty.toFixed(8)},`,
+        `Sufficient=${adjustedQty <= availableForThisOCO + TRADE_EXECUTION.BALANCE_TOLERANCE ? 'YES' : 'NO'}`
+      );
+
       if (adjustedQty > availableForThisOCO + TRADE_EXECUTION.BALANCE_TOLERANCE) {
         const originalQty = adjustedQty;
 
         // Check if we have ANY balance left
         if (availableForThisOCO < TRADE_EXECUTION.BALANCE_TOLERANCE) {
           console.warn(
-            `[OCO] ${trade.symbol} - No balance remaining for target ${i}. ` +
-            `Available: ${availableForThisOCO.toFixed(8)} ${baseAsset}, ` +
-            `Already locked: ${trackedLockedBalance.toFixed(8)} ${baseAsset}. ` +
-            `Skipping remaining targets.`
+            `[OCO] ${trade.symbol} - INSUFFICIENT BALANCE: No balance remaining for target ${i + 1}/${targets.length}. ` +
+            `Binance API reports free balance: ${trackedAvailableBalance.toFixed(8)} ${baseAsset}, ` +
+            `Already locked by previous OCOs: ${trackedLockedBalance.toFixed(8)} ${baseAsset}, ` +
+            `Remaining available: ${availableForThisOCO.toFixed(8)} ${baseAsset} (below ${TRADE_EXECUTION.BALANCE_TOLERANCE} tolerance). ` +
+            `Skipping this and remaining targets.`
           );
           continue; // Skip this and remaining targets
         }
@@ -1250,9 +1268,11 @@ export async function createOCOOrders(
         adjustedQty = availableForThisOCO;
 
         console.warn(
-          `[OCO] ${trade.symbol} - Insufficient balance for target ${i}. ` +
-          `Requested: ${originalQty.toFixed(8)}, Available: ${availableForThisOCO.toFixed(8)} ${baseAsset}. ` +
-          `Adjusting quantity to use all remaining balance.`
+          `[OCO] ${trade.symbol} - BALANCE ADJUSTMENT: Insufficient balance for target ${i + 1}. ` +
+          `Originally requested: ${originalQty.toFixed(8)} ${baseAsset}, ` +
+          `Available (free - locked): ${availableForThisOCO.toFixed(8)} ${baseAsset}, ` +
+          `Breakdown: Total free=${trackedAvailableBalance.toFixed(8)}, Already locked=${trackedLockedBalance.toFixed(8)}. ` +
+          `Adjusting quantity to use ALL remaining balance.`
         );
 
         // Re-validate adjusted quantity against filters
@@ -1322,6 +1342,9 @@ export async function createOCOOrders(
         );
       }
 
+      // CRITICAL: Calculate current tracked balance state for diagnostic logging
+      const currentTrackedFree = trackedAvailableBalance - trackedLockedBalance;
+
       // eslint-disable-next-line no-console
       if (process.env.NODE_ENV !== 'production') console.log(`[OCO] ${trade.symbol} - Creating OCO for target ${i + 1}/${targets.length}:`, {
         symbol: trade.symbol,
@@ -1330,7 +1353,10 @@ export async function createOCOOrders(
         adjustedPrice: adjustedPrice,
         quantity: qtyForTarget.toFixed(8),
         adjustedQty: adjustedQty.toFixed(8),
-        currentFreeBalance: currentAvailableBalance.toFixed(8),
+        trackedAvailableBalance: trackedAvailableBalance.toFixed(8), // Total free balance from Binance API
+        trackedLockedBalance: trackedLockedBalance.toFixed(8),       // Cumulative locked by our previous OCOs
+        currentTrackedFree: currentTrackedFree.toFixed(8),          // Remaining available: free - locked
+        initialFreeBalance: currentAvailableBalance.toFixed(8),     // Initial free balance (reference only)
         percentage: `${percentage}%`,
         originalStopLoss: trade.stopLoss,
         adjustedStopLoss: adjustedStopLoss,
@@ -1546,6 +1572,19 @@ export async function createOCOOrders(
     if (failedTargets.length > 0) {
       trade.failedTargets = failedTargets;
     }
+
+    // FINAL SUMMARY: Log balance allocation summary
+    if (process.env.NODE_ENV !== 'production') console.log(
+      `[OCO] ${trade.symbol} - FINAL ALLOCATION SUMMARY:`,
+      `Bought quantity: ${actualQuantity.toFixed(8)} ${baseAsset},`,
+      `Total allocated: ${totalAllocatedQty.toFixed(8)} ${baseAsset} (${allocationPercentage.toFixed(2)}%),`,
+      `Unallocated: ${Math.max(0, unallocatedQty).toFixed(8)} ${baseAsset},`,
+      `Successful OCOs: ${createdOCOCount}/${targets.length},`,
+      `Failed targets: ${failedTargets.length},`,
+      `Initial free balance: ${trackedAvailableBalance.toFixed(8)} ${baseAsset},`,
+      `Total locked: ${trackedLockedBalance.toFixed(8)} ${baseAsset},`,
+      `Remaining free: ${(trackedAvailableBalance - trackedLockedBalance).toFixed(8)} ${baseAsset}`
+    );
 
     // Log allocation mismatch if significant
     if (unallocatedQty > TRADE_EXECUTION.BALANCE_TOLERANCE) {
