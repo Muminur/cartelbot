@@ -36,6 +36,13 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   useEffect(() => {
     const checkAdminAccess = async () => {
+      // Skip auth check for login page to prevent redirect loop
+      if (pathname === "/admin/login") {
+        setAuthorized(true);
+        setLoading(false);
+        return;
+      }
+
       try {
         // Check for admin session first
         const adminResponse = await fetch("/api/admin/auth/session");
@@ -60,7 +67,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     };
 
     checkAdminAccess();
-  }, [router]);
+  }, [router, pathname]);
 
   if (loading) {
     return (
@@ -72,6 +79,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   if (!authorized) {
     return null;
+  }
+
+  // Login page should not have the admin sidebar
+  if (pathname === "/admin/login") {
+    return <>{children}</>;
   }
 
   return (

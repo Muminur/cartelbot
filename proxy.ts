@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken } from "@/lib/auth/jwt";
 
-const PUBLIC_PATHS = ["/", "/login", "/verify"];
-const API_PUBLIC_PATHS = ["/api/auth/magic-link", "/api/auth/verify"];
+const PUBLIC_PATHS = ["/", "/login", "/verify", "/admin/login"];
+const API_PUBLIC_PATHS = ["/api/auth/magic-link", "/api/auth/verify", "/api/admin/auth/login", "/api/admin/auth/session"];
 
 export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
