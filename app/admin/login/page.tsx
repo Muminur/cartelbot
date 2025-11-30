@@ -38,7 +38,8 @@ export default function AdminLoginPage() {
       }
 
       toast.success("Login successful!");
-      router.push("/admin");
+      // Force a hard redirect to ensure cookie is set properly
+      window.location.href = "/admin";
     } catch (error) {
       if (process.env.NODE_ENV === "development") {
         console.error("Admin login error:", error);
