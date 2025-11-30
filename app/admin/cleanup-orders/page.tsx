@@ -324,16 +324,18 @@ export default function CleanupOrdersPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Order Cancellation</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>
-                You are about to cancel <strong>ALL open orders</strong> for <strong>{symbol}</strong>.
-              </p>
-              <p className="text-destructive font-medium">
-                This action cannot be undone. All pending orders and OCO pairs will be canceled immediately.
-              </p>
-              <p>
-                Are you sure you want to proceed?
-              </p>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  You are about to cancel <strong>ALL open orders</strong> for <strong>{symbol}</strong>.
+                </p>
+                <p className="text-destructive font-medium">
+                  This action cannot be undone. All pending orders and OCO pairs will be canceled immediately.
+                </p>
+                <p>
+                  Are you sure you want to proceed?
+                </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
