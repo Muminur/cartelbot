@@ -11,7 +11,9 @@ import {
   Radio,
   CreditCard,
   Trash2,
+  LogOut,
 } from "lucide-react";
+import { toast } from "sonner";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -35,28 +37,23 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   useEffect(() => {
     const checkAdminAccess = async () => {
       try {
-        const response = await fetch(API_ROUTES.AUTH.SESSION);
-        const data = await response.json();
+        // Check for admin session first
+        const adminResponse = await fetch("/api/admin/auth/session");
 
-        if (!data.success || !data.data.user) {
-          router.push("/login");
-          return;
+        if (adminResponse.ok) {
+          const adminData = await adminResponse.json();
+          if (adminData.success && adminData.data.user?.isAdmin) {
+            setAuthorized(true);
+            setLoading(false);
+            return;
+          }
         }
 
-        // Verify admin access by attempting to call an admin endpoint
-        const adminCheckResponse = await fetch("/api/admin/system/health");
-
-        if (!adminCheckResponse.ok) {
-          // User is not an admin, redirect to dashboard
-          console.warn("Admin access denied - redirecting to dashboard");
-          router.push("/dashboard");
-          return;
-        }
-
-        setAuthorized(true);
+        // Not an admin, redirect to admin login
+        router.push("/admin/login");
       } catch (error) {
         console.error("Admin auth check failed:", error);
-        router.push("/login");
+        router.push("/admin/login");
       } finally {
         setLoading(false);
       }
@@ -106,12 +103,27 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
               );
             })}
           </nav>
-          <div className="p-4 border-t dark:border-border mt-auto">
+          <div className="p-4 border-t dark:border-border mt-auto space-y-2">
             <button
               onClick={() => router.push("/dashboard")}
               className="w-full px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               ← Back to Dashboard
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  await fetch("/api/admin/auth/logout", { method: "POST" });
+                  toast.success("Logged out successfully");
+                  router.push("/admin/login");
+                } catch (error) {
+                  toast.error("Logout failed");
+                }
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Logout
             </button>
           </div>
         </div>

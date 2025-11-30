@@ -74,3 +74,39 @@ export function verifySessionToken(token: string): SessionPayload {
     throw new Error("Session verification failed");
   }
 }
+
+// Generic JWT functions for admin authentication
+export interface AdminJWTPayload {
+  role: "admin";
+  username: string;
+  isAdmin: boolean;
+  iat?: number;
+  exp?: number;
+}
+
+export function signJWT(
+  payload: Omit<AdminJWTPayload, "iat" | "exp">,
+  expiresIn: string = "7d"
+): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return jwt.sign(payload, env.JWT_SECRET, {
+    expiresIn: expiresIn as any,
+  });
+}
+
+export function verifyJWT(token: string): AdminJWTPayload {
+  try {
+    const payload = jwt.verify(token, env.JWT_SECRET, {
+      algorithms: ["HS256"],
+    }) as AdminJWTPayload;
+    return payload;
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      throw new Error("Token has expired");
+    }
+    if (error instanceof jwt.JsonWebTokenError) {
+      throw new Error("Invalid token");
+    }
+    throw new Error("Token verification failed");
+  }
+}
