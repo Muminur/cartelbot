@@ -80,6 +80,7 @@ export interface AdminJWTPayload {
   role: "admin";
   username: string;
   isAdmin: boolean;
+  adminId?: string;
   iat?: number;
   exp?: number;
 }

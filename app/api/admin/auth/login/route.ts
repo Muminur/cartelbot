@@ -4,40 +4,7 @@ import { signJWT } from "@/lib/auth/jwt";
 import { createAuditLog, getIpFromRequest, getUserAgentFromRequest } from "@/lib/audit/logger";
 import { rateLimit } from "@/lib/middleware/rate-limiter";
 import { sanitizeAlphanumeric } from "@/lib/security/sanitizer";
-
-// Admin credentials (hashed passwords stored in environment variables)
-// Runtime validation happens on first request
-function getAdminCredentials() {
-  const passwordHash = process.env.ADMIN_PASSWORD_HASH;
-
-  if (!passwordHash) {
-    throw new Error("ADMIN_PASSWORD_HASH environment variable is required");
-  }
-
-  // Validate hash length - bcrypt hashes are 60 characters
-  // Common issue on Windows: Git Bash expands $ as shell variables, corrupting the hash
-  // Example: $2b$10$... becomes .Y9xl... (32 chars instead of 60)
-  // Fix: Wrap hash in single quotes in .env.local: ADMIN_PASSWORD_HASH='$2b$10$...'
-  const expectedHashLength = 60;
-  if (passwordHash.length !== expectedHashLength) {
-    const errorMsg = `ADMIN_PASSWORD_HASH is corrupted (${passwordHash.length} chars, expected ${expectedHashLength}).
-Common cause on Windows: Git Bash interpreting $ as shell variables.
-Fix: Edit .env.local using Windows Notepad (not Bash) and wrap the hash in single quotes:
-ADMIN_PASSWORD_HASH='$2b$10$...'`;
-
-    if (process.env.NODE_ENV === "development") {
-      console.error("[Admin Auth Error]", errorMsg);
-      console.error("[Current Hash Value]", passwordHash);
-    }
-
-    throw new Error(errorMsg);
-  }
-
-  return {
-    username: process.env.ADMIN_USERNAME || "admin",
-    passwordHash,
-  };
-}
+import { connectDB, Admin } from "@/lib/db";
 
 // Cookie name constant
 const ADMIN_TOKEN_COOKIE = "admin_token";
@@ -89,28 +56,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get admin credentials (validates env vars)
-    const adminCredentials = getAdminCredentials();
-
     // Sanitize inputs
     const sanitizedUsername = sanitizeAlphanumeric(username);
 
-    // Verify credentials
-    const isUsernameValid = sanitizedUsername === adminCredentials.username;
-    const isPasswordValid = await bcrypt.compare(password, adminCredentials.passwordHash);
+    // Connect to database
+    await connectDB();
 
-    // Development logging for debugging (no sensitive data exposed)
-    if (process.env.NODE_ENV === "development") {
-      console.log("[Admin Login Debug]", {
-        inputUsername: sanitizedUsername,
-        expectedUsername: adminCredentials.username,
-        usernameMatch: isUsernameValid,
-        passwordMatch: isPasswordValid,
-        hashConfigured: !!adminCredentials.passwordHash,
-      });
-    }
+    // Find admin by username (include passwordHash field)
+    const admin = await Admin.findOne({
+      username: sanitizedUsername,
+    }).select("+passwordHash");
 
-    if (!isUsernameValid || !isPasswordValid) {
+    // Check if admin exists
+    if (!admin) {
       // Log failed login attempt
       await createAuditLog({
         userId: undefined,
@@ -124,6 +82,7 @@ export async function POST(request: NextRequest) {
         statusCode: 401,
         metadata: {
           username: sanitizedUsername,
+          reason: "Admin not found",
         },
       });
 
@@ -133,12 +92,103 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if account is locked
+    if (admin.lockUntil && admin.lockUntil > new Date()) {
+      const minutesLeft = Math.ceil(
+        (admin.lockUntil.getTime() - Date.now()) / (1000 * 60)
+      );
+
+      await createAuditLog({
+        userId: undefined,
+        action: "admin.login.failed",
+        resource: "admin",
+        resourceId: admin._id.toString(),
+        method: request.method,
+        endpoint: new URL(request.url).pathname,
+        ip: getIpFromRequest(request),
+        userAgent: getUserAgentFromRequest(request),
+        statusCode: 423,
+        metadata: {
+          username: sanitizedUsername,
+          reason: "Account locked",
+          minutesLeft,
+        },
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Account is locked. Try again in ${minutesLeft} minute(s)`,
+        },
+        { status: 423 }
+      );
+    }
+
+    // Check if account is active
+    if (!admin.isActive) {
+      await createAuditLog({
+        userId: undefined,
+        action: "admin.login.failed",
+        resource: "admin",
+        resourceId: admin._id.toString(),
+        method: request.method,
+        endpoint: new URL(request.url).pathname,
+        ip: getIpFromRequest(request),
+        userAgent: getUserAgentFromRequest(request),
+        statusCode: 403,
+        metadata: {
+          username: sanitizedUsername,
+          reason: "Account inactive",
+        },
+      });
+
+      return NextResponse.json(
+        { success: false, error: "Account is inactive" },
+        { status: 403 }
+      );
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, admin.passwordHash);
+
+    if (!isPasswordValid) {
+      // Increment login attempts
+      await admin.incLoginAttempts();
+
+      // Log failed login attempt
+      await createAuditLog({
+        userId: undefined,
+        action: "admin.login.failed",
+        resource: "admin",
+        resourceId: admin._id.toString(),
+        method: request.method,
+        endpoint: new URL(request.url).pathname,
+        ip: getIpFromRequest(request),
+        userAgent: getUserAgentFromRequest(request),
+        statusCode: 401,
+        metadata: {
+          username: sanitizedUsername,
+          reason: "Invalid password",
+          loginAttempts: admin.loginAttempts + 1,
+        },
+      });
+
+      return NextResponse.json(
+        { success: false, error: "Invalid username or password" },
+        { status: 401 }
+      );
+    }
+
+    // Reset login attempts on successful login
+    await admin.resetLoginAttempts();
+
     // Generate JWT token for admin session (7 days)
     const token = signJWT(
       {
         role: "admin",
-        username: adminCredentials.username,
+        username: admin.username,
         isAdmin: true,
+        adminId: admin._id.toString(),
       },
       "7d"
     );
@@ -148,14 +198,14 @@ export async function POST(request: NextRequest) {
       userId: undefined,
       action: "admin.login.success",
       resource: "admin",
-      resourceId: undefined,
+      resourceId: admin._id.toString(),
       method: request.method,
       endpoint: new URL(request.url).pathname,
       ip: getIpFromRequest(request),
       userAgent: getUserAgentFromRequest(request),
       statusCode: 200,
       metadata: {
-        username: adminCredentials.username,
+        username: admin.username,
       },
     });
 
@@ -165,7 +215,8 @@ export async function POST(request: NextRequest) {
       data: {
         message: "Admin login successful",
         user: {
-          username: adminCredentials.username,
+          username: admin.username,
+          email: admin.email,
           role: "admin",
         },
       },

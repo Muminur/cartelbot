@@ -49,6 +49,8 @@ const AuditLogSchema = new Schema<IAuditLog>(
         "admin.login.success",
         "admin.login.failed",
         "admin.logout",
+        "admin.password.changed",
+        "admin.password.change.failed",
       ],
       index: true,
     },
