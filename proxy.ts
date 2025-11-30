@@ -2,12 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken, verifyJWT } from "@/lib/auth/jwt";
 
 const PUBLIC_PATHS = ["/", "/login", "/verify", "/admin/login"];
-const API_PUBLIC_PATHS = ["/api/auth/magic-link", "/api/auth/verify", "/api/admin/auth/login", "/api/admin/auth/session", "/api/admin/auth/change-password", "/api/admin/auth/logout"];
+const API_PUBLIC_PATHS = ["/api/auth/magic-link", "/api/auth/verify"];
+const ADMIN_AUTH_PATHS = ["/api/admin/auth/login", "/api/admin/auth/session", "/api/admin/auth/change-password", "/api/admin/auth/logout"];
 
 export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Public paths that don't need any authentication
   if (PUBLIC_PATHS.includes(pathname) || API_PUBLIC_PATHS.some(p => pathname.startsWith(p))) {
+    return NextResponse.next();
+  }
+
+  // Admin auth endpoints - allow without token (they handle their own auth)
+  if (ADMIN_AUTH_PATHS.some(p => pathname.startsWith(p))) {
     return NextResponse.next();
   }
 

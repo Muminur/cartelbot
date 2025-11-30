@@ -22,7 +22,6 @@ const adminSchema = new Schema<IAdmin>(
     username: {
       type: String,
       required: [true, "Username is required"],
-      unique: true,
       lowercase: true,
       trim: true,
       minlength: [3, "Username must be at least 3 characters"],
