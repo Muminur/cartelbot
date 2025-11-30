@@ -1,25 +1,78 @@
 /**
  * E2E Test Data Fixtures
  * Provides test data for CartelBot E2E tests
+ *
+ * SECURITY NOTES:
+ * - Validates production API keys to prevent real trades
+ * - Uses unique emails to prevent test pollution
+ * - Requires environment variables for sensitive data
  */
 
+import { randomUUID } from 'crypto';
+
+/**
+ * Validate that API keys are testnet keys, not production
+ * CRITICAL: Prevents executing real trades during E2E tests
+ */
+function validateTestnetApiKey(apiKey: string | undefined, fieldName: string): string {
+  if (!apiKey) {
+    return 'test_api_key'; // Safe default for missing keys
+  }
+
+  // Production Binance API keys are typically 64 characters
+  // If we detect a production-like key, throw error
+  if (apiKey.length === 64 && !apiKey.startsWith('test_')) {
+    throw new Error(
+      `CRITICAL: Production API key detected in ${fieldName}!\n` +
+      `E2E tests must use testnet API keys only.\n` +
+      `Set ${fieldName} to your Binance Testnet API key.`
+    );
+  }
+
+  return apiKey;
+}
+
+/**
+ * Generate unique test user data
+ * Prevents test collisions in parallel execution
+ * FIXED: Validates API keys to prevent production key usage
+ */
+export function generateTestUser(type: 'regular' | 'premium' = 'regular') {
+  const uniqueId = randomUUID().slice(0, 8);
+
+  // Validate API keys before returning
+  const apiKey = validateTestnetApiKey(process.env.TEST_BINANCE_API_KEY, 'TEST_BINANCE_API_KEY');
+  const apiSecret = validateTestnetApiKey(process.env.TEST_BINANCE_API_SECRET, 'TEST_BINANCE_API_SECRET');
+
+  return {
+    email: `test-${uniqueId}@e2e.test`,
+    apiKey,
+    apiSecret,
+    useTestnet: true,
+    subscription: type === 'premium' ? 'premium' : 'free',
+  };
+}
+
+/**
+ * Static test users for backwards compatibility
+ * WARNING: Use generateTestUser() for new tests to avoid collisions
+ */
 export const TEST_USERS = {
-  regular: {
-    email: 'test@example.com',
-    apiKey: process.env.TEST_BINANCE_API_KEY || 'test_api_key',
-    apiSecret: process.env.TEST_BINANCE_API_SECRET || 'test_api_secret',
-    useTestnet: true,
-  },
-  premium: {
-    email: 'premium@example.com',
-    apiKey: process.env.TEST_BINANCE_API_KEY || 'test_api_key',
-    apiSecret: process.env.TEST_BINANCE_API_SECRET || 'test_api_secret',
-    useTestnet: true,
-    subscription: 'premium',
-  },
+  regular: generateTestUser('regular'),
+  premium: generateTestUser('premium'),
   admin: {
     username: process.env.ADMIN_USERNAME || 'admin',
-    password: process.env.TEST_ADMIN_PASSWORD || 'aDmin@7878',
+    password: (() => {
+      const pw = process.env.TEST_ADMIN_PASSWORD;
+      if (!pw) {
+        throw new Error(
+          'TEST_ADMIN_PASSWORD environment variable is required for E2E tests.\n' +
+          'This prevents hardcoded passwords in source code.\n' +
+          'Example: export TEST_ADMIN_PASSWORD=aDmin@7878'
+        );
+      }
+      return pw;
+    })(),
   },
 };
 

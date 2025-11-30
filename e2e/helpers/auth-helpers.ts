@@ -5,11 +5,11 @@
 
 import { Page, expect } from '@playwright/test';
 import { TEST_USERS, API_ROUTES, PAGE_ROUTES, TIMEOUTS } from '../fixtures/test-data';
+import { getMagicLinkToken } from './database-helpers';
 
 /**
  * Login as regular user using magic link
- * Note: This is a simplified version for E2E testing
- * In real tests, you would need to intercept the magic link email or use a test endpoint
+ * IMPLEMENTED: Uses database-backed magic link token retrieval
  */
 export async function loginAsUser(page: Page, email: string = TEST_USERS.regular.email) {
   // Navigate to login page
@@ -22,12 +22,21 @@ export async function loginAsUser(page: Page, email: string = TEST_USERS.regular
   // Wait for success message
   await expect(page.locator('text=Check your email')).toBeVisible({ timeout: TIMEOUTS.SHORT });
 
-  // For E2E testing, we'll create a mock magic link token
-  // In production, this would come from email
-  const mockToken = await generateMockMagicLinkToken(page, email);
+  // FIXED: Add 500ms delay to allow database write to complete
+  // The magic link API writes the token asynchronously, so we need to wait
+  await page.waitForTimeout(500);
+
+  // Retrieve magic link token from database
+  const token = await getMagicLinkToken(email);
+
+  if (!token) {
+    throw new Error(`[Auth Helper] ✗ Failed to retrieve magic link token for ${email}`);
+  }
+
+  console.log(`[Auth Helper] ✓ Retrieved magic link token for ${email}`);
 
   // Navigate to verify page with token
-  await page.goto(`${PAGE_ROUTES.VERIFY}?token=${mockToken}`);
+  await page.goto(`${PAGE_ROUTES.VERIFY}?token=${token}`);
 
   // Wait for verification success
   await expect(page.locator('text=Success!')).toBeVisible({ timeout: TIMEOUTS.MEDIUM });
@@ -37,6 +46,8 @@ export async function loginAsUser(page: Page, email: string = TEST_USERS.regular
 
   // Verify we're logged in
   await expect(page.locator('h1:has-text("Dashboard")')).toBeVisible({ timeout: TIMEOUTS.SHORT });
+
+  console.log(`[Auth Helper] ✓ Successfully logged in as ${email}`);
 }
 
 /**
@@ -89,25 +100,6 @@ export async function isAuthenticated(page: Page): Promise<boolean> {
   });
 
   return response;
-}
-
-/**
- * Generate a mock magic link token for testing
- * This simulates the token generation without actually sending an email
- * NOTE: In production, you would use a test email service or intercept the email
- */
-async function generateMockMagicLinkToken(page: Page, email: string): Promise<string> {
-  // For E2E tests, we can use the API directly to generate a token
-  // This is a test-only approach and should not be available in production
-
-  // In a real scenario, you would:
-  // 1. Use a test email service (like Mailtrap, Mailosaur)
-  // 2. OR create a test-only endpoint that returns the token
-  // 3. OR intercept the Resend API call
-
-  // For now, we'll return a placeholder that the test should override
-  // with actual implementation based on your testing strategy
-  return 'test-magic-link-token';
 }
 
 /**
