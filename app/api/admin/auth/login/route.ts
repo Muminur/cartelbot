@@ -14,10 +14,41 @@ function getAdminCredentials() {
     throw new Error("ADMIN_PASSWORD_HASH environment variable is required");
   }
 
+  // Validate hash length - bcrypt hashes are 60 characters
+  // Common issue on Windows: Git Bash expands $ as shell variables, corrupting the hash
+  // Example: $2b$10$... becomes .Y9xl... (32 chars instead of 60)
+  // Fix: Wrap hash in single quotes in .env.local: ADMIN_PASSWORD_HASH='$2b$10$...'
+  const expectedHashLength = 60;
+  if (passwordHash.length !== expectedHashLength) {
+    const errorMsg = `ADMIN_PASSWORD_HASH is corrupted (${passwordHash.length} chars, expected ${expectedHashLength}).
+Common cause on Windows: Git Bash interpreting $ as shell variables.
+Fix: Edit .env.local using Windows Notepad (not Bash) and wrap the hash in single quotes:
+ADMIN_PASSWORD_HASH='$2b$10$...'`;
+
+    if (process.env.NODE_ENV === "development") {
+      console.error("[Admin Auth Error]", errorMsg);
+      console.error("[Current Hash Value]", passwordHash);
+    }
+
+    throw new Error(errorMsg);
+  }
+
   return {
     username: process.env.ADMIN_USERNAME || "admin",
     passwordHash,
   };
+}
+
+// Cookie name constant
+const ADMIN_TOKEN_COOKIE = "admin_token";
+
+// Maximum password length (bcrypt max is 72)
+const MAX_PASSWORD_LENGTH = 72;
+
+// Request body interface
+interface AdminLoginRequest {
+  username: string;
+  password: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -29,13 +60,31 @@ export async function POST(request: NextRequest) {
       return rateLimitResponse;
     }
 
-    const body = await request.json();
+    // Safe JSON parsing with validation
+    let body: AdminLoginRequest;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { success: false, error: "Invalid request body" },
+        { status: 400 }
+      );
+    }
+
     const { username, password } = body;
 
     // Input validation
     if (!username || !password) {
       return NextResponse.json(
         { success: false, error: "Username and password are required" },
+        { status: 400 }
+      );
+    }
+
+    // Password length validation (bcrypt max is 72 characters)
+    if (typeof password !== "string" || password.length > MAX_PASSWORD_LENGTH) {
+      return NextResponse.json(
+        { success: false, error: "Invalid password format" },
         { status: 400 }
       );
     }
@@ -49,6 +98,17 @@ export async function POST(request: NextRequest) {
     // Verify credentials
     const isUsernameValid = sanitizedUsername === adminCredentials.username;
     const isPasswordValid = await bcrypt.compare(password, adminCredentials.passwordHash);
+
+    // Development logging for debugging (no sensitive data exposed)
+    if (process.env.NODE_ENV === "development") {
+      console.log("[Admin Login Debug]", {
+        inputUsername: sanitizedUsername,
+        expectedUsername: adminCredentials.username,
+        usernameMatch: isUsernameValid,
+        passwordMatch: isPasswordValid,
+        hashConfigured: !!adminCredentials.passwordHash,
+      });
+    }
 
     if (!isUsernameValid || !isPasswordValid) {
       // Log failed login attempt
@@ -111,7 +171,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    response.cookies.set("admin_token", token, {
+    response.cookies.set(ADMIN_TOKEN_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
