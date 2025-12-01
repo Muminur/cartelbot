@@ -408,3 +408,41 @@ export interface UserWithEncryptedKeys {
   encryptedApiSecret: string;
   useTestnet?: boolean;
 }
+
+/**
+ * Extended signal interface for admin views
+ * Includes additional fields not present in the base ISignal interface
+ */
+export interface AdminSignal {
+  _id: string;
+  userId: string;
+  userEmail?: string;
+  symbol: string;
+  entries: number[];
+  targets: number[];
+  stopLoss: number;
+  currentMarketPrice?: number;
+  status: "pending" | "parsed" | "executing" | "completed" | "failed" | "cancelled";
+  rawSignal: string;
+  isImageSignal: boolean;
+  imageUrl?: string;
+  confidence?: number;
+  parseErrors?: string[];
+  executionError?: string;
+  executionErrorCode?: string;
+  executionErrorTimestamp?: Date;
+  failureReason?:
+    | 'INSUFFICIENT_BALANCE'
+    | 'INVALID_TARGETS'
+    | 'SETTLEMENT_TIMEOUT'
+    | 'PHANTOM_ORDERS'
+    | 'BINANCE_API_ERROR'
+    | 'NETWORK_ERROR'
+    | 'INVALID_SYMBOL'
+    | 'PERMISSION_DENIED'
+    | 'RATE_LIMITED'
+    | 'FILTER_VIOLATION'
+    | 'UNKNOWN';
+  createdAt: Date;
+  updatedAt: Date;
+}
