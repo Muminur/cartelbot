@@ -244,7 +244,7 @@ export default function AdminSignalDetailModal({
 
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`HTTP ${response.status}: Failed to fetch trade data`);
+          throw new Error(`HTTP ${response.status}: ${errorText.substring(0, 100)}`);
         }
 
         const data = await safeJsonParse<{
@@ -379,12 +379,11 @@ export default function AdminSignalDetailModal({
   }, [trade?.status, trade?.sellOrders?.length]);
   // Removed fetchOCOStatuses from deps to prevent interval recreation
 
-  if (!signal) return null;
-
   // Optimized: Use useMemo to prevent recalculating filled targets on every render
   // Pre-build a Map for O(1) lookups instead of nested loops (O(n²))
+  // IMPORTANT: Must be called before any early returns to maintain hook order
   const filledTargets = useMemo((): Set<number> => {
-    if (!trade || !trade.sellOrders || !signal.targets) return new Set();
+    if (!signal || !trade || !trade.sellOrders || !signal.targets) return new Set();
 
     const filled = new Set<number>();
 
@@ -415,8 +414,10 @@ export default function AdminSignalDetailModal({
     });
 
     return filled;
-  }, [trade?.sellOrders, ocoStatuses, signal.targets]);
-  // Dependencies: recalculate only when trade orders, OCO statuses, or targets change
+  }, [signal, trade?.sellOrders, ocoStatuses, signal?.targets]);
+  // Dependencies: recalculate only when signal, trade orders, OCO statuses, or targets change
+
+  if (!signal) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
