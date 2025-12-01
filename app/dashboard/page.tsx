@@ -7,16 +7,14 @@ import { Button } from "@/components/ui/button";
 import { API_ROUTES } from "@/lib/constants";
 import { UserProfile } from "@/types";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ActiveSignalsWidget } from "@/components/dashboard/ActiveSignalsWidget";
-import { OpenPositionsWidget } from "@/components/dashboard/OpenPositionsWidget";
-import { AccountBalanceWidget } from "@/components/dashboard/AccountBalanceWidget";
-import { PnLChartWidget } from "@/components/dashboard/PnLChartWidget";
-import { RecentTradesWidget } from "@/components/dashboard/RecentTradesWidget";
 import SubscriptionStatusWidget from "@/components/dashboard/SubscriptionStatusWidget";
 import { useWebSocketStream } from "@/hooks/useWebSocketStream";
 import { useSession } from "@/contexts/SessionContext";
 import { TrendingUp, Signal, Wallet, Award } from "lucide-react";
 import { formatCurrency } from "@/lib/utils/format";
+
+// Force dynamic rendering (skip static generation)
+export const dynamic = "force-dynamic";
 
 interface DashboardStats {
   activeSignals: number;
@@ -184,18 +182,6 @@ export default function DashboardPage() {
             <SubscriptionStatusWidget key={`subscription-${refreshKey}`} />
           </div>
         )}
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <ActiveSignalsWidget key={`signals-${refreshKey}`} />
-          <AccountBalanceWidget key={`balance-${refreshKey}`} />
-        </div>
-
-        <PnLChartWidget key={`chart-${refreshKey}`} />
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <OpenPositionsWidget key={`positions-${refreshKey}`} />
-          <RecentTradesWidget key={`recent-${refreshKey}`} />
-        </div>
       </div>
     </DashboardLayout>
   );
