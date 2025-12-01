@@ -9,7 +9,6 @@ import {
   Users,
   Activity,
   Radio,
-  CreditCard,
   Trash2,
   LogOut,
 } from "lucide-react";
@@ -24,7 +23,6 @@ const ADMIN_NAV_ITEMS = [
   { name: "Users", href: "/admin/users", icon: Users },
   { name: "System", href: "/admin/system", icon: Activity },
   { name: "Signals", href: "/admin/signals", icon: Radio },
-  { name: "Subscriptions", href: "/admin/subscriptions", icon: CreditCard },
   { name: "Cleanup Orders", href: "/admin/cleanup-orders", icon: Trash2 },
 ];
 
