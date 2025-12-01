@@ -4,6 +4,12 @@ import { createSuccessResponse, createErrorResponse } from "@/lib/utils/api";
 import { createBinanceClient } from "@/lib/binance/client";
 import { decrypt } from "@/lib/encryption";
 import { BinanceAPIError } from "@/lib/utils/errors";
+import { connectDB } from "@/lib/db";
+import { User } from "@/lib/db/models";
+import { isValidObjectId } from "@/lib/utils/validation";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 interface CancellationResult {
   orderId: number;
@@ -28,10 +34,10 @@ interface CancellationSummary {
 export async function POST(request: NextRequest) {
   try {
     // Admin authentication
-    const user = await requireAdmin(request);
+    const adminUser = await requireAdmin(request);
 
     const body = await request.json();
-    const { symbol } = body;
+    const { symbol, userId } = body;
 
     if (!symbol || typeof symbol !== "string") {
       return createErrorResponse(
@@ -48,19 +54,62 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get user's API keys
-    if (!user.encryptedApiKey || !user.encryptedApiSecret) {
+    // Determine which user's API keys to use
+    let targetUserEmail = adminUser.email;
+    let encryptedApiKey = adminUser.encryptedApiKey;
+    let encryptedApiSecret = adminUser.encryptedApiSecret;
+    let useTestnet = adminUser.useTestnet;
+
+    // If userId is provided, use that user's API keys (admin privilege)
+    if (userId) {
+      if (!isValidObjectId(userId)) {
+        return createErrorResponse(
+          new Error("Invalid user ID format"),
+          400
+        );
+      }
+
+      await connectDB();
+
+      const selectedUser = await User.findById(userId)
+        .select("email encryptedApiKey encryptedApiSecret useTestnet")
+        .lean() as {
+          email?: string;
+          encryptedApiKey?: string;
+          encryptedApiSecret?: string;
+          useTestnet?: boolean;
+        } | null;
+
+      if (!selectedUser) {
+        return createErrorResponse(
+          new Error("User not found"),
+          404
+        );
+      }
+
+      targetUserEmail = selectedUser.email || "";
+      encryptedApiKey = selectedUser.encryptedApiKey;
+      encryptedApiSecret = selectedUser.encryptedApiSecret;
+      useTestnet = selectedUser.useTestnet;
+
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[Admin Cleanup] Admin ${adminUser.email} cleaning up orders for user ${targetUserEmail}`);
+      }
+    }
+
+    // Get target user's API keys
+    if (!encryptedApiKey || !encryptedApiSecret) {
       return createErrorResponse(
-        new Error("Binance API keys not configured"),
+        new Error(`Binance API keys not configured for ${targetUserEmail}`),
         400
       );
     }
 
-    const apiKey = decrypt(user.encryptedApiKey);
-    const apiSecret = decrypt(user.encryptedApiSecret);
+    const apiKey = decrypt(encryptedApiKey);
+    const apiSecret = decrypt(encryptedApiSecret);
 
-    // Create Binance client
-    const client = createBinanceClient(apiKey, apiSecret, user.useTestnet);
+    // Create Binance client with target user's settings
+    const client = createBinanceClient(apiKey, apiSecret, useTestnet);
 
     // Sync server time before operations
     await client.syncServerTime();
@@ -114,7 +163,9 @@ export async function POST(request: NextRequest) {
       console.log(`[Admin Cleanup] Starting cancellation for ${symbol}:`, {
         individualOrders: individualOrders.length,
         ocoGroups: ocoGroups.size,
-        adminEmail: user.email,
+        adminEmail: adminUser.email,
+        targetUserEmail,
+        useTestnet,
         timestamp: new Date().toISOString(),
       });
     }
@@ -234,6 +285,10 @@ export async function POST(request: NextRequest) {
     return createSuccessResponse({
       message: `Canceled ${summary.canceledOrders + summary.canceledOCOs} of ${summary.totalOrders + summary.totalOCOs} orders for ${symbol}`,
       summary,
+      targetUser: {
+        email: targetUserEmail,
+        useTestnet: useTestnet,
+      },
     });
   } catch (error) {
     console.error("[Admin Cleanup] Fatal error:", {

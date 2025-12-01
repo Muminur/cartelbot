@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Trash2, AlertCircle, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
+import { Loader2, Trash2, AlertCircle, CheckCircle2, XCircle, RefreshCw, Users } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -25,6 +25,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface CancellationResult {
   orderId: number;
@@ -46,6 +53,17 @@ interface CancellationSummary {
   errors: string[];
 }
 
+interface UserWithKeys {
+  _id: string;
+  email: string;
+  useTestnet?: boolean;
+}
+
+interface TargetUserInfo {
+  email: string;
+  useTestnet?: boolean;
+}
+
 export default function CleanupOrdersPage() {
   const [symbol, setSymbol] = useState("MINAUSDT");
   const [loading, setLoading] = useState(false);
@@ -53,18 +71,54 @@ export default function CleanupOrdersPage() {
   const [summary, setSummary] = useState<CancellationSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // User selection state
+  const [users, setUsers] = useState<UserWithKeys[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [targetUserInfo, setTargetUserInfo] = useState<TargetUserInfo | null>(null);
+
+  // Fetch users with API keys on mount
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch("/api/admin/users-with-keys");
+        const data = await response.json();
+
+        if (response.ok && data.data?.users) {
+          setUsers(data.data.users);
+        }
+      } catch (err) {
+        console.error("Failed to fetch users:", err);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+
+    fetchUsers();
+  }, []);
+
   const handleCancel = async () => {
     setLoading(true);
     setError(null);
     setSummary(null);
+    setTargetUserInfo(null);
 
     try {
+      const requestBody: { symbol: string; userId?: string } = {
+        symbol: symbol.toUpperCase().trim(),
+      };
+
+      // Include userId if a user is selected
+      if (selectedUserId) {
+        requestBody.userId = selectedUserId;
+      }
+
       const response = await fetch("/api/admin/cancel-all-orders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ symbol: symbol.toUpperCase().trim() }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -73,7 +127,10 @@ export default function CleanupOrdersPage() {
         throw new Error(data.error?.message || "Failed to cancel orders");
       }
 
-      setSummary(data.summary);
+      setSummary(data.data?.summary || data.summary);
+      if (data.data?.targetUser) {
+        setTargetUserInfo(data.data.targetUser);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -123,6 +180,39 @@ export default function CleanupOrdersPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* User Selection Dropdown */}
+              <div className="space-y-2">
+                <label htmlFor="user-select" className="text-sm font-medium flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Select User
+                </label>
+                <Select
+                  value={selectedUserId}
+                  onValueChange={setSelectedUserId}
+                  disabled={loading || loadingUsers}
+                >
+                  <SelectTrigger className="max-w-md">
+                    <SelectValue placeholder={loadingUsers ? "Loading users..." : "Select a user..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.map((user) => (
+                      <SelectItem key={user._id} value={user._id}>
+                        <div className="flex items-center gap-2">
+                          <span>{user.email}</span>
+                          {user.useTestnet && (
+                            <Badge variant="outline" className="text-xs">Testnet</Badge>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  Select the user whose phantom orders need to be cleaned up ({users.length} users with API keys)
+                </p>
+              </div>
+
+              {/* Symbol Input */}
               <div className="space-y-2">
                 <label htmlFor="symbol" className="text-sm font-medium">
                   Trading Symbol
@@ -142,7 +232,7 @@ export default function CleanupOrdersPage() {
                 </p>
               </div>
 
-              <Button type="submit" disabled={loading || !symbol.trim()}>
+              <Button type="submit" disabled={loading || !symbol.trim() || !selectedUserId}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -171,8 +261,16 @@ export default function CleanupOrdersPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Cancellation Summary</CardTitle>
-                <CardDescription>
-                  Results for {symbol}
+                <CardDescription className="flex flex-col gap-1">
+                  <span>Results for {symbol}</span>
+                  {targetUserInfo && (
+                    <span className="flex items-center gap-2">
+                      User: <strong>{targetUserInfo.email}</strong>
+                      {targetUserInfo.useTestnet && (
+                        <Badge variant="outline" className="text-xs">Testnet</Badge>
+                      )}
+                    </span>
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -329,6 +427,12 @@ export default function CleanupOrdersPage() {
                 <p>
                   You are about to cancel <strong>ALL open orders</strong> for <strong>{symbol}</strong>.
                 </p>
+                {selectedUserId && (
+                  <p>
+                    Target user: <strong>{users.find(u => u._id === selectedUserId)?.email}</strong>
+                    {users.find(u => u._id === selectedUserId)?.useTestnet && " (Testnet)"}
+                  </p>
+                )}
                 <p className="text-destructive font-medium">
                   This action cannot be undone. All pending orders and OCO pairs will be canceled immediately.
                 </p>
