@@ -293,7 +293,7 @@ export default function AdminSignalDetailModal({
       const promises = orderListIds.map(async (orderListId) => {
         try {
           const response = await fetch(
-            `/api/trades/orders/status?orderListId=${orderListId}`
+            `/api/admin/oco-status/${orderListId}`
           );
 
           if (!response.ok) {

@@ -28,8 +28,8 @@ export async function GET(request: Request) {
     // Validate pagination parameters
     const { page, limit } = validatePagination(rawPage, rawLimit);
 
-    // Build query with sanitized inputs
-    const query: SignalQuery = {};
+    // Build query with sanitized inputs (excluding userEmail since it's not in Signal schema)
+    const query: Partial<SignalQuery> = {};
 
     if (status !== "all") {
       query.status = status;
@@ -39,19 +39,58 @@ export async function GET(request: Request) {
       query.symbol = { $regex: escapeRegex(symbol), $options: "i" };
     }
 
-    if (userEmail) {
-      query.userEmail = { $regex: escapeRegex(userEmail), $options: "i" };
-    }
-
     const skip = (page - 1) * limit;
 
-    const [signals, total, stats] = await Promise.all([
-      Signal.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      Signal.countDocuments(query),
+    // Build aggregation pipeline to join with User collection for email
+    const aggregationPipeline: any[] = [
+      { $match: query },
+      {
+        $lookup: {
+          from: 'users',
+          let: { userIdStr: '$userId' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: [{ $toString: '$_id' }, '$$userIdStr'] }
+              }
+            },
+            {
+              $project: { email: 1 }
+            }
+          ],
+          as: 'user'
+        }
+      },
+      {
+        $addFields: {
+          userEmail: { $arrayElemAt: ['$user.email', 0] }
+        }
+      },
+      { $project: { user: 0 } } // Remove joined user object
+    ];
+
+    // Add userEmail filter AFTER lookup (since userEmail is computed)
+    if (userEmail) {
+      aggregationPipeline.push({
+        $match: {
+          userEmail: { $regex: escapeRegex(userEmail), $options: 'i' }
+        }
+      });
+    }
+
+    // Add sorting, skip, and limit
+    aggregationPipeline.push(
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit }
+    );
+
+    // Create total count pipeline (excludes $skip and $limit, includes userEmail filter)
+    const totalPipeline = [...aggregationPipeline.slice(0, -3), { $count: "total" }];
+
+    const [signals, totalResult, stats] = await Promise.all([
+      Signal.aggregate(aggregationPipeline),
+      Signal.aggregate(totalPipeline),
       Signal.aggregate([
         {
           $group: {
@@ -61,6 +100,8 @@ export async function GET(request: Request) {
         },
       ]),
     ]);
+
+    const total = totalResult[0]?.total || 0;
 
     const statusStats = {
       pending: stats.find((s) => s._id === "pending")?.count || 0,
