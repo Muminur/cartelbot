@@ -327,7 +327,22 @@ export default function AdminSignalDetailModal({
         }
       });
 
-      setOcoStatuses(newStatuses);
+      // Only update if data actually changed (prevents unnecessary re-renders)
+      setOcoStatuses(prev => {
+        if (prev.size !== newStatuses.size) {
+          return newStatuses;
+        }
+        // If sizes match, check if any values changed
+        let hasChanges = false;
+        for (const [key, value] of newStatuses.entries()) {
+          const prevValue = prev.get(key);
+          if (!prevValue || prevValue.listOrderStatus !== value.listOrderStatus) {
+            hasChanges = true;
+            break;
+          }
+        }
+        return hasChanges ? newStatuses : prev;
+      });
     } catch (error) {
       if (process.env.NODE_ENV === "development") {
         console.error("[AdminSignalDetailModal] Error fetching OCO statuses:", error);
@@ -379,11 +394,17 @@ export default function AdminSignalDetailModal({
   }, [trade?.status, trade?.sellOrders?.length]);
   // Removed fetchOCOStatuses from deps to prevent interval recreation
 
-  // Optimized: Use useMemo to prevent recalculating filled targets on every render
-  // Pre-build a Map for O(1) lookups instead of nested loops (O(n²))
-  // IMPORTANT: Must be called before any early returns to maintain hook order
+  /**
+   * Calculates which take-profit targets have been filled by comparing
+   * FILLED LIMIT_MAKER orders against signal target prices.
+   * Uses Map for O(1) lookups instead of O(n²) nested loops.
+   *
+   * IMPORTANT: Must be called before any early returns to maintain hook order.
+   *
+   * @returns Set of filled target indices (1-based)
+   */
   const filledTargets = useMemo((): Set<number> => {
-    if (!signal || !trade || !trade.sellOrders || !signal.targets) return new Set();
+    if (!signal?.targets?.length || !trade?.sellOrders?.length) return new Set();
 
     const filled = new Set<number>();
 
@@ -405,7 +426,11 @@ export default function AdminSignalDetailModal({
 
         // Find matching target (still O(n) but unavoidable for target matching)
         signal.targets.forEach((target, index) => {
-          const tolerance = target * TARGET_PRICE_TOLERANCE_PERCENT;
+          // Use both percentage and absolute tolerance to handle edge cases
+          const percentageTolerance = target * TARGET_PRICE_TOLERANCE_PERCENT;
+          const absoluteTolerance = 0.00001; // Minimum tolerance for low prices
+          const tolerance = Math.max(percentageTolerance, absoluteTolerance);
+
           if (Math.abs(orderPrice - target) <= tolerance) {
             filled.add(index + 1);
           }
@@ -414,8 +439,8 @@ export default function AdminSignalDetailModal({
     });
 
     return filled;
-  }, [signal, trade?.sellOrders, ocoStatuses, signal?.targets]);
-  // Dependencies: recalculate only when signal, trade orders, OCO statuses, or targets change
+  }, [signal?._id, signal?.targets, trade?.sellOrders?.length, ocoStatuses.size]);
+  // Dependencies: Use stable references to prevent unnecessary recalculations
 
   if (!signal) return null;
 
