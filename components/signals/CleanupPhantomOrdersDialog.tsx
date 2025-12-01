@@ -36,8 +36,8 @@ interface PhantomOrder {
 }
 
 interface PreviewData {
-  phantomOrders: PhantomOrder[];
-  completedOrders?: PhantomOrder[]; // Orders that are already filled/cancelled
+  phantomOrders: PhantomOrder[]; // Orders on Binance NOT in database (orphaned)
+  trackedOrders?: PhantomOrder[]; // Orders properly tracked in database (for reference)
   totalOrders: number;
   totalQuantity: string;
   baseAsset: string;
@@ -212,15 +212,15 @@ export default function CleanupPhantomOrdersDialog({
                     </AlertDescription>
                   </Alert>
 
-                  {/* Show completed orders if available */}
-                  {preview.completedOrders && preview.completedOrders.length > 0 && (
+                  {/* Show tracked orders (properly managed in database) if available */}
+                  {preview.trackedOrders && preview.trackedOrders.length > 0 && (
                     <>
-                      <Alert className="border-blue-500 bg-blue-50">
-                        <AlertDescription className="text-blue-900">
-                          <strong>Order Status:</strong> Found{" "}
-                          <strong>{preview.completedOrders.length}</strong> completed order
-                          {preview.completedOrders.length !== 1 ? "s" : ""} for this trade.
-                          These orders have already been filled or cancelled.
+                      <Alert className="border-blue-500 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800">
+                        <AlertDescription className="text-blue-900 dark:text-blue-100">
+                          <strong>Tracked Orders:</strong> Found{" "}
+                          <strong>{preview.trackedOrders.length}</strong> order
+                          {preview.trackedOrders.length !== 1 ? "s" : ""} properly tracked in database.
+                          These are legitimate orders managed by your trades.
                         </AlertDescription>
                       </Alert>
 
@@ -237,7 +237,7 @@ export default function CleanupPhantomOrdersDialog({
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {preview.completedOrders.map((order) => (
+                            {preview.trackedOrders.map((order) => (
                               <TableRow key={order.orderId}>
                                 <TableCell className="font-mono text-sm">
                                   {order.orderId}

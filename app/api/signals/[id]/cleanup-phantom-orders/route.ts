@@ -170,29 +170,38 @@ export async function GET(
     });
 
     // 7. Fetch all orders for this symbol (including filled/cancelled)
-    // This allows users to see what happened to their orders
     const allOrders = await binanceClient.getAllOrders(signal.symbol, 500);
 
-    // 8. Filter orders that belong to THIS trade
-    const tradeOrderIds = new Set<number>();
+    // 8. Get ALL order IDs from ALL user's trades for this symbol
+    // This is the source of truth for what's tracked in the database
+    const allUserTrades = await Trade.find({
+      userId: String(user._id),
+      symbol: signal.symbol,
+    }).select("buyOrder.orderId sellOrders.orderId");
 
-    // Add buy order ID (if it exists and is still open - unlikely but possible)
-    if (trade.buyOrder?.orderId) {
-      tradeOrderIds.add(trade.buyOrder.orderId);
+    const trackedOrderIds = new Set<number>();
+
+    // Collect all order IDs tracked in database across ALL trades for this symbol
+    for (const userTrade of allUserTrades) {
+      if (userTrade.buyOrder?.orderId) {
+        trackedOrderIds.add(userTrade.buyOrder.orderId);
+      }
+      if (userTrade.sellOrders && userTrade.sellOrders.length > 0) {
+        userTrade.sellOrders.forEach((order: { orderId?: number }) => {
+          if (order.orderId) {
+            trackedOrderIds.add(order.orderId);
+          }
+        });
+      }
     }
 
-    // Add all sell order IDs
-    if (trade.sellOrders && trade.sellOrders.length > 0) {
-      trade.sellOrders.forEach((order: { orderId?: number }) => {
-        if (order.orderId) {
-          tradeOrderIds.add(order.orderId);
-        }
-      });
-    }
-
-    // Filter all orders to only those belonging to this trade
-    const tradeOrders: PhantomOrder[] = allOrders
-      .filter((order) => tradeOrderIds.has(order.orderId))
+    // PHANTOM ORDERS = orders on Binance that are NOT tracked in database
+    // These are orphaned from failed trade attempts and are locking balance
+    const phantomOrders: PhantomOrder[] = allOrders
+      .filter((order) =>
+        !trackedOrderIds.has(order.orderId) && // NOT in database
+        (order.status === "NEW" || order.status === "PARTIALLY_FILLED") // Can be cancelled
+      )
       .map((order) => ({
         orderId: order.orderId,
         orderListId: order.orderListId || undefined,
@@ -204,13 +213,19 @@ export async function GET(
         stopPrice: order.stopPrice,
       }));
 
-    // Separate orders by status - only NEW/PARTIALLY_FILLED can be cancelled
-    const phantomOrders = tradeOrders.filter(
-      (order) => order.status === "NEW" || order.status === "PARTIALLY_FILLED"
-    );
-    const completedOrders = tradeOrders.filter(
-      (order) => order.status !== "NEW" && order.status !== "PARTIALLY_FILLED"
-    );
+    // Also show tracked orders (from database) for reference
+    const trackedOrders: PhantomOrder[] = allOrders
+      .filter((order) => trackedOrderIds.has(order.orderId))
+      .map((order) => ({
+        orderId: order.orderId,
+        orderListId: order.orderListId || undefined,
+        type: order.type,
+        side: order.side,
+        quantity: order.origQty,
+        price: order.price,
+        status: order.status,
+        stopPrice: order.stopPrice,
+      }));
 
     // 9. Calculate total quantity that will be freed (only from phantom orders)
     // FIX C3: OCO orders have 2 legs with same quantity - only count once per OCO group
@@ -236,8 +251,8 @@ export async function GET(
     return NextResponse.json({
       success: true,
       data: {
-        phantomOrders,
-        completedOrders, // Include completed orders so user can see what happened
+        phantomOrders, // Orders on Binance NOT in database (orphaned, locking balance)
+        trackedOrders, // Orders properly tracked in database (for reference)
         totalOrders: phantomOrders.length,
         totalQuantity: totalQuantity.toFixed(8),
         baseAsset,
@@ -385,30 +400,37 @@ export async function POST(
       testnet: useTestnet,
     });
 
-    // 7. Fetch all orders for this symbol (FIX C2: Use getAllOrders to match GET endpoint)
-    // This prevents race conditions where orders might be missed between GET and POST calls
+    // 7. Fetch all orders for this symbol
     const allOrders = await binanceClient.getAllOrders(signal.symbol, 500);
 
-    // 8. Filter orders that belong to THIS trade
-    const tradeOrderIds = new Set<number>();
+    // 8. Get ALL order IDs from ALL user's trades for this symbol
+    // This is the source of truth for what's tracked in the database
+    const allUserTrades = await Trade.find({
+      userId: String(user._id),
+      symbol: signal.symbol,
+    }).select("buyOrder.orderId sellOrders.orderId");
 
-    if (trade.buyOrder?.orderId) {
-      tradeOrderIds.add(trade.buyOrder.orderId);
+    const trackedOrderIds = new Set<number>();
+
+    // Collect all order IDs tracked in database across ALL trades for this symbol
+    for (const userTrade of allUserTrades) {
+      if (userTrade.buyOrder?.orderId) {
+        trackedOrderIds.add(userTrade.buyOrder.orderId);
+      }
+      if (userTrade.sellOrders && userTrade.sellOrders.length > 0) {
+        userTrade.sellOrders.forEach((order: { orderId?: number }) => {
+          if (order.orderId) {
+            trackedOrderIds.add(order.orderId);
+          }
+        });
+      }
     }
 
-    if (trade.sellOrders && trade.sellOrders.length > 0) {
-      trade.sellOrders.forEach((order: { orderId?: number }) => {
-        if (order.orderId) {
-          tradeOrderIds.add(order.orderId);
-        }
-      });
-    }
-
-    // FIX C2: Filter by trade orders AND status (only NEW/PARTIALLY_FILLED can be cancelled)
+    // PHANTOM ORDERS = orders on Binance NOT in database (orphaned, locking balance)
     const phantomOrders = allOrders.filter(
       (order) =>
-        tradeOrderIds.has(order.orderId) &&
-        (order.status === "NEW" || order.status === "PARTIALLY_FILLED")
+        !trackedOrderIds.has(order.orderId) && // NOT in database
+        (order.status === "NEW" || order.status === "PARTIALLY_FILLED") // Can be cancelled
     );
 
     if (phantomOrders.length === 0) {
