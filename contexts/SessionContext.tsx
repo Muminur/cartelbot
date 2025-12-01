@@ -32,6 +32,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 export function useSession() {
   const context = useContext(SessionContext);
   if (context === undefined) {
+    // During SSR or static generation, return a safe default instead of throwing
+    if (typeof window === "undefined") {
+      return {
+        showSessionExpired: () => {},
+        isSessionExpired: false,
+      };
+    }
     throw new Error("useSession must be used within a SessionProvider");
   }
   return context;

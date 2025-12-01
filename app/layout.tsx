@@ -9,6 +9,10 @@ export const metadata: Metadata = {
   description: "Execute trading signals automatically on Binance Spot market",
 };
 
+// Force dynamic rendering to prevent Next.js 16 Turbopack prerendering bug
+export const dynamic = "force-dynamic";
+export const dynamicParams = true;
+
 export default function RootLayout({
   children,
 }: Readonly<{

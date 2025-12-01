@@ -1,0 +1,46 @@
+{
+  "name": "cartelbot",
+  "description": "Automated Binance Spot Trading Bot",
+  "type": "docker-compose",
+  "repository": "https://github.com/your-username/cartelbot",
+  "branch": "main",
+  "buildPath": "./",
+  "dockerComposePath": "./docker-compose.yml",
+  "healthCheck": {
+    "enabled": true,
+    "path": "/api/health",
+    "interval": 30,
+    "timeout": 10,
+    "retries": 3,
+    "startPeriod": 40
+  },
+  "domains": [
+    {
+      "domain": "cartelbot.coinspree.cc",
+      "https": true,
+      "certificate": "letsencrypt"
+    }
+  ],
+  "resources": {
+    "limits": {
+      "cpus": "2",
+      "memory": "2g"
+    },
+    "reservations": {
+      "cpus": "1",
+      "memory": "1g"
+    }
+  },
+  "deployment": {
+    "strategy": "rolling",
+    "maxUnavailable": 0,
+    "autoRestart": true
+  },
+  "logging": {
+    "driver": "json-file",
+    "options": {
+      "max-size": "10m",
+      "max-file": "3"
+    }
+  }
+}

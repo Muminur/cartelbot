@@ -87,29 +87,33 @@ const envSchema = z.object({
     .string()
     .optional()
     .default(""),
+
+  SENTRY_DSN: z
+    .string()
+    .url("SENTRY_DSN must be a valid URL")
+    .refine(
+      (val) => !val || val.includes('sentry.io'),
+      "SENTRY_DSN must be a valid Sentry URL"
+    )
+    .optional(),
+
+  NEXT_PUBLIC_SENTRY_DSN: z
+    .string()
+    .url("NEXT_PUBLIC_SENTRY_DSN must be a valid URL")
+    .optional(),
+
+  SENTRY_ENVIRONMENT: z
+    .enum(['development', 'staging', 'production'])
+    .default('production'),
 });
 
 export type Env = z.infer<typeof envSchema>;
 
-/**
- * Environment configuration with memoization for performance optimization.
- *
- * IMPORTANT: Environment variables are validated ONCE at server startup.
- * Changes to .env files require server restart in development mode.
- *
- * Performance: Reduces startup validation overhead from ~100ms to <1ms
- * by caching the validation result across all module imports.
- *
- * Security: Immutable after initialization, preventing runtime tampering.
- */
 let cachedEnv: Env | null = null;
 let validationError: Error | null = null;
 
 function getEnv(): Env {
-  // Return cached result if validation already ran
   if (cachedEnv) return cachedEnv;
-
-  // Throw cached error if validation previously failed
   if (validationError) throw validationError;
 
   try {
@@ -130,6 +134,9 @@ function getEnv(): Env {
       PAYMENT_WALLET_ADDRESS: process.env.PAYMENT_WALLET_ADDRESS,
       TRON_MIN_CONFIRMATIONS: process.env.TRON_MIN_CONFIRMATIONS,
       ADMIN_IP_WHITELIST: process.env.ADMIN_IP_WHITELIST,
+      SENTRY_DSN: process.env.SENTRY_DSN,
+      NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
+      SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT,
     };
 
     const parsed = envSchema.safeParse(env);
@@ -144,7 +151,6 @@ function getEnv(): Env {
       console.error("The following environment variables are missing or invalid:");
       console.error("");
 
-      // Display errors without showing secret values
       for (const [field, messages] of Object.entries(errors)) {
         if (messages && messages.length > 0) {
           console.error(`  ${field}:`);
@@ -159,21 +165,17 @@ function getEnv(): Env {
       console.error("See .env.example for required variables.");
       console.error("======================================");
 
-      // Cache the error
       validationError = new Error("Invalid environment variables. Check logs for details.");
       throw validationError;
     }
 
-    // Ensure parsed data exists
     if (!parsed.data) {
       throw new Error("Environment validation succeeded but returned null data");
     }
 
-    // Cache the validated environment
     cachedEnv = parsed.data;
     return cachedEnv;
   } catch (error) {
-    // Cache any errors that occur during validation (defensive type checking)
     validationError = error instanceof Error ? error : new Error(String(error));
     throw validationError;
   }

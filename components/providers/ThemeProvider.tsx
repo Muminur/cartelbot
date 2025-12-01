@@ -36,6 +36,21 @@ const ThemeContext = React.createContext<ThemeContextType | undefined>(
 export function useThemePreset() {
   const context = React.useContext(ThemeContext);
   if (!context) {
+    // During SSR or static generation, return a safe default instead of throwing
+    if (typeof window === "undefined") {
+      return {
+        preset: "default" as ThemePreset,
+        setPreset: () => {},
+        accentColor: null,
+        setAccentColor: () => {},
+        highContrast: false,
+        setHighContrast: () => {},
+        autoSwitch: false,
+        setAutoSwitch: () => {},
+        autoSwitchTime: { day: "06:00", night: "18:00" },
+        setAutoSwitchTime: () => {},
+      };
+    }
     throw new Error("useThemePreset must be used within ThemeProvider");
   }
   return context;
