@@ -73,138 +73,147 @@ interface ListStatusEvent {
 export async function handleExecutionReport(event: BinanceWebSocketEvent): Promise<void> {
   try {
     const data = event.data as unknown as ExecutionReportEvent;
-
-    const trade = await Trade.findOne({
-      $or: [
-        { "buyOrder.orderId": data.i },
-        { "sellOrders.orderId": data.i },
-      ],
-    });
-
-    if (!trade) {
-      console.warn(`Trade not found for orderId: ${data.i}`);
-      return;
-    }
-
+    const orderId = data.i;
     const orderStatus = data.X;
     const executedQty = parseFloat(data.z);
     const cummulativeQuoteQty = parseFloat(data.Z);
 
-    if (data.i === trade.buyOrder.orderId) {
-      trade.buyOrder.status = orderStatus;
-      trade.buyOrder.executedQty = executedQty;
-      trade.buyOrder.cummulativeQuoteQty = cummulativeQuoteQty;
+    // Try buy order update first (atomic)
+    const buyOrderUpdate: Record<string, unknown> = {
+      "buyOrder.status": orderStatus,
+      "buyOrder.executedQty": executedQty,
+      "buyOrder.cummulativeQuoteQty": cummulativeQuoteQty,
+    };
 
-      if (orderStatus === "FILLED") {
-        const avgPrice = cummulativeQuoteQty / executedQty;
-        trade.entryPrice = avgPrice;
-
-        // NOTE: Buy order notification is already sent from the execute endpoint
-        // (app/api/trades/execute/route.ts line 100) after OCO creation succeeds.
-        // We do NOT send notification here to avoid duplicate emails.
-        // Only SELL orders (targets and stop loss) trigger notifications from WebSocket events.
-      }
-    } else {
-      const sellOrderIndex = trade.sellOrders.findIndex(
-        (order: { orderId: number }) => order.orderId === data.i
-      );
-
-      if (sellOrderIndex !== -1) {
-        trade.sellOrders[sellOrderIndex].status = orderStatus;
-        trade.sellOrders[sellOrderIndex].executedQty = executedQty;
-        trade.sellOrders[sellOrderIndex].cummulativeQuoteQty = cummulativeQuoteQty;
-
-        if (orderStatus === "FILLED") {
-          const currentOrder = trade.sellOrders[sellOrderIndex];
-          const isStopLoss = currentOrder.type === "STOP_LOSS_LIMIT";
-
-          // Send notification based on order type
-          if (isStopLoss) {
-            // Stop Loss Hit - Calculate loss proportionally
-            const avgBuyPrice = trade.buyOrder.cummulativeQuoteQty / trade.buyOrder.executedQty;
-            const buyCostForThisQuantity = avgBuyPrice * executedQty;
-            const loss = cummulativeQuoteQty - buyCostForThisQuantity;
-
-            sendStopLossHitNotification({
-              userId: trade.userId,
-              tradeId: trade._id,
-              symbol: data.s,
-              stopLossPrice: currentOrder.stopPrice || currentOrder.price,
-              executedQuantity: executedQty,
-              loss: loss,
-              timestamp: new Date(data.T),
-              orderId: data.i,
-            }).catch((error) => {
-              console.error("[Notification] Failed to send stop loss email:", error);
-            });
-          } else {
-            // Target Hit (Take Profit) - Calculate profit proportionally
-            const avgBuyPrice = trade.buyOrder.cummulativeQuoteQty / trade.buyOrder.executedQty;
-            const buyCostForThisQuantity = avgBuyPrice * executedQty;
-            const profit = cummulativeQuoteQty - buyCostForThisQuantity;
-
-            const targetNumber = sellOrderIndex + 1; // TP #1, TP #2, etc.
-            const remainingTargets = trade.sellOrders.filter(
-              (order: { status: string; type: string }) =>
-                order.status !== "FILLED" && order.type !== "STOP_LOSS_LIMIT"
-            ).length;
-
-            sendTargetHitNotification({
-              userId: trade.userId,
-              tradeId: trade._id,
-              symbol: data.s,
-              targetNumber: targetNumber,
-              targetPrice: currentOrder.price,
-              executedQuantity: executedQty,
-              revenue: profit,
-              timestamp: new Date(data.T),
-              orderId: data.i,
-              remainingTargets: remainingTargets,
-            }).catch((error) => {
-              console.error("[Notification] Failed to send target hit email:", error);
-            });
-          }
-
-          const totalExecutedQty = trade.sellOrders.reduce(
-            (sum: number, order: { executedQty: number }) => sum + order.executedQty,
-            0
-          );
-
-          if (totalExecutedQty >= trade.quantity * 0.99) {
-            trade.status = "closed";
-            trade.closeReason = isStopLoss ? "stop_loss" : "target";
-            trade.closeReasonDetail = isStopLoss ? "Stop Loss Hit" : "Target Hit";
-
-            // Get actual buy cost from Binance (what was actually spent)
-            const buyCost = trade.buyOrder.cummulativeQuoteQty;
-
-            // Get actual sell revenue from filled orders (what was actually received)
-            const sellRevenue = trade.sellOrders.reduce(
-              (sum: number, order: { cummulativeQuoteQty: number }) =>
-                sum + order.cummulativeQuoteQty,
-              0
-            );
-
-            // FIX: Realized P&L = Sell Revenue - Buy Cost (both from Binance API, not user input)
-            trade.realizedPnL = sellRevenue - buyCost;
-            trade.exitPrice = sellRevenue / totalExecutedQty;
-
-            // Update signal status when trade closes
-            if (trade.signalId) {
-              await markSignalCompleted(
-                trade.signalId,
-                trade._id,
-                isStopLoss ? "stop_loss" : "target"
-              );
-            }
-          } else {
-            trade.status = "partial";
-          }
-        }
-      }
+    if (orderStatus === "FILLED") {
+      buyOrderUpdate.entryPrice = cummulativeQuoteQty / executedQty;
     }
 
-    await trade.save();
+    const buyResult = await Trade.findOneAndUpdate(
+      { "buyOrder.orderId": orderId },
+      { $set: buyOrderUpdate },
+      { new: true }
+    );
+
+    if (buyResult) {
+      // Buy order updated successfully - no notification here (sent from execute endpoint)
+      return;
+    }
+
+    // Try sell order update (atomic) - use positional $ operator
+    const sellOrderUpdate = await Trade.findOneAndUpdate(
+      { "sellOrders.orderId": orderId },
+      {
+        $set: {
+          "sellOrders.$.status": orderStatus,
+          "sellOrders.$.executedQty": executedQty,
+          "sellOrders.$.cummulativeQuoteQty": cummulativeQuoteQty,
+        },
+      },
+      { new: true }
+    );
+
+    if (!sellOrderUpdate) {
+      console.warn(`Trade not found for orderId: ${orderId}`);
+      return;
+    }
+
+    // Find which sell order was updated and handle notifications
+    const sellOrderIndex = sellOrderUpdate.sellOrders.findIndex(
+      (order: { orderId: number }) => order.orderId === orderId
+    );
+
+    if (sellOrderIndex === -1 || orderStatus !== "FILLED") {
+      return;
+    }
+
+    const currentOrder = sellOrderUpdate.sellOrders[sellOrderIndex];
+    const isStopLoss = currentOrder.type === "STOP_LOSS_LIMIT";
+
+    // Send notification based on order type
+    if (isStopLoss) {
+      const avgBuyPrice = sellOrderUpdate.buyOrder.cummulativeQuoteQty / sellOrderUpdate.buyOrder.executedQty;
+      const buyCostForThisQuantity = avgBuyPrice * executedQty;
+      const loss = cummulativeQuoteQty - buyCostForThisQuantity;
+
+      sendStopLossHitNotification({
+        userId: sellOrderUpdate.userId,
+        tradeId: sellOrderUpdate._id,
+        symbol: data.s,
+        stopLossPrice: currentOrder.stopPrice || currentOrder.price,
+        executedQuantity: executedQty,
+        loss: loss,
+        timestamp: new Date(data.T),
+        orderId: orderId,
+      }).catch((error) => {
+        console.error("[Notification] Failed to send stop loss email:", error);
+      });
+    } else {
+      const avgBuyPrice = sellOrderUpdate.buyOrder.cummulativeQuoteQty / sellOrderUpdate.buyOrder.executedQty;
+      const buyCostForThisQuantity = avgBuyPrice * executedQty;
+      const profit = cummulativeQuoteQty - buyCostForThisQuantity;
+
+      const targetNumber = sellOrderIndex + 1;
+      const remainingTargets = sellOrderUpdate.sellOrders.filter(
+        (order: { status: string; type: string }) =>
+          order.status !== "FILLED" && order.type !== "STOP_LOSS_LIMIT"
+      ).length;
+
+      sendTargetHitNotification({
+        userId: sellOrderUpdate.userId,
+        tradeId: sellOrderUpdate._id,
+        symbol: data.s,
+        targetNumber: targetNumber,
+        targetPrice: currentOrder.price,
+        executedQuantity: executedQty,
+        revenue: profit,
+        timestamp: new Date(data.T),
+        orderId: orderId,
+        remainingTargets: remainingTargets,
+      }).catch((error) => {
+        console.error("[Notification] Failed to send target hit email:", error);
+      });
+    }
+
+    // Check if trade should be closed (atomic update)
+    const totalExecutedQty = sellOrderUpdate.sellOrders.reduce(
+      (sum: number, order: { executedQty: number }) => sum + order.executedQty,
+      0
+    );
+
+    if (totalExecutedQty >= sellOrderUpdate.quantity * 0.99) {
+      const buyCost = sellOrderUpdate.buyOrder.cummulativeQuoteQty;
+      const sellRevenue = sellOrderUpdate.sellOrders.reduce(
+        (sum: number, order: { cummulativeQuoteQty: number }) =>
+          sum + order.cummulativeQuoteQty,
+        0
+      );
+
+      // Atomic trade close update
+      await Trade.findByIdAndUpdate(sellOrderUpdate._id, {
+        $set: {
+          status: "closed",
+          closeReason: isStopLoss ? "stop_loss" : "target",
+          closeReasonDetail: isStopLoss ? "Stop Loss Hit" : "Target Hit",
+          realizedPnL: sellRevenue - buyCost,
+          exitPrice: sellRevenue / totalExecutedQty,
+        },
+      });
+
+      // Update signal status when trade closes
+      if (sellOrderUpdate.signalId) {
+        await markSignalCompleted(
+          sellOrderUpdate.signalId,
+          sellOrderUpdate._id,
+          isStopLoss ? "stop_loss" : "target"
+        );
+      }
+    } else if (sellOrderUpdate.status !== "partial") {
+      // Atomic partial status update
+      await Trade.findByIdAndUpdate(sellOrderUpdate._id, {
+        $set: { status: "partial" },
+      });
+    }
   } catch (error) {
     const data = event.data as unknown as ExecutionReportEvent;
     console.error("Error handling executionReport:", {
@@ -238,81 +247,82 @@ export async function handleListStatus(event: BinanceWebSocketEvent): Promise<vo
   try {
     const data = event.data as unknown as ListStatusEvent;
 
+    // Only process ALL_DONE status
+    if (data.l !== "ALL_DONE") {
+      return;
+    }
+
     // Track processed trade IDs to avoid duplicate processing
-    // (data.O contains multiple orders that may belong to the same trade)
     const processedTradeIds = new Set<string>();
 
     for (const order of data.O as Array<{ s: string; i: number; c: string }>) {
+      // Find trade without modifying (lean query for read-only)
+      interface LeanTrade {
+        _id: string;
+        signalId?: string;
+        buyOrder: { cummulativeQuoteQty: number };
+        sellOrders: Array<{
+          status: string;
+          cummulativeQuoteQty: number;
+          executedQty: number;
+        }>;
+      }
       const trade = await Trade.findOne({
         "sellOrders.orderId": order.i,
+      }).lean() as LeanTrade | null;
+
+      if (!trade) continue;
+
+      // Skip if we've already processed this trade in this event
+      const tradeIdStr = String(trade._id);
+      if (processedTradeIds.has(tradeIdStr)) {
+        continue;
+      }
+      processedTradeIds.add(tradeIdStr);
+
+      const allFilled = trade.sellOrders.every(
+        (sellOrder: { status: string }) =>
+          sellOrder.status === "FILLED" || sellOrder.status === "CANCELED"
+      );
+
+      if (!allFilled) continue;
+
+      const filledOrders = trade.sellOrders.filter(
+        (order: { status: string }) => order.status === "FILLED"
+      );
+
+      if (filledOrders.length === 0) continue;
+
+      // Calculate P&L values
+      const buyCost = trade.buyOrder.cummulativeQuoteQty;
+      const sellRevenue = filledOrders.reduce(
+        (sum: number, order: { cummulativeQuoteQty: number }) =>
+          sum + order.cummulativeQuoteQty,
+        0
+      );
+      const totalExecutedQty = filledOrders.reduce(
+        (sum: number, order: { executedQty: number }) => sum + order.executedQty,
+        0
+      );
+
+      const isStopLoss = data.r === "STOP_LOSS_LIMIT";
+
+      // Atomic update - prevents version conflicts
+      await Trade.findByIdAndUpdate(trade._id, {
+        $set: {
+          status: "closed",
+          closeReason: isStopLoss ? "stop_loss" : "target",
+          closeReasonDetail: isStopLoss ? "Stop Loss Hit" : "Target Hit",
+          exitPrice: sellRevenue / totalExecutedQty,
+          realizedPnL: sellRevenue - buyCost,
+        },
       });
 
-      if (trade) {
-        // Skip if we've already processed this trade in this event
-        const tradeIdStr = trade._id.toString();
-        if (processedTradeIds.has(tradeIdStr)) {
-          continue;
-        }
-        processedTradeIds.add(tradeIdStr);
-
-        if (data.l === "ALL_DONE") {
-          const allFilled = trade.sellOrders.every(
-            (sellOrder: { status: string }) =>
-              sellOrder.status === "FILLED" || sellOrder.status === "CANCELED"
-          );
-
-          if (allFilled) {
-            const filledOrders = trade.sellOrders.filter(
-              (order: { status: string }) => order.status === "FILLED"
-            );
-
-            if (filledOrders.length > 0) {
-              // Get actual buy cost from Binance (what was actually spent)
-              const buyCost = trade.buyOrder.cummulativeQuoteQty;
-
-              // Get actual sell revenue from filled orders (what was actually received)
-              const sellRevenue = filledOrders.reduce(
-                (sum: number, order: { cummulativeQuoteQty: number }) =>
-                  sum + order.cummulativeQuoteQty,
-                0
-              );
-              const totalExecutedQty = filledOrders.reduce(
-                (sum: number, order: { executedQty: number }) => sum + order.executedQty,
-                0
-              );
-
-              trade.exitPrice = sellRevenue / totalExecutedQty;
-
-              // FIX: Realized P&L = Sell Revenue - Buy Cost (both from Binance API, not user input)
-              trade.realizedPnL = sellRevenue - buyCost;
-              trade.status = "closed";
-
-              const isStopLoss = data.r === "STOP_LOSS_LIMIT";
-
-              if (isStopLoss) {
-                trade.closeReason = "stop_loss";
-                trade.closeReasonDetail = "Stop Loss Hit";
-                // NOTE: Stop loss notification is already sent from handleExecutionReport
-                // when the individual STOP_LOSS_LIMIT order is FILLED.
-                // We do NOT send notification here to avoid duplicate emails.
-              } else {
-                trade.closeReason = "target";
-                trade.closeReasonDetail = "Target Hit";
-                // NOTE: Target hit notification is already sent from handleExecutionReport
-                // when each individual target order is FILLED.
-                // We do NOT send notification here to avoid duplicate emails.
-              }
-
-              await trade.save();
-
-              // Update signal status when trade closes (via OCO list status)
-              if (trade.signalId) {
-                const reason = isStopLoss ? "stop_loss" : "target";
-                await markSignalCompleted(trade.signalId, trade._id, reason);
-              }
-            }
-          }
-        }
+      // Update signal status when trade closes
+      // NOTE: Notifications are already sent from handleExecutionReport
+      if (trade.signalId) {
+        const reason = isStopLoss ? "stop_loss" : "target";
+        await markSignalCompleted(trade.signalId, trade._id, reason);
       }
     }
   } catch (error) {

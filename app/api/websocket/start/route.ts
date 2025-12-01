@@ -10,6 +10,9 @@ import {
   getConnection,
   setConnection,
   deleteConnection,
+  isPendingConnection,
+  setPendingConnection,
+  clearPendingConnection,
 } from "@/lib/binance/connection-manager";
 
 export async function POST(req: NextRequest) {
@@ -27,6 +30,17 @@ export async function POST(req: NextRequest) {
         { success: false, error: { message: "Binance API keys not configured" } },
         { status: 400 }
       );
+    }
+
+    // Check for pending connection to prevent race conditions
+    if (isPendingConnection(userId)) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          message: "WebSocket connection is being established",
+          listenKey: null,
+        },
+      });
     }
 
     const existingConnection = getConnection(userId);
@@ -47,6 +61,9 @@ export async function POST(req: NextRequest) {
         deleteConnection(userId);
       }
     }
+
+    // Mark connection as pending to prevent duplicate attempts
+    setPendingConnection(userId);
 
     const existingSession = await WebSocketSession.findOne({
       userId,
@@ -88,19 +105,29 @@ export async function POST(req: NextRequest) {
     });
 
     if (process.env.NODE_ENV !== 'production') console.log(`[WebSocket Start] Starting WebSocket manager for user ${userId}`);
-    const listenKey = await wsManager.start();
-    if (process.env.NODE_ENV !== 'production') console.log(`[WebSocket Start] WebSocket started successfully with listen key: ${listenKey?.substring(0, 10)}...`);
 
-    setConnection(userId, wsManager);
+    try {
+      const listenKey = await wsManager.start();
+      if (process.env.NODE_ENV !== 'production') console.log(`[WebSocket Start] WebSocket started successfully with listen key: ${listenKey?.substring(0, 10)}...`);
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        listenKey,
-        message: "WebSocket connection started successfully",
-      },
-    });
+      setConnection(userId, wsManager);
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          listenKey,
+          message: "WebSocket connection started successfully",
+        },
+      });
+    } catch (startError) {
+      // Clean up on failure - stop manager and clear pending
+      clearPendingConnection(userId);
+      await wsManager.stop();
+      throw startError;
+    }
   } catch (error) {
+    // Note: pending status is already cleared in inner catch for wsManager failures
+    // For early failures (auth, DB), userId isn't in pending state yet
     console.error("[WebSocket Start] Error starting WebSocket:", error);
 
     // Enhanced error logging
