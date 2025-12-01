@@ -6,6 +6,10 @@ import { connectDB } from "@/lib/db/connection";
 import { User } from "@/lib/db/models/User";
 import { Trade } from "@/lib/db/models/Trade";
 
+// Force Next.js to recognize this as a dynamic API route
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 /**
  * POST /api/trades/orders/status
  *
