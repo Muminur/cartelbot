@@ -161,17 +161,8 @@ export default function AnalyticsPage() {
     fetchData();
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div
-          className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"
-          role="status"
-          aria-label="Loading analytics data"
-        />
-      </div>
-    );
-  }
+  // IMPORTANT: All useMemo hooks must be placed BEFORE any early returns
+  // to comply with React's Rules of Hooks (hooks must be called in the same order every render)
 
   // Memoize cumulative P&L calculation for performance
   const cumulativeDailyData = useMemo(() => {
@@ -197,6 +188,19 @@ export default function AnalyticsPage() {
       { name: "Pending", value: data.signalStats.pending, color: "#3b82f6" },
     ].filter((d) => d.value > 0);
   }, [data?.signalStats]);
+
+  // Early returns AFTER all hooks
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div
+          className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"
+          role="status"
+          aria-label="Loading analytics data"
+        />
+      </div>
+    );
+  }
 
   if (!data) {
     return (
