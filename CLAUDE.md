@@ -560,3 +560,21 @@ Fixed -1121 errors by removing delisted BUSD pairs (43% API reduction). Implemen
 
 ## Session: Dec 1, 2025 - Database-Only Admin Auth Clarification ✅ COMPLETED
 **Admin auth migration (856e781)**: Verified admin authentication is ALREADY 100% database-driven (passwordHash in MongoDB, NO .env dependencies). Cleaned up misleading .env.example ADMIN_PASSWORD_HASH reference, created production-ready create-admin.js script (bcrypt hashing, CLI args, security warnings), deprecated legacy scripts (setup-admin.ts, generate-admin-password.js moved to scripts/legacy/). Documented dual auth architecture (JWT cookie for pages, email whitelist for API). Security review: 9.5/10, code quality 9.2/10, production-ready.
+
+## Session: Dec 1, 2025 - Order Status API 404 Fix ✅ COMPLETED
+**Fixed 404 HTML response on /api/trades/orders/status (262e1ad)**: SignalDetailModal was receiving 404 HTML error page instead of JSON when fetching order status. Root cause: Next.js 16 Turbopack cache not recognizing the nested API route. Fix: Cleared .next cache, added `export const runtime = 'nodejs'` and `export const dynamic = 'force-dynamic'` to force route recognition. Build: 61 routes, TypeScript clean. Tests: 42/42 passing.
+
+## Session: Dec 1, 2025 - Remove Admin Subscriptions Page ✅ COMPLETED
+**Removed /admin/subscriptions page (24f4da3)**: Deleted admin subscription management page and 2 API endpoints. Admin users have 100-year default subscription. Removed nav link from layout, deleted 4 files (560 lines). Build: 59 routes, TypeScript clean.
+
+## Session: Dec 1, 2025 - Admin Cleanup Orders Error Display Fix ✅ COMPLETED
+**Fixed [object Object] error (bce27c8)**: Admin cleanup-orders page displayed "[object Object]" instead of error message. Root cause: `data.error` is object `{message,code,statusCode}` but code passed entire object to `Error()`. Fix: Extract message with `data.error?.message`. Code review 7.5/10→simplified to match codebase standard pattern.
+
+## Session: Dec 1, 2025 - Admin User-Specific Order Cleanup ✅ COMPLETED
+**Admin phantom order cleanup for any user (40dae66)**: Admin can now cleanup phantom orders for any user. Added user dropdown selector to cleanup-orders page, new API `/api/admin/users-with-keys` lists users with configured API keys, modified cancel-all-orders API to accept userId. Shows target user + Testnet badge in UI. Build: 60 routes, TypeScript clean.
+
+## Session: Dec 1, 2025 - Admin 100-Year Subscription ✅ COMPLETED
+**Admin unlimited access (b7d13b3)**: Added `isAdminEmail()` helper to usage-checker.ts. Admin users (ADMIN_EMAILS) bypass all subscription checks with unlimited Pro tier access and 100-year expiry. Build: 60 routes, TypeScript clean.
+
+## Session: Dec 1, 2025 - Admin Signal Details Modal + Bulk Export ✅ COMPLETED
+**Admin signal monitoring enhancement (013738e)**: Created AdminSignalDetailModal (714 LOC) with read-only signal details, live price (5s refresh), trade execution data, OCO status (10s refresh), P&L display, parse/execution errors. Implemented bulk export: JSON/TXT formats with paginated batching (500/batch, 5000 max), progress tracking, memory-safe. Added /api/admin/trades endpoint. Fixed 8 critical issues: type safety (removed 'as any'), memory leak (interval cleanup), O(n²)→O(n) performance, race conditions, error handling. Code quality 9.5/10, TypeScript clean, build ✅ 42s.
