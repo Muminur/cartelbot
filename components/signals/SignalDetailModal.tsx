@@ -891,49 +891,77 @@ export default function SignalDetailModal({
 
     const filled = new Set<number>();
 
-    // Count how many LIMIT_MAKER (take profit) orders are FILLED
-    let filledTpCount = 0;
-
     trade.sellOrders.forEach((order: IOrder) => {
-      // FIX: Use real-time status from Binance API if available, fallback to database
+      // Get real-time status from Binance OCO API
       const ocoStatus = order.orderListId ? ocoStatuses.get(order.orderListId) : null;
       const realOrderStatus = ocoStatus?.orderReports?.find(
         (report: BinanceOCOOrderReport) => report.orderId === order.orderId
       );
+
+      // CRITICAL FIX: Only use Binance status, not database status
       const displayStatus = realOrderStatus?.status || order.status;
 
-      // Count FILLED LIMIT_MAKER orders (take profit targets)
-      if (displayStatus === "FILLED" && order.type === "LIMIT_MAKER") {
-        filledTpCount++;
+      // CRITICAL FIX: Validate cummulativeQuoteQty > 0 (actual execution occurred)
+      const cummulativeQuoteQty = realOrderStatus?.cummulativeQuoteQty
+        ? parseFloat(realOrderStatus.cummulativeQuoteQty)
+        : order.cummulativeQuoteQty || 0;
 
-        // Try to match this order to a specific target price
-        // Use price from Binance API if available, fallback to database price
-        const orderPrice = realOrderStatus?.price
-          ? parseFloat(realOrderStatus.price)
-          : order.price;
+      const executedQty = realOrderStatus?.executedQty
+        ? parseFloat(realOrderStatus.executedQty)
+        : order.executedQty || 0;
 
-        if (orderPrice) {
-          // FIX H3: Add null check for signal.targets array
-          if (signal.targets && Array.isArray(signal.targets)) {
-            signal.targets.forEach((target, index) => {
-              // FIX M1: Use constant instead of magic number
-              const tolerance = target * TARGET_PRICE_TOLERANCE_PERCENT;
-              if (Math.abs(orderPrice - target) <= tolerance) {
-                filled.add(index);
-              }
-            });
-          }
+      // Only count as filled if:
+      // 1. Status is FILLED (from Binance)
+      // 2. Order type is LIMIT_MAKER (take profit, not stop loss)
+      // 3. cummulativeQuoteQty > 0 (actual USDT received)
+      // 4. executedQty > 0 (actual coins sold)
+      if (
+        displayStatus === "FILLED" &&
+        order.type === "LIMIT_MAKER" &&
+        cummulativeQuoteQty > 0 &&
+        executedQty > 0
+      ) {
+        // Calculate actual execution price from cummulativeQuoteQty
+        const actualExecutionPrice = cummulativeQuoteQty / executedQty;
+
+        // Match against signal targets with tolerance
+        if (signal.targets && Array.isArray(signal.targets)) {
+          signal.targets.forEach((target, index) => {
+            const tolerance = target * TARGET_PRICE_TOLERANCE_PERCENT;
+            if (Math.abs(actualExecutionPrice - target) <= tolerance) {
+              filled.add(index);
+            }
+          });
         }
       }
     });
 
-    // FIX: If we have filled TP orders but couldn't match them to specific targets,
-    // assume targets were hit in order (Target 1, Target 2, etc.)
-    if (filledTpCount > 0 && filled.size === 0) {
-      console.warn(`[getFilledTargets] ${filledTpCount} TP orders filled but couldn't match to targets. Assuming sequential fill.`);
-      for (let i = 0; i < Math.min(filledTpCount, signal.targets.length); i++) {
-        filled.add(i);
-      }
+    // CRITICAL FIX: Removed fallback assumption logic entirely
+    // DO NOT assume targets were hit just because orders exist
+    // Only real Binance execution data (cummulativeQuoteQty > 0) counts as "hit"
+
+    // Development-only debug logging
+    if (process.env.NODE_ENV === "development") {
+      console.log("[getFilledTargets] Analysis:", {
+        totalSellOrders: trade.sellOrders.length,
+        limitMakerCount: trade.sellOrders.filter((o) => o.type === "LIMIT_MAKER").length,
+        filledCount: filled.size,
+        details: trade.sellOrders.map((order) => {
+          const ocoStatus = order.orderListId ? ocoStatuses.get(order.orderListId) : null;
+          const realOrderStatus = ocoStatus?.orderReports?.find(
+            (r: BinanceOCOOrderReport) => r.orderId === order.orderId
+          );
+          return {
+            orderId: order.orderId,
+            type: order.type,
+            dbStatus: order.status,
+            binanceStatus: realOrderStatus?.status,
+            cummulativeQuoteQty:
+              realOrderStatus?.cummulativeQuoteQty || order.cummulativeQuoteQty || "0",
+            executedQty: realOrderStatus?.executedQty || order.executedQty || "0",
+          };
+        }),
+      });
     }
 
     return filled;
