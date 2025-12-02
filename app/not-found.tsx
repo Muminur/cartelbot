@@ -5,11 +5,11 @@ export const dynamic = "force-dynamic";
 
 export default function NotFound() {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <title>404 - Page Not Found | CartelBot</title>
       </head>
-      <body>
+      <body className="font-sans antialiased">
         <div
           style={{
             display: "flex",
