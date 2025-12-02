@@ -67,6 +67,7 @@ export default function SettingsPage() {
   const [onTradeExecuted, setOnTradeExecuted] = useState(true);
   const [onTargetHit, setOnTargetHit] = useState(true);
   const [onStopLossHit, setOnStopLossHit] = useState(true);
+  const [onTargetAdjustment, setOnTargetAdjustment] = useState(true);
   const [dailySummary, setDailySummary] = useState(false);
   const [emailFrequency, setEmailFrequency] = useState<"instant" | "hourly" | "daily">("instant");
   const [savingNotifications, setSavingNotifications] = useState(false);
@@ -132,6 +133,7 @@ export default function SettingsPage() {
             setOnTradeExecuted(userData.emailNotifications.onTradeExecuted ?? true);
             setOnTargetHit(userData.emailNotifications.onTargetHit ?? true);
             setOnStopLossHit(userData.emailNotifications.onStopLossHit ?? true);
+            setOnTargetAdjustment(userData.emailNotifications.onTargetAdjustment ?? true);
             setDailySummary(userData.emailNotifications.dailySummary ?? false);
           }
           setEmailFrequency(userData.emailFrequency || "instant");
@@ -354,6 +356,40 @@ export default function SettingsPage() {
       toast.error("Failed to save trade settings");
     } finally {
       setSavingTradeSettings(false);
+    }
+  };
+
+  const handleSaveNotifications = async () => {
+    setSavingNotifications(true);
+
+    try {
+      const response = await fetch("/api/user/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          emailNotifications: {
+            onTradeExecuted,
+            onTargetHit,
+            onStopLossHit,
+            onTargetAdjustment,
+            dailySummary,
+          },
+          emailFrequency,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success("Notification preferences saved successfully");
+      } else {
+        toast.error(data.error || "Failed to save notification preferences");
+      }
+    } catch (error) {
+      console.error("Error saving notification preferences:", error);
+      toast.error("Failed to save notification preferences");
+    } finally {
+      setSavingNotifications(false);
     }
   };
 
@@ -815,6 +851,16 @@ export default function SettingsPage() {
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
+                    <Label className="text-base md:text-sm">Target Adjustment</Label>
+                    <p className="text-xs text-gray-500">
+                      Notify when targets are adjusted due to market movement
+                    </p>
+                  </div>
+                  <Switch checked={onTargetAdjustment} onCheckedChange={setOnTargetAdjustment} />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
                     <Label className="text-base md:text-sm">Daily Summary</Label>
                     <p className="text-xs text-gray-500">
                       Receive a daily summary of all trades
@@ -824,12 +870,20 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm text-blue-900">
-                  <strong>Coming Soon:</strong> Email notification preferences will be fully functional in the next update.
-                  Currently configured preferences are saved but emails are not yet being sent.
-                </p>
-              </div>
+              <Button
+                onClick={handleSaveNotifications}
+                disabled={savingNotifications}
+                className="w-full h-12 md:h-10 text-base md:text-sm"
+              >
+                {savingNotifications ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Notification Preferences"
+                )}
+              </Button>
             </CardContent>
           </Card>
 
