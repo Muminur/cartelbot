@@ -95,6 +95,20 @@ const signalSchema = new Schema<ISignal>(
         'UNKNOWN',
       ],
     },
+    source: {
+      type: String,
+      enum: {
+        values: ["manual", "discord", "telegram"],
+        message: "Invalid signal source",
+      },
+      default: "manual",
+    },
+    discordMessageId: {
+      type: String,
+    },
+    discordChannelId: {
+      type: String,
+    },
   },
   {
     timestamps: true,

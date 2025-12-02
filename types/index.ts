@@ -28,6 +28,9 @@ export interface IUser extends Document {
   emailFrequency?: "instant" | "hourly" | "daily";
   telegramEnabled?: boolean;
   useTestnet?: boolean;
+  discordUserId?: string;
+  discordUsername?: string;
+  discordConnected?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,6 +62,9 @@ export interface ISignal extends Document {
     | 'RATE_LIMITED'
     | 'FILTER_VIOLATION'
     | 'UNKNOWN';
+  source?: "manual" | "discord" | "telegram";
+  discordMessageId?: string;
+  discordChannelId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -443,6 +449,56 @@ export interface AdminSignal {
     | 'RATE_LIMITED'
     | 'FILTER_VIOLATION'
     | 'UNKNOWN';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IDiscordConnection extends Document {
+  userId: any;
+  discordUserToken: string;
+  discordUserId: string;
+  discordUsername: string;
+  serverId: string;
+  serverName: string;
+  channelId: string;
+  channelName: string;
+  status: "active" | "paused" | "error" | "banned" | "expired";
+  isActive: boolean;
+  lastMessageId: string;
+  lastProcessedAt?: Date;
+  autoExecute: boolean;
+  requireConfirmation: boolean;
+  errorCount: number;
+  lastError?: string;
+  lastErrorAt?: Date;
+  tosAccepted: boolean;
+  tosAcceptedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IDiscordMessage extends Document {
+  userId: any;
+  connectionId: any;
+  discordMessageId: string;
+  serverId: string;
+  channelId: string;
+  authorId: string;
+  authorUsername: string;
+  content: string;
+  timestamp: Date;
+  processingStatus: "pending" | "parsed" | "executed" | "failed" | "ignored";
+  parsedSignal?: {
+    symbol: string;
+    entries: number[];
+    targets: number[];
+    stopLoss: number;
+    confidence: number;
+  };
+  signalId?: any;
+  tradeId?: any;
+  parseErrors: string[];
+  executionError?: string;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -105,6 +105,31 @@ const envSchema = z.object({
   SENTRY_ENVIRONMENT: z
     .enum(['development', 'staging', 'production'])
     .default('production'),
+
+  DISCORD_PYTHON_SERVICE_URL: z
+    .string()
+    .url("DISCORD_PYTHON_SERVICE_URL must be a valid URL")
+    .default("http://localhost:8000"),
+
+  DISCORD_WEBHOOK_SECRET: z
+    .string()
+    .min(32, "DISCORD_WEBHOOK_SECRET must be at least 32 characters")
+    .optional(),
+
+  DISCORD_SELFBOT_ENABLED: z
+    .string()
+    .refine(
+      (val) => val === "true" || val === "false",
+      "DISCORD_SELFBOT_ENABLED must be 'true' or 'false'"
+    )
+    .transform((val) => val === "true")
+    .default("true"),
+
+  DISCORD_MAX_CONNECTIONS_PER_USER: z
+    .string()
+    .regex(/^\d+$/, "DISCORD_MAX_CONNECTIONS_PER_USER must be a number")
+    .transform((val) => parseInt(val, 10))
+    .default("3"),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -137,6 +162,10 @@ function getEnv(): Env {
       SENTRY_DSN: process.env.SENTRY_DSN,
       NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
       SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT,
+      DISCORD_PYTHON_SERVICE_URL: process.env.DISCORD_PYTHON_SERVICE_URL,
+      DISCORD_WEBHOOK_SECRET: process.env.DISCORD_WEBHOOK_SECRET,
+      DISCORD_SELFBOT_ENABLED: process.env.DISCORD_SELFBOT_ENABLED,
+      DISCORD_MAX_CONNECTIONS_PER_USER: process.env.DISCORD_MAX_CONNECTIONS_PER_USER,
     };
 
     const parsed = envSchema.safeParse(env);

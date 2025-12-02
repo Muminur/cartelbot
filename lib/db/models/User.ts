@@ -118,6 +118,16 @@ const userSchema = new Schema<IUser>(
       type: Boolean,
       default: false,
     },
+    discordUserId: {
+      type: String,
+    },
+    discordUsername: {
+      type: String,
+    },
+    discordConnected: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

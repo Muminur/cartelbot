@@ -124,3 +124,16 @@ Targets:
 20%
 30%
 Sl: 2700
+
+
+Buying $BNB
+First buying: 828
+Second buying: 828
+CMP: 828
+Targets:
+4%
+8%
+12%
+20%
+30%
+Sl: 700
