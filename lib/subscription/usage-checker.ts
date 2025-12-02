@@ -113,15 +113,30 @@ export async function getUserUsageStats(userId: string) {
     const adminExpiryDate = new Date();
     adminExpiryDate.setFullYear(adminExpiryDate.getFullYear() + 100);
 
+    // Count signals this month for admin (show real stats)
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const signalsThisMonth = await Signal.countDocuments({
+      userId,
+      createdAt: { $gte: startOfMonth },
+    });
+
+    const activeTradesCount = await Trade.countDocuments({
+      userId,
+      status: "open",
+    });
+
     return {
       tier: {
         ...proTierConfig,
         displayName: "Admin (Pro)",
       },
       usage: {
-        signalsThisMonth: 0,
+        signalsThisMonth,
         signalsLimit: -1, // Unlimited
-        activePositions: 0,
+        activePositions: activeTradesCount,
         activePositionsLimit: proTierConfig.features.maxOpenPositions,
       },
       subscription: {
