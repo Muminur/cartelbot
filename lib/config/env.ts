@@ -114,7 +114,17 @@ const envSchema = z.object({
   DISCORD_WEBHOOK_SECRET: z
     .string()
     .min(32, "DISCORD_WEBHOOK_SECRET must be at least 32 characters")
-    .optional(),
+    .refine(
+      (val) => {
+        // Security: In production, ensure it's not a default/example value
+        if (process.env.NODE_ENV === "production") {
+          const insecureValues = ["your_secret_here", "changeme", "test", "secret"];
+          return !insecureValues.some(insecure => val.toLowerCase().includes(insecure));
+        }
+        return true;
+      },
+      "DISCORD_WEBHOOK_SECRET must be a secure random value in production (not a default/test value)"
+    ),
 
   DISCORD_SELFBOT_ENABLED: z
     .string()

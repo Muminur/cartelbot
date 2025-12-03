@@ -77,6 +77,7 @@ export async function PUT(
         const token = decrypt(connection.discordUserToken);
         const startResult = await pythonServiceClient.startClient({
           userId: String(user._id),
+          connectionId: String(connection._id),
           token,
           serverId: connection.serverId,
           channelId: connection.channelId,
@@ -135,11 +136,13 @@ export async function PUT(
 
     // Return connection without encrypted token
     const connectionData = connection.toObject();
-    delete (connectionData as any).discordUserToken;
+    // Use type assertion to safely delete the token field
+    const connectionDataWithoutToken = connectionData as Partial<typeof connectionData> & { discordUserToken?: string };
+    delete connectionDataWithoutToken.discordUserToken;
 
     return NextResponse.json({
       success: true,
-      data: serializeResponse(connectionData),
+      data: serializeResponse(connectionDataWithoutToken),
     });
   } catch (error) {
     console.error("PUT /api/discord/connections/[id] error:", error);

@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
           username: tokenValidation.data.username,
         },
       });
-    } catch (discordError: any) {
+    } catch (discordError: unknown) {
       if (axios.isAxiosError(discordError)) {
         const status = discordError.response?.status;
         const errorMessage = discordError.response?.data?.message || discordError.message;

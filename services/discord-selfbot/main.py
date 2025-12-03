@@ -6,8 +6,10 @@ to the CartelBot Next.js API for signal processing.
 """
 import os
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional
+import discord
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -41,6 +43,34 @@ async def lifespan(app: FastAPI):
 
     # Startup
     logger.info("Starting Discord Self-Bot Service...")
+
+    # Validate required environment variables
+    required_env_vars = {
+        "DATABASE_URL": "MongoDB connection string",
+        "NEXTJS_API_URL": "Next.js API base URL",
+        "NEXTJS_WEBHOOK_SECRET": "Webhook secret for Next.js communication",
+        "ENCRYPTION_KEY": "Fernet encryption key for token storage",
+    }
+
+    missing_vars = []
+    for var_name, description in required_env_vars.items():
+        var_value = os.getenv(var_name)
+        if not var_value or var_value.strip() == "":
+            missing_vars.append(f"{var_name} ({description})")
+
+    if missing_vars:
+        error_msg = "Missing required environment variables:\n  - " + "\n  - ".join(missing_vars)
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
+    # Security: In production, ensure NEXTJS_WEBHOOK_SECRET is not a default/example value
+    webhook_secret = os.getenv("NEXTJS_WEBHOOK_SECRET", "")
+    if os.getenv("NODE_ENV") == "production" or os.getenv("PYTHON_ENV") == "production":
+        if webhook_secret in ["your_secret_here_generate_with_openssl_rand_hex_32", "changeme", "test"]:
+            logger.error("NEXTJS_WEBHOOK_SECRET must be changed from default value in production")
+            raise ValueError("NEXTJS_WEBHOOK_SECRET must be a secure random value in production")
+
+    logger.info("Environment variable validation passed")
 
     # Connect to MongoDB
     database_url = os.getenv("DATABASE_URL")
@@ -116,6 +146,11 @@ class StartClientRequest(BaseModel):
 class StopClientRequest(BaseModel):
     """Request to stop a Discord client."""
     userId: str = Field(..., description="CartelBot user ID")
+
+
+class ValidateTokenRequest(BaseModel):
+    """Request to validate a Discord token."""
+    token: str = Field(..., description="Discord user token to validate")
 
 
 # API Endpoints
@@ -246,6 +281,110 @@ async def get_client_status(userId: Optional[str] = None):
             "activeClients": len(client_manager.clients),
             "maxClients": client_manager.max_clients,
             "clients": client_manager.get_all_statuses()
+        }
+
+
+@app.post("/token/validate")
+async def validate_token(request: ValidateTokenRequest):
+    """
+    Validate a Discord user token.
+
+    Creates a temporary Discord client to test the token validity
+    and retrieves user information if valid.
+
+    Returns:
+        - valid: True if token is valid, False otherwise
+        - userId: Discord user ID (if valid)
+        - username: Discord username (if valid)
+        - error: Error message (if invalid)
+    """
+    logger.info("Received token validation request")
+
+    try:
+        # Create a temporary Discord client to test the token
+        temp_client = discord.Client()
+
+        # Use asyncio.wait_for to timeout the login attempt after 10 seconds
+        login_successful = False
+        user_id = None
+        username = None
+
+        @temp_client.event
+        async def on_ready():
+            nonlocal login_successful, user_id, username
+            login_successful = True
+            user_id = str(temp_client.user.id)
+            username = str(temp_client.user)
+            logger.info(f"Token validation successful: {username}")
+            # Close the client after successful validation
+            await temp_client.close()
+
+        try:
+            # Start the client with a timeout
+            await asyncio.wait_for(temp_client.start(request.token), timeout=10.0)
+        except asyncio.TimeoutError:
+            # If timeout occurs but login was successful (on_ready fired), it's valid
+            if login_successful:
+                return {
+                    "success": True,
+                    "data": {
+                        "valid": True,
+                        "userId": user_id,
+                        "username": username
+                    }
+                }
+            else:
+                logger.warning("Token validation timed out")
+                return {
+                    "success": False,
+                    "data": {"valid": False},
+                    "error": "Token validation timed out"
+                }
+        except discord.LoginFailure:
+            logger.warning("Token validation failed: Invalid token")
+            if not temp_client.is_closed():
+                await temp_client.close()
+            return {
+                "success": False,
+                "data": {"valid": False},
+                "error": "Invalid Discord token"
+            }
+        except Exception as e:
+            logger.error(f"Token validation error: {e}", exc_info=True)
+            if not temp_client.is_closed():
+                await temp_client.close()
+            return {
+                "success": False,
+                "data": {"valid": False},
+                "error": f"Validation error: {str(e)}"
+            }
+
+        # If we reach here, validation was successful
+        if not temp_client.is_closed():
+            await temp_client.close()
+
+        if login_successful:
+            return {
+                "success": True,
+                "data": {
+                    "valid": True,
+                    "userId": user_id,
+                    "username": username
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "data": {"valid": False},
+                "error": "Token validation failed"
+            }
+
+    except Exception as e:
+        logger.error(f"Unexpected error in token validation: {e}", exc_info=True)
+        return {
+            "success": False,
+            "data": {"valid": False},
+            "error": f"Internal error: {str(e)}"
         }
 
 

@@ -107,7 +107,7 @@ export async function GET(
         success: true,
         data: textChannels,
       });
-    } catch (discordError: any) {
+    } catch (discordError: unknown) {
       if (axios.isAxiosError(discordError)) {
         const status = discordError.response?.status;
         const errorMessage = discordError.response?.data?.message || discordError.message;

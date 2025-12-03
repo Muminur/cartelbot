@@ -22,7 +22,11 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status");
 
     // Build query
-    const query: any = { userId: user._id };
+    interface DiscordConnectionQuery {
+      userId: unknown;
+      status?: string;
+    }
+    const query: DiscordConnectionQuery = { userId: user._id };
     if (status) {
       query.status = status;
     }
@@ -185,6 +189,7 @@ export async function POST(request: NextRequest) {
     // Start Python Discord client
     const startResult = await pythonServiceClient.startClient({
       userId: String(user._id),
+      connectionId: String(connection._id),
       token,
       serverId,
       channelId,

@@ -2,16 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { formatErrorResponse } from "@/lib/utils/errors";
 import { pythonServiceClient } from "@/lib/discord/python-service-client";
+import { rateLimit } from "@/lib/middleware/rate-limiter";
 
 /**
  * POST /api/discord/token/validate
  * Validates a Discord user token by testing it with the Python service
- * TODO: Add rate limiting (5 requests per 15 minutes per user)
+ * Rate limit: 5 requests per 15 minutes per user (auth tier)
  */
 export async function POST(request: NextRequest) {
   try {
     // Require authentication
     const user = await requireAuth();
+
+    // Apply rate limiting (5 requests per 15 minutes using 'auth' tier)
+    const rateLimitResponse = await rateLimit(String(user._id), "auth");
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
 
     // Parse request body
     const body = await request.json();

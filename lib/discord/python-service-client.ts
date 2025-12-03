@@ -10,6 +10,7 @@ interface PythonServiceResponse<T = unknown> {
 
 interface ClientStartRequest {
   userId: string;
+  connectionId: string;
   token: string;
   serverId: string;
   channelId: string;
