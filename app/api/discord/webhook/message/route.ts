@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import { formatErrorResponse } from "@/lib/utils/errors";
 import { connectDB } from "@/lib/db";
 import { DiscordConnection, DiscordMessage, Signal, User } from "@/lib/db/models";
@@ -6,7 +7,6 @@ import { parseSignal } from "@/lib/parser";
 import { executeSignalTrade } from "@/lib/binance";
 import { serializeResponse } from "@/lib/utils/serialize";
 import { Types } from "mongoose";
-import { verifySignature } from "@/lib/encryption";
 
 interface WebhookMessagePayload {
   userId: string;
@@ -46,7 +46,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!webhookSecret || webhookSecret !== expectedSecret) {
+    // Use timing-safe comparison to prevent timing attacks
+    const isValidSecret =
+      webhookSecret &&
+      webhookSecret.length === expectedSecret.length &&
+      crypto.timingSafeEqual(
+        Buffer.from(webhookSecret),
+        Buffer.from(expectedSecret)
+      );
+
+    if (!isValidSecret) {
       console.error("[Discord Webhook] Invalid webhook secret");
       return NextResponse.json(
         {
@@ -386,3 +395,7 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+// Force dynamic rendering for webhook endpoint
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
