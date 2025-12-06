@@ -218,6 +218,7 @@ export class PythonServiceClient {
       valid: boolean;
       userId?: string;
       username?: string;
+      discriminator?: string;
     }>
   > {
     try {
@@ -226,6 +227,7 @@ export class PythonServiceClient {
           valid: boolean;
           userId?: string;
           username?: string;
+      discriminator?: string;
         }>
       >("/token/validate", { token });
       return response.data;

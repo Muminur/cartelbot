@@ -34,7 +34,24 @@ export function TokenInput({ value, onChange, onValidate }: TokenInputProps) {
         body: JSON.stringify({ token: value }),
       });
 
-      const data = await response.json();
+      // Safe JSON parsing - handle empty or invalid responses
+      let data;
+      try {
+        const text = await response.text();
+        if (!text || text.trim() === "") {
+          throw new Error("Empty response from server");
+        }
+        data = JSON.parse(text);
+      } catch (parseError) {
+        // JSON parse failed - likely Python service is down
+        setValidationStatus("invalid");
+        onValidate(false);
+        toast.error("Discord service is unavailable. Please try again later.");
+        if (process.env.NODE_ENV === "development") {
+          console.error("Token validation parse error:", parseError);
+        }
+        return;
+      }
 
       if (response.ok && data.valid) {
         setValidationStatus("valid");
@@ -45,12 +62,18 @@ export function TokenInput({ value, onChange, onValidate }: TokenInputProps) {
       } else {
         setValidationStatus("invalid");
         onValidate(false);
-        toast.error(data.error || "Invalid Discord token");
+        // Extract error message from nested structure
+        const errorMsg = data.error?.message || data.error || "Invalid Discord token";
+        toast.error(errorMsg);
       }
     } catch (error) {
       setValidationStatus("invalid");
       onValidate(false);
-      toast.error("Failed to validate token. Please try again.");
+      // Network error or other issues
+      const errorMessage = error instanceof Error && error.message.includes("Failed to fetch")
+        ? "Network error. Please check your connection."
+        : "Failed to validate token. Discord service may be unavailable.";
+      toast.error(errorMessage);
       if (process.env.NODE_ENV === "development") {
         console.error("Token validation error:", error);
       }

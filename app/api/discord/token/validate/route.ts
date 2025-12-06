@@ -74,14 +74,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Token is valid
+    // Token is valid - return at root level for TokenInput compatibility
     return NextResponse.json({
       success: true,
-      data: {
-        valid: true,
-        userId: result.data.userId,
-        username: result.data.username,
-      },
+      valid: true,
+      userId: result.data.userId,
+      username: result.data.username,
+      discriminator: result.data.discriminator || "0", // Modern Discord may not have discriminator
     });
   } catch (error) {
     console.error("POST /api/discord/token/validate error:", error);
@@ -92,3 +91,7 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+// Force dynamic rendering for authenticated route
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
