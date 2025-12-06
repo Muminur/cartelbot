@@ -10,6 +10,7 @@ interface DiscordGuild {
   id: string;
   name: string;
   icon: string | null;
+  owner?: boolean;
 }
 
 /**
@@ -131,3 +132,107 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+/**
+ * POST /api/discord/guilds
+ * Fetch Discord servers using a provided token (for first-time setup)
+ * Token is passed in request body, not from existing connections
+ */
+export async function POST(request: NextRequest) {
+  try {
+    await requireAuth();
+
+    const body = await request.json();
+    const { token } = body;
+
+    if (!token || typeof token !== "string") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message: "Discord token is required",
+            code: "VALIDATION_ERROR",
+            statusCode: 400,
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    try {
+      // Fetch guilds from Discord API using provided token
+      const response = await axios.get<DiscordGuild[]>(
+        "https://discord.com/api/v10/users/@me/guilds",
+        {
+          headers: {
+            Authorization: token,
+          },
+          timeout: 10000,
+        }
+      );
+
+      // Format guild data to match client expectations
+      const guilds = response.data.map((guild) => ({
+        id: guild.id,
+        name: guild.name,
+        icon: guild.icon,
+        owner: guild.owner || false,
+      }));
+
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Discord Guilds] Fetched guilds via POST:", {
+          count: guilds.length,
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        guilds,
+      });
+    } catch (discordError: unknown) {
+      if (axios.isAxiosError(discordError)) {
+        const status = discordError.response?.status;
+        const errorMessage =
+          discordError.response?.data?.message || discordError.message;
+
+        if (status === 401) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "Invalid Discord token. Please check and try again.",
+            },
+            { status: 401 }
+          );
+        }
+
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[Discord Guilds] Discord API error:", {
+            status,
+            message: errorMessage,
+          });
+        }
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: errorMessage || "Failed to fetch Discord servers",
+          },
+          { status: status || 500 }
+        );
+      }
+
+      throw discordError;
+    }
+  } catch (error) {
+    console.error("POST /api/discord/guilds error:", error);
+    const errorResponse = formatErrorResponse(error);
+    return NextResponse.json(
+      { success: false, ...errorResponse },
+      { status: errorResponse.error.statusCode }
+    );
+  }
+}
+
+// Force dynamic rendering for authenticated route
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";

@@ -40,7 +40,22 @@ export function ServerSelector({ token, onSelect, disabled }: ServerSelectorProp
           body: JSON.stringify({ token }),
         });
 
-        const data = await response.json();
+        // Safe JSON parsing - handle empty or invalid responses
+        let data;
+        try {
+          const text = await response.text();
+          if (!text || text.trim() === "") {
+            throw new Error("Empty response from server");
+          }
+          data = JSON.parse(text);
+        } catch (parseError) {
+          toast.error("Discord service is unavailable. Please try again later.");
+          setServers([]);
+          if (process.env.NODE_ENV === "development") {
+            console.error("Guild fetch parse error:", parseError);
+          }
+          return;
+        }
 
         if (response.ok && data.guilds) {
           setServers(data.guilds);
@@ -48,11 +63,15 @@ export function ServerSelector({ token, onSelect, disabled }: ServerSelectorProp
             toast.info("No servers found for this Discord account");
           }
         } else {
-          toast.error(data.error || "Failed to fetch Discord servers");
+          const errorMsg = data.error?.message || data.error || "Failed to fetch Discord servers";
+          toast.error(errorMsg);
           setServers([]);
         }
       } catch (error) {
-        toast.error("Failed to load servers. Please try again.");
+        const errorMessage = error instanceof Error && error.message.includes("Failed to fetch")
+          ? "Network error. Please check your connection."
+          : "Failed to load servers. Please try again.";
+        toast.error(errorMessage);
         setServers([]);
         if (process.env.NODE_ENV === "development") {
           console.error("Server fetch error:", error);
