@@ -4,7 +4,12 @@ import { formatErrorResponse } from "@/lib/utils/errors";
 import { connectDB } from "@/lib/db";
 import { DiscordConnection } from "@/lib/db/models";
 import { decrypt } from "@/lib/encryption";
+import { rateLimit } from "@/lib/middleware/rate-limiter";
 import axios from "axios";
+
+// Token validation constants
+const DISCORD_TOKEN_MIN_LENGTH = 50;
+const DISCORD_TOKEN_MAX_LENGTH = 150;
 
 interface DiscordGuild {
   id: string;
@@ -54,13 +59,12 @@ export async function GET(request: NextRequest) {
         }
       );
 
-      // Format guild data
+      // Format guild data - consistent with POST endpoint
       const guilds = response.data.map((guild) => ({
-        serverId: guild.id,
+        id: guild.id,
         name: guild.name,
-        icon: guild.icon
-          ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png`
-          : null,
+        icon: guild.icon,
+        owner: guild.owner || false,
       }));
 
       if (process.env.NODE_ENV !== "production") {
@@ -72,7 +76,7 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        data: guilds,
+        guilds,
       });
     } catch (discordError: unknown) {
       if (axios.isAxiosError(discordError)) {
@@ -137,20 +141,43 @@ export async function GET(request: NextRequest) {
  * POST /api/discord/guilds
  * Fetch Discord servers using a provided token (for first-time setup)
  * Token is passed in request body, not from existing connections
+ * Rate limit: 5 requests per 15 minutes per user (auth tier)
  */
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
+
+    // Apply rate limiting (5 requests per 15 minutes using 'auth' tier)
+    const rateLimitResponse = await rateLimit(String(user._id), "auth");
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
 
     const body = await request.json();
     const { token } = body;
 
+    // Validate token presence and type
     if (!token || typeof token !== "string") {
       return NextResponse.json(
         {
           success: false,
           error: {
             message: "Discord token is required",
+            code: "VALIDATION_ERROR",
+            statusCode: 400,
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate token length (Discord tokens are typically 59-88 chars)
+    if (token.length < DISCORD_TOKEN_MIN_LENGTH || token.length > DISCORD_TOKEN_MAX_LENGTH) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message: "Invalid token format",
             code: "VALIDATION_ERROR",
             statusCode: 400,
           },
@@ -199,7 +226,11 @@ export async function POST(request: NextRequest) {
           return NextResponse.json(
             {
               success: false,
-              error: "Invalid Discord token. Please check and try again.",
+              error: {
+                message: "Invalid Discord token. Please check and try again.",
+                code: "INVALID_TOKEN",
+                statusCode: 401,
+              },
             },
             { status: 401 }
           );
@@ -215,7 +246,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: errorMessage || "Failed to fetch Discord servers",
+            error: {
+              message: errorMessage || "Failed to fetch Discord servers",
+              code: "DISCORD_API_ERROR",
+              statusCode: status || 500,
+            },
           },
           { status: status || 500 }
         );
@@ -223,8 +258,10 @@ export async function POST(request: NextRequest) {
 
       throw discordError;
     }
-  } catch (error) {
-    console.error("POST /api/discord/guilds error:", error);
+  } catch (error: unknown) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("POST /api/discord/guilds error:", error);
+    }
     const errorResponse = formatErrorResponse(error);
     return NextResponse.json(
       { success: false, ...errorResponse },
