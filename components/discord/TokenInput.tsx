@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, Loader2, CheckCircle2, XCircle, Copy } from "lucide-react";
+import { Eye, EyeOff, Loader2, CheckCircle2, XCircle, Copy, ExternalLink, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 
 interface TokenInputProps {
@@ -78,7 +78,20 @@ export function TokenInput({ value, onChange, onValidate }: TokenInputProps) {
 
   return (
     <div className="space-y-2">
-      <Label htmlFor="discord-token">Discord Token</Label>
+      <div className="flex items-center justify-between">
+        <Label htmlFor="discord-token">Discord Token</Label>
+        <a
+          href="https://www.androidauthority.com/get-discord-token-3149920/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+          aria-label="Learn how to get your Discord token (opens in new tab)"
+        >
+          <HelpCircle className="h-3.5 w-3.5" />
+          How to get your token
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </div>
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Input
