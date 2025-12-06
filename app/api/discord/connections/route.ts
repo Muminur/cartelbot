@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: serializeResponse(connections),
+      connections: serializeResponse(connections),
     });
   } catch (error) {
     console.error("GET /api/discord/connections error:", error);
@@ -262,3 +262,7 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+// Force dynamic rendering for authenticated route
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
