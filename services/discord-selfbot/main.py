@@ -17,8 +17,70 @@ from pydantic import BaseModel, Field
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 import aiohttp
+import base64
+import json
 
 from client_manager import ClientManager
+
+
+# Discord client fingerprint for anti-detection
+# Mimics real Discord web client to avoid self-bot detection
+DISCORD_BUILD_NUMBER = 291963  # Update periodically from Discord client
+BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+BROWSER_VERSION = "124.0.0.0"
+
+
+def get_super_properties() -> str:
+    """
+    Generate X-Super-Properties header to mimic real Discord client.
+    This helps avoid detection as a self-bot by matching real client fingerprints.
+    """
+    properties = {
+        "os": "Windows",
+        "browser": "Chrome",
+        "device": "",
+        "system_locale": "en-US",
+        "browser_user_agent": BROWSER_USER_AGENT,
+        "browser_version": BROWSER_VERSION,
+        "os_version": "10",
+        "referrer": "",
+        "referring_domain": "",
+        "referrer_current": "",
+        "referring_domain_current": "",
+        "release_channel": "stable",
+        "client_build_number": DISCORD_BUILD_NUMBER,
+        "client_event_source": None,
+        "design_id": 0
+    }
+    return base64.b64encode(json.dumps(properties).encode()).decode()
+
+
+def get_discord_headers(token: str) -> dict:
+    """
+    Generate complete Discord client headers for anti-detection.
+    Includes all headers a real Discord web client would send.
+    """
+    return {
+        "Authorization": token,
+        "User-Agent": BROWSER_USER_AGENT,
+        "X-Super-Properties": get_super_properties(),
+        "X-Discord-Locale": "en-US",
+        "X-Discord-Timezone": "America/New_York",
+        "Content-Type": "application/json",
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Origin": "https://discord.com",
+        "Referer": "https://discord.com/channels/@me",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"'
+    }
+
+
 from health import check_health
 
 # Load environment variables
@@ -320,12 +382,8 @@ async def validate_token(request: ValidateTokenRequest):
     # Discord API endpoint
     discord_api_url = "https://discord.com/api/v10/users/@me"
 
-    # Prepare headers with user token
-    headers = {
-        "Authorization": token,
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
+    # Get anti-detection headers that mimic real Discord web client
+    headers = get_discord_headers(token)
 
     try:
         async with aiohttp.ClientSession() as session:
