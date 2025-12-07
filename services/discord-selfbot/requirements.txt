@@ -1,5 +1,6 @@
 # Discord Self-Bot Library (user account support)
-git+https://github.com/dolfies/discord.py-self.git
+# Pinned to specific commit for security (supply chain protection)
+git+https://github.com/dolfies/discord.py-self.git@600fd36d
 
 # Web Framework
 fastapi>=0.104.0

@@ -7,10 +7,12 @@ to the CartelBot Next.js API for signal processing.
 import os
 import logging
 import asyncio
+import time
+from collections import defaultdict
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, Dict
 import discord
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -21,6 +23,13 @@ import base64
 import json
 
 from client_manager import ClientManager
+
+# Rate limiting configuration
+RATE_LIMIT_WINDOW = 900  # 15 minutes in seconds
+RATE_LIMIT_MAX_REQUESTS = 5  # Max 5 requests per window
+
+# In-memory rate limit storage (IP -> list of timestamps)
+rate_limit_store: Dict[str, list] = defaultdict(list)
 
 
 # Discord client fingerprint for anti-detection
@@ -95,6 +104,36 @@ def create_tls_session() -> tls_client.Session:
         client_identifier=TLS_CLIENT_IDENTIFIER,
         random_tls_extension_order=True  # Randomize TLS extension order like real browsers
     )
+
+
+def check_rate_limit(client_ip: str) -> bool:
+    """
+    Check if the client IP has exceeded the rate limit.
+    Returns True if rate limited, False if allowed.
+    """
+    current_time = time.time()
+
+    # Clean up old entries
+    rate_limit_store[client_ip] = [
+        ts for ts in rate_limit_store[client_ip]
+        if current_time - ts < RATE_LIMIT_WINDOW
+    ]
+
+    # Check if rate limited
+    if len(rate_limit_store[client_ip]) >= RATE_LIMIT_MAX_REQUESTS:
+        return True
+
+    # Add new request timestamp
+    rate_limit_store[client_ip].append(current_time)
+    return False
+
+
+def get_client_ip(request: Request) -> str:
+    """Get the real client IP from request, handling proxies."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
 from health import check_health
@@ -364,12 +403,14 @@ async def get_client_status(userId: Optional[str] = None):
 
 
 @app.post("/token/validate")
-async def validate_token(request: ValidateTokenRequest):
+async def validate_token(request: ValidateTokenRequest, req: Request):
     """
     Validate a Discord user token using Discord's REST API with TLS fingerprinting.
 
     Uses tls_client (Go-based) which provides Chrome TLS/JA3 fingerprinting
     to avoid bot detection, without the Windows crashes of curl_cffi.
+
+    Rate limited to 5 requests per 15 minutes per IP.
 
     Returns:
         - valid: True if token is valid, False otherwise
@@ -378,16 +419,29 @@ async def validate_token(request: ValidateTokenRequest):
         - discriminator: Discord discriminator (if valid)
         - error: Error message (if invalid)
     """
+    # Rate limiting check
+    client_ip = get_client_ip(req)
+    if check_rate_limit(client_ip):
+        logger.warning(f"Rate limit exceeded for IP: {client_ip[:10]}...")
+        return JSONResponse(
+            status_code=429,
+            content={
+                "success": False,
+                "data": {"valid": False},
+                "error": "Rate limit exceeded. Try again in 15 minutes."
+            }
+        )
+
     logger.info("Received token validation request")
 
     # Validate token format (Discord tokens are typically 50-150 characters)
     token = request.token.strip() if request.token else ""
     if not token or len(token) < 50 or len(token) > 150:
-        logger.warning("Token validation failed: Invalid token format")
+        logger.warning("Token validation failed: Invalid format")
         return {
             "success": False,
             "data": {"valid": False},
-            "error": "Invalid token format"
+            "error": "Invalid Discord token"
         }
 
     # Strip "Bot " prefix if present (user tokens don't need it)
@@ -417,10 +471,12 @@ async def validate_token(request: ValidateTokenRequest):
             username = user_data.get("username", "")
             discriminator = user_data.get("discriminator", "0")
 
-            # Format username (Discord removed discriminators for most users)
-            full_username = f"{username}#{discriminator}" if discriminator != "0" else username
-
-            logger.info(f"Token validation successful: {full_username}")
+            # Only log user info in debug mode (protect PII in production)
+            if os.getenv("LOG_LEVEL", "INFO").upper() == "DEBUG":
+                full_username = f"{username}#{discriminator}" if discriminator != "0" else username
+                logger.debug(f"Token validation successful: {full_username}")
+            else:
+                logger.info("Token validation successful")
 
             return {
                 "success": True,
@@ -432,28 +488,10 @@ async def validate_token(request: ValidateTokenRequest):
                 }
             }
 
-        elif response.status_code == 401:
-            # Invalid token
-            logger.warning("Token validation failed: 401 Unauthorized")
-            return {
-                "success": False,
-                "data": {"valid": False},
-                "error": "Invalid Discord token"
-            }
-
-        elif response.status_code == 403:
-            # Forbidden - token might be valid but account restricted
-            logger.warning("Token validation failed: 403 Forbidden")
-            return {
-                "success": False,
-                "data": {"valid": False},
-                "error": "Account restricted or token lacks permissions"
-            }
-
         elif response.status_code == 429:
-            # Rate limited
-            retry_after = response.headers.get("Retry-After", "unknown")
-            logger.warning(f"Token validation rate limited. Retry after {retry_after}s")
+            # Rate limited by Discord - different from our rate limiting
+            retry_after = response.headers.get("Retry-After", "60")
+            logger.warning("Discord API rate limit hit")
             return {
                 "success": False,
                 "data": {"valid": False},
@@ -461,12 +499,13 @@ async def validate_token(request: ValidateTokenRequest):
             }
 
         else:
-            # Other error - don't log response body (may contain sensitive data)
-            logger.error(f"Token validation failed with status {response.status_code}")
+            # All other errors (401, 403, etc.) return generic message
+            # This prevents account enumeration attacks
+            logger.warning(f"Token validation failed: {response.status_code}")
             return {
                 "success": False,
                 "data": {"valid": False},
-                "error": f"Discord API error: {response.status_code}"
+                "error": "Invalid Discord token"
             }
 
     except Exception as e:
@@ -475,7 +514,7 @@ async def validate_token(request: ValidateTokenRequest):
         return {
             "success": False,
             "data": {"valid": False},
-            "error": "Internal error occurred"
+            "error": "Invalid Discord token"
         }
 
 
