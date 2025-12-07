@@ -1,5 +1,4 @@
-import axios, { AxiosInstance } from "axios";
-import { env } from "@/lib/config";
+import axios, { AxiosError, AxiosInstance } from "axios";
 
 interface PythonServiceResponse<T = unknown> {
   success: boolean;
@@ -34,6 +33,16 @@ interface HealthCheckResponse {
   version?: string;
 }
 
+interface TokenValidationResponse {
+  valid: boolean;
+  userId?: string;
+  username?: string;
+  discriminator?: string;
+}
+
+/** Connection error codes that indicate the service is not running */
+const CONNECTION_ERROR_CODES = ["ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT"] as const;
+
 /**
  * Client for communicating with the Python Discord selfbot service
  * Handles all HTTP requests to the Python service for managing Discord clients
@@ -55,6 +64,63 @@ export class PythonServiceClient {
   }
 
   /**
+   * Check if an error is a connection error (service not running)
+   */
+  private isConnectionError(error: AxiosError): boolean {
+    return (
+      CONNECTION_ERROR_CODES.includes(error.code as typeof CONNECTION_ERROR_CODES[number]) ||
+      !error.response
+    );
+  }
+
+  /**
+   * Handle Axios errors with consistent error detection and logging
+   * @param error The caught error
+   * @param context Description of the operation for logging
+   * @param metadata Additional metadata to log (safe - no sensitive data)
+   * @returns Standardized error response
+   */
+  private handleAxiosError<T = unknown>(
+    error: unknown,
+    context: string,
+    metadata?: Record<string, unknown>
+  ): PythonServiceResponse<T> {
+    if (axios.isAxiosError(error)) {
+      const isConnError = this.isConnectionError(error);
+
+      const errorMessage = isConnError
+        ? "Discord selfbot service is not running"
+        : error.response?.data?.error ||
+          error.response?.data?.message ||
+          error.message;
+
+      if (process.env.NODE_ENV !== "production") {
+        console.error(`[PythonServiceClient] ${context}:`, {
+          status: error.response?.status,
+          code: error.code,
+          message: errorMessage,
+          isConnectionError: isConnError,
+          ...metadata,
+        });
+      }
+
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+      console.error(`[PythonServiceClient] Unexpected error in ${context}:`, error);
+    }
+
+    return {
+      success: false,
+      error: "Failed to communicate with Discord service",
+    };
+  }
+
+  /**
    * Start a new Discord client for a user
    * @param data User ID, Discord token, server ID, and channel ID
    * @returns Success status and message
@@ -62,6 +128,21 @@ export class PythonServiceClient {
   async startClient(
     data: ClientStartRequest
   ): Promise<PythonServiceResponse> {
+    // Input validation
+    if (!data.userId || !data.connectionId || !data.token || !data.serverId || !data.channelId) {
+      return {
+        success: false,
+        error: "Missing required parameters for client start",
+      };
+    }
+
+    if (data.token.length < 50 || data.token.length > 150) {
+      return {
+        success: false,
+        error: "Invalid Discord token format",
+      };
+    }
+
     try {
       const response = await this.client.post<PythonServiceResponse>(
         "/client/start",
@@ -69,28 +150,13 @@ export class PythonServiceClient {
       );
       return response.data;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const errorMessage =
-          error.response?.data?.error ||
-          error.response?.data?.message ||
-          error.message;
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[PythonServiceClient] Start client error:", {
-            status: error.response?.status,
-            message: errorMessage,
-            userId: data.userId,
-          });
-        }
-        return {
-          success: false,
-          error: errorMessage,
-        };
-      }
-      console.error("[PythonServiceClient] Unexpected error:", error);
-      return {
-        success: false,
-        error: "Failed to communicate with Discord service",
-      };
+      // Explicit metadata - prevents accidental token exposure
+      return this.handleAxiosError(error, "Start client error", {
+        userId: data.userId,
+        serverId: data.serverId,
+        channelId: data.channelId,
+        // Deliberately omitting: token, connectionId
+      });
     }
   }
 
@@ -100,6 +166,13 @@ export class PythonServiceClient {
    * @returns Success status and message
    */
   async stopClient(userId: string): Promise<PythonServiceResponse> {
+    if (!userId) {
+      return {
+        success: false,
+        error: "User ID is required",
+      };
+    }
+
     try {
       const response = await this.client.post<PythonServiceResponse>(
         "/client/stop",
@@ -107,28 +180,7 @@ export class PythonServiceClient {
       );
       return response.data;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const errorMessage =
-          error.response?.data?.error ||
-          error.response?.data?.message ||
-          error.message;
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[PythonServiceClient] Stop client error:", {
-            status: error.response?.status,
-            message: errorMessage,
-            userId,
-          });
-        }
-        return {
-          success: false,
-          error: errorMessage,
-        };
-      }
-      console.error("[PythonServiceClient] Unexpected error:", error);
-      return {
-        success: false,
-        error: "Failed to communicate with Discord service",
-      };
+      return this.handleAxiosError(error, "Stop client error", { userId });
     }
   }
 
@@ -140,34 +192,24 @@ export class PythonServiceClient {
   async getClientStatus(
     userId: string
   ): Promise<PythonServiceResponse<ClientStatusResponse>> {
+    if (!userId) {
+      return {
+        success: false,
+        error: "User ID is required",
+      };
+    }
+
     try {
       const response = await this.client.get<
         PythonServiceResponse<ClientStatusResponse>
       >(`/client/status?userId=${encodeURIComponent(userId)}`);
       return response.data;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const errorMessage =
-          error.response?.data?.error ||
-          error.response?.data?.message ||
-          error.message;
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[PythonServiceClient] Get status error:", {
-            status: error.response?.status,
-            message: errorMessage,
-            userId,
-          });
-        }
-        return {
-          success: false,
-          error: errorMessage,
-        };
-      }
-      console.error("[PythonServiceClient] Unexpected error:", error);
-      return {
-        success: false,
-        error: "Failed to communicate with Discord service",
-      };
+      return this.handleAxiosError<ClientStatusResponse>(
+        error,
+        "Get status error",
+        { userId }
+      );
     }
   }
 
@@ -182,27 +224,10 @@ export class PythonServiceClient {
       >("/health");
       return response.data;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const errorMessage =
-          error.response?.data?.error ||
-          error.response?.data?.message ||
-          error.message;
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[PythonServiceClient] Health check error:", {
-            status: error.response?.status,
-            message: errorMessage,
-          });
-        }
-        return {
-          success: false,
-          error: errorMessage,
-        };
-      }
-      console.error("[PythonServiceClient] Unexpected error:", error);
-      return {
-        success: false,
-        error: "Failed to communicate with Discord service",
-      };
+      return this.handleAxiosError<HealthCheckResponse>(
+        error,
+        "Health check error"
+      );
     }
   }
 
@@ -213,43 +238,59 @@ export class PythonServiceClient {
    */
   async validateToken(
     token: string
-  ): Promise<
-    PythonServiceResponse<{
-      valid: boolean;
-      userId?: string;
-      username?: string;
-      discriminator?: string;
-    }>
-  > {
+  ): Promise<PythonServiceResponse<TokenValidationResponse>> {
+    // Input validation
+    if (!token || typeof token !== "string") {
+      return {
+        success: false,
+        data: { valid: false },
+        error: "Token is required",
+      };
+    }
+
+    if (token.length < 50 || token.length > 150) {
+      return {
+        success: false,
+        data: { valid: false },
+        error: "Invalid token format",
+      };
+    }
+
     try {
       const response = await this.client.post<
-        PythonServiceResponse<{
-          valid: boolean;
-          userId?: string;
-          username?: string;
-      discriminator?: string;
-        }>
+        PythonServiceResponse<TokenValidationResponse>
       >("/token/validate", { token });
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        const errorMessage =
-          error.response?.data?.error ||
-          error.response?.data?.message ||
-          error.message;
+        const isConnError = this.isConnectionError(error);
+
+        const errorMessage = isConnError
+          ? "Discord selfbot service is not running"
+          : error.response?.data?.error ||
+            error.response?.data?.message ||
+            error.message;
+
         if (process.env.NODE_ENV !== "production") {
           console.error("[PythonServiceClient] Validate token error:", {
             status: error.response?.status,
+            code: error.code,
             message: errorMessage,
+            isConnectionError: isConnError,
           });
         }
+
         return {
           success: false,
           data: { valid: false },
           error: errorMessage,
         };
       }
-      console.error("[PythonServiceClient] Unexpected error:", error);
+
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[PythonServiceClient] Unexpected error:", error);
+      }
+
       return {
         success: false,
         data: { valid: false },
