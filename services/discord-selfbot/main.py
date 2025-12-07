@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
-import aiohttp
+import tls_client
 import base64
 import json
 
@@ -28,6 +28,10 @@ from client_manager import ClientManager
 DISCORD_BUILD_NUMBER = 291963  # Update periodically from Discord client
 BROWSER_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 BROWSER_VERSION = "124.0.0.0"
+
+# TLS Client identifier - mimics Chrome 124 TLS/JA3 fingerprint
+# This provides browser-level TLS fingerprinting without curl_cffi crashes
+TLS_CLIENT_IDENTIFIER = "chrome_124"
 
 
 def get_super_properties() -> str:
@@ -79,6 +83,18 @@ def get_discord_headers(token: str) -> dict:
         "Sec-Ch-Ua-Mobile": "?0",
         "Sec-Ch-Ua-Platform": '"Windows"'
     }
+
+
+def create_tls_session() -> tls_client.Session:
+    """
+    Create a TLS session with Chrome browser fingerprint.
+    Uses tls_client (Go-based) which works on Windows without crashes.
+    Provides real Chrome TLS/JA3 fingerprinting for anti-detection.
+    """
+    return tls_client.Session(
+        client_identifier=TLS_CLIENT_IDENTIFIER,
+        random_tls_extension_order=True  # Randomize TLS extension order like real browsers
+    )
 
 
 from health import check_health
@@ -350,11 +366,10 @@ async def get_client_status(userId: Optional[str] = None):
 @app.post("/token/validate")
 async def validate_token(request: ValidateTokenRequest):
     """
-    Validate a Discord user token using Discord's REST API.
+    Validate a Discord user token using Discord's REST API with TLS fingerprinting.
 
-    Makes a simple GET request to /users/@me endpoint instead of
-    creating a full Discord client. This avoids Windows WebSocket issues
-    with curl_cffi and is much faster (50-100ms vs 10+ seconds).
+    Uses tls_client (Go-based) which provides Chrome TLS/JA3 fingerprinting
+    to avoid bot detection, without the Windows crashes of curl_cffi.
 
     Returns:
         - valid: True if token is valid, False otherwise
@@ -386,88 +401,73 @@ async def validate_token(request: ValidateTokenRequest):
     headers = get_discord_headers(token)
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                discord_api_url,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as response:
+        # Use tls_client for Chrome TLS fingerprinting (sync, run in thread pool)
+        def _validate_sync():
+            session = create_tls_session()
+            response = session.get(discord_api_url, headers=headers, timeout_seconds=10)
+            return response
 
-                if response.status == 200:
-                    # Token is valid
-                    user_data = await response.json()
-                    user_id = str(user_data.get("id", ""))
-                    username = user_data.get("username", "")
-                    discriminator = user_data.get("discriminator", "0")
+        # Run sync tls_client in thread pool to not block async event loop
+        response = await asyncio.to_thread(_validate_sync)
 
-                    # Format username (Discord removed discriminators for most users)
-                    full_username = f"{username}#{discriminator}" if discriminator != "0" else username
+        if response.status_code == 200:
+            # Token is valid
+            user_data = response.json()
+            user_id = str(user_data.get("id", ""))
+            username = user_data.get("username", "")
+            discriminator = user_data.get("discriminator", "0")
 
-                    logger.info(f"Token validation successful: {full_username}")
+            # Format username (Discord removed discriminators for most users)
+            full_username = f"{username}#{discriminator}" if discriminator != "0" else username
 
-                    return {
-                        "success": True,
-                        "data": {
-                            "valid": True,
-                            "userId": user_id,
-                            "username": username,
-                            "discriminator": discriminator
-                        }
-                    }
+            logger.info(f"Token validation successful: {full_username}")
 
-                elif response.status == 401:
-                    # Invalid token
-                    logger.warning("Token validation failed: 401 Unauthorized")
-                    return {
-                        "success": False,
-                        "data": {"valid": False},
-                        "error": "Invalid Discord token"
-                    }
+            return {
+                "success": True,
+                "data": {
+                    "valid": True,
+                    "userId": user_id,
+                    "username": username,
+                    "discriminator": discriminator
+                }
+            }
 
-                elif response.status == 403:
-                    # Forbidden - token might be valid but account restricted
-                    logger.warning("Token validation failed: 403 Forbidden")
-                    return {
-                        "success": False,
-                        "data": {"valid": False},
-                        "error": "Account restricted or token lacks permissions"
-                    }
+        elif response.status_code == 401:
+            # Invalid token
+            logger.warning("Token validation failed: 401 Unauthorized")
+            return {
+                "success": False,
+                "data": {"valid": False},
+                "error": "Invalid Discord token"
+            }
 
-                elif response.status == 429:
-                    # Rate limited
-                    retry_after = response.headers.get("Retry-After", "unknown")
-                    logger.warning(f"Token validation rate limited. Retry after {retry_after}s")
-                    return {
-                        "success": False,
-                        "data": {"valid": False},
-                        "error": f"Rate limited. Retry after {retry_after} seconds"
-                    }
+        elif response.status_code == 403:
+            # Forbidden - token might be valid but account restricted
+            logger.warning("Token validation failed: 403 Forbidden")
+            return {
+                "success": False,
+                "data": {"valid": False},
+                "error": "Account restricted or token lacks permissions"
+            }
 
-                else:
-                    # Other error - don't log response body (may contain sensitive data)
-                    logger.error(f"Token validation failed with status {response.status}")
-                    return {
-                        "success": False,
-                        "data": {"valid": False},
-                        "error": f"Discord API error: {response.status}"
-                    }
+        elif response.status_code == 429:
+            # Rate limited
+            retry_after = response.headers.get("Retry-After", "unknown")
+            logger.warning(f"Token validation rate limited. Retry after {retry_after}s")
+            return {
+                "success": False,
+                "data": {"valid": False},
+                "error": f"Rate limited. Retry after {retry_after} seconds"
+            }
 
-    except aiohttp.ClientError as e:
-        # Only log exception type, not message (may contain sensitive data)
-        logger.error(f"Network error during token validation: {type(e).__name__}")
-        return {
-            "success": False,
-            "data": {"valid": False},
-            "error": "Network error occurred"
-        }
-
-    except asyncio.TimeoutError:
-        logger.warning("Token validation timed out")
-        return {
-            "success": False,
-            "data": {"valid": False},
-            "error": "Request timed out"
-        }
+        else:
+            # Other error - don't log response body (may contain sensitive data)
+            logger.error(f"Token validation failed with status {response.status_code}")
+            return {
+                "success": False,
+                "data": {"valid": False},
+                "error": f"Discord API error: {response.status_code}"
+            }
 
     except Exception as e:
         # Only log exception type, not full traceback (may contain sensitive data)
