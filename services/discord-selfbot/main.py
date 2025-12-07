@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
+import aiohttp
 
 from client_manager import ClientManager
 from health import check_health
@@ -287,104 +288,136 @@ async def get_client_status(userId: Optional[str] = None):
 @app.post("/token/validate")
 async def validate_token(request: ValidateTokenRequest):
     """
-    Validate a Discord user token.
+    Validate a Discord user token using Discord's REST API.
 
-    Creates a temporary Discord client to test the token validity
-    and retrieves user information if valid.
+    Makes a simple GET request to /users/@me endpoint instead of
+    creating a full Discord client. This avoids Windows WebSocket issues
+    with curl_cffi and is much faster (50-100ms vs 10+ seconds).
 
     Returns:
         - valid: True if token is valid, False otherwise
         - userId: Discord user ID (if valid)
         - username: Discord username (if valid)
+        - discriminator: Discord discriminator (if valid)
         - error: Error message (if invalid)
     """
     logger.info("Received token validation request")
 
-    try:
-        # Create a temporary Discord client to test the token
-        temp_client = discord.Client()
-
-        # Use asyncio.wait_for to timeout the login attempt after 10 seconds
-        login_successful = False
-        user_id = None
-        username = None
-
-        @temp_client.event
-        async def on_ready():
-            nonlocal login_successful, user_id, username
-            login_successful = True
-            user_id = str(temp_client.user.id)
-            username = str(temp_client.user)
-            logger.info(f"Token validation successful: {username}")
-            # Close the client after successful validation
-            await temp_client.close()
-
-        try:
-            # Start the client with a timeout
-            await asyncio.wait_for(temp_client.start(request.token), timeout=10.0)
-        except asyncio.TimeoutError:
-            # If timeout occurs but login was successful (on_ready fired), it's valid
-            if login_successful:
-                return {
-                    "success": True,
-                    "data": {
-                        "valid": True,
-                        "userId": user_id,
-                        "username": username
-                    }
-                }
-            else:
-                logger.warning("Token validation timed out")
-                return {
-                    "success": False,
-                    "data": {"valid": False},
-                    "error": "Token validation timed out"
-                }
-        except discord.LoginFailure:
-            logger.warning("Token validation failed: Invalid token")
-            if not temp_client.is_closed():
-                await temp_client.close()
-            return {
-                "success": False,
-                "data": {"valid": False},
-                "error": "Invalid Discord token"
-            }
-        except Exception as e:
-            logger.error(f"Token validation error: {e}", exc_info=True)
-            if not temp_client.is_closed():
-                await temp_client.close()
-            return {
-                "success": False,
-                "data": {"valid": False},
-                "error": f"Validation error: {str(e)}"
-            }
-
-        # If we reach here, validation was successful
-        if not temp_client.is_closed():
-            await temp_client.close()
-
-        if login_successful:
-            return {
-                "success": True,
-                "data": {
-                    "valid": True,
-                    "userId": user_id,
-                    "username": username
-                }
-            }
-        else:
-            return {
-                "success": False,
-                "data": {"valid": False},
-                "error": "Token validation failed"
-            }
-
-    except Exception as e:
-        logger.error(f"Unexpected error in token validation: {e}", exc_info=True)
+    # Validate token format (Discord tokens are typically 50-150 characters)
+    token = request.token.strip() if request.token else ""
+    if not token or len(token) < 50 or len(token) > 150:
+        logger.warning("Token validation failed: Invalid token format")
         return {
             "success": False,
             "data": {"valid": False},
-            "error": f"Internal error: {str(e)}"
+            "error": "Invalid token format"
+        }
+
+    # Strip "Bot " prefix if present (user tokens don't need it)
+    if token.startswith("Bot "):
+        token = token[4:]
+
+    # Discord API endpoint
+    discord_api_url = "https://discord.com/api/v10/users/@me"
+
+    # Prepare headers with user token
+    headers = {
+        "Authorization": token,
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                discord_api_url,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as response:
+
+                if response.status == 200:
+                    # Token is valid
+                    user_data = await response.json()
+                    user_id = str(user_data.get("id", ""))
+                    username = user_data.get("username", "")
+                    discriminator = user_data.get("discriminator", "0")
+
+                    # Format username (Discord removed discriminators for most users)
+                    full_username = f"{username}#{discriminator}" if discriminator != "0" else username
+
+                    logger.info(f"Token validation successful: {full_username}")
+
+                    return {
+                        "success": True,
+                        "data": {
+                            "valid": True,
+                            "userId": user_id,
+                            "username": username,
+                            "discriminator": discriminator
+                        }
+                    }
+
+                elif response.status == 401:
+                    # Invalid token
+                    logger.warning("Token validation failed: 401 Unauthorized")
+                    return {
+                        "success": False,
+                        "data": {"valid": False},
+                        "error": "Invalid Discord token"
+                    }
+
+                elif response.status == 403:
+                    # Forbidden - token might be valid but account restricted
+                    logger.warning("Token validation failed: 403 Forbidden")
+                    return {
+                        "success": False,
+                        "data": {"valid": False},
+                        "error": "Account restricted or token lacks permissions"
+                    }
+
+                elif response.status == 429:
+                    # Rate limited
+                    retry_after = response.headers.get("Retry-After", "unknown")
+                    logger.warning(f"Token validation rate limited. Retry after {retry_after}s")
+                    return {
+                        "success": False,
+                        "data": {"valid": False},
+                        "error": f"Rate limited. Retry after {retry_after} seconds"
+                    }
+
+                else:
+                    # Other error - don't log response body (may contain sensitive data)
+                    logger.error(f"Token validation failed with status {response.status}")
+                    return {
+                        "success": False,
+                        "data": {"valid": False},
+                        "error": f"Discord API error: {response.status}"
+                    }
+
+    except aiohttp.ClientError as e:
+        # Only log exception type, not message (may contain sensitive data)
+        logger.error(f"Network error during token validation: {type(e).__name__}")
+        return {
+            "success": False,
+            "data": {"valid": False},
+            "error": "Network error occurred"
+        }
+
+    except asyncio.TimeoutError:
+        logger.warning("Token validation timed out")
+        return {
+            "success": False,
+            "data": {"valid": False},
+            "error": "Request timed out"
+        }
+
+    except Exception as e:
+        # Only log exception type, not full traceback (may contain sensitive data)
+        logger.error(f"Unexpected error in token validation: {type(e).__name__}")
+        return {
+            "success": False,
+            "data": {"valid": False},
+            "error": "Internal error occurred"
         }
 
 
