@@ -3,10 +3,9 @@ import { requireAuth } from "@/lib/auth";
 import { formatErrorResponse } from "@/lib/utils/errors";
 import { connectDB } from "@/lib/db";
 import { DiscordConnection, User } from "@/lib/db/models";
-import { encrypt, decrypt } from "@/lib/encryption";
+import { encrypt } from "@/lib/encryption";
 import { pythonServiceClient } from "@/lib/discord/python-service-client";
 import { serializeResponse } from "@/lib/utils/serialize";
-import { Types } from "mongoose";
 
 /**
  * GET /api/discord/connections
@@ -73,6 +72,15 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!token || !serverId || !serverName || !channelId || !channelName) {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Discord Connections] Missing fields:", {
+          hasToken: !!token,
+          hasServerId: !!serverId,
+          hasServerName: !!serverName,
+          hasChannelId: !!channelId,
+          hasChannelName: !!channelName,
+        });
+      }
       return NextResponse.json(
         {
           success: false,
@@ -88,6 +96,9 @@ export async function POST(request: NextRequest) {
 
     // Validate TOS acceptance (mandatory)
     if (tosAccepted !== true) {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Discord Connections] TOS not accepted:", { tosAccepted });
+      }
       return NextResponse.json(
         {
           success: false,

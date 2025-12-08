@@ -168,6 +168,7 @@ export default function DiscordIntegrationClient() {
           channelName,
           autoExecute,
           requireConfirmation,
+          tosAccepted,
         }),
       });
 
@@ -179,7 +180,11 @@ export default function DiscordIntegrationClient() {
         setIsFormOpen(false);
         fetchData();
       } else {
-        toast.error(data.error || "Failed to create connection");
+        const errorMessage = data.error?.message || data.error || "Failed to create connection";
+        toast.error(errorMessage);
+        if (process.env.NODE_ENV === "development") {
+          console.error("Connection API error:", data);
+        }
       }
     } catch (error) {
       toast.error("Failed to create connection. Please try again.");
