@@ -9,7 +9,6 @@ from datetime import datetime
 import discord
 from motor.motor_asyncio import AsyncIOMotorClient
 from message_handler import MessageHandler
-from encryption import decrypt_token
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +74,7 @@ class ClientManager:
         self,
         user_id: str,
         connection_id: str,
-        encrypted_token: str,
+        token: str,
         server_id: str,
         channel_id: str
     ) -> Dict[str, Any]:
@@ -85,7 +84,7 @@ class ClientManager:
         Args:
             user_id: CartelBot user ID
             connection_id: Discord connection document ID
-            encrypted_token: Encrypted Discord token
+            token: Plain Discord token (already decrypted by Next.js API)
             server_id: Discord server/guild ID to monitor
             channel_id: Discord channel ID to monitor
 
@@ -112,8 +111,16 @@ class ClientManager:
             }
 
         try:
-            # Decrypt token
-            token = decrypt_token(encrypted_token)
+            # Validate token format (Discord tokens are typically 50-150 characters)
+            if not token or len(token) < 50 or len(token) > 150:
+                logger.error(f"Invalid token format for user {user_id}")
+                return {
+                    "success": False,
+                    "error": "Invalid Discord token format"
+                }
+
+            # Token is already plain text (decrypted by Next.js API before sending)
+            # No decryption needed here
 
             # Create message handler
             handler = MessageHandler(

@@ -945,86 +945,221 @@
 ### ⚠️ IMPORTANT DISCLAIMER
 This feature uses Discord user account automation via `discord.py-self` which **VIOLATES Discord's Terms of Service**. Implementation includes mandatory TOS warning and user risk acknowledgment. Users may face account suspension or permanent bans.
 
-### Python Service Foundation
-- [ ] Create Python service directory structure (services/discord-selfbot/)
-- [ ] Setup requirements.txt with discord.py-self dependencies
-- [ ] Implement FastAPI main.py server
-- [ ] Build ClientManager for multi-user Discord clients
-- [ ] Create MessageHandler for processing Discord messages
-- [ ] Implement SignalForwarder to send signals to Next.js API
-- [ ] Add encryption.py for token encryption/decryption
-- [ ] Create health.py for health check endpoint
-- [ ] Write Dockerfile for Python 3.11 container
+### Python Service Foundation ✅ COMPLETED
+- [x] Create Python service directory structure (services/discord-selfbot/)
+- [x] Setup requirements.txt with discord.py-self dependencies
+- [x] Implement FastAPI main.py server
+- [x] Build ClientManager for multi-user Discord clients
+- [x] Create MessageHandler for processing Discord messages
+- [x] Implement SignalForwarder to send signals to Next.js API
+- [x] Add encryption.py for token encryption/decryption
+- [x] Create health.py for health check endpoint
+- [x] Write Dockerfile for Python 3.11 container
 
-### Database Models
-- [ ] Create DiscordConnection model (lib/db/models/DiscordConnection.ts)
-- [ ] Create DiscordMessage model (lib/db/models/DiscordMessage.ts)
-- [ ] Update User model with Discord fields
-- [ ] Update Signal model with source field ('manual' | 'discord')
-- [ ] Add database indexes for performance
+### Database Models ✅ COMPLETED
+- [x] Create DiscordConnection model (lib/db/models/DiscordConnection.ts)
+- [x] Create DiscordMessage model (lib/db/models/DiscordMessage.ts)
+- [x] Update User model with Discord fields
+- [x] Update Signal model with source field ('manual' | 'discord')
+- [x] Add database indexes for performance
 
-### Next.js API Integration
-- [ ] Create POST /api/discord/token/validate - Validate Discord token
-- [ ] Create POST /api/discord/token/info - Get user info from token
-- [ ] Create GET /api/discord/connections - List connections
-- [ ] Create POST /api/discord/connections - Create connection
-- [ ] Create PUT /api/discord/connections/[id] - Update connection
-- [ ] Create DELETE /api/discord/connections/[id] - Delete connection
-- [ ] Create GET /api/discord/guilds - List user's servers
-- [ ] Create GET /api/discord/channels/[guildId] - List channels
-- [ ] Create POST /api/discord/test-connection - Test token & channel
-- [ ] Create POST /api/discord/webhook/message - Receive from Python service
+### Next.js API Integration ✅ COMPLETED
+- [x] Create POST /api/discord/token/validate - Validate Discord token
+- [x] Create POST /api/discord/token/info - Get user info from token (via validate endpoint)
+- [x] Create GET /api/discord/connections - List connections
+- [x] Create POST /api/discord/connections - Create connection
+- [x] Create PUT /api/discord/connections/[id] - Update connection
+- [x] Create DELETE /api/discord/connections/[id] - Delete connection
+- [x] Create GET /api/discord/guilds - List user's servers
+- [x] Create GET /api/discord/channels/[guildId] - List channels
+- [x] Create POST /api/discord/test-connection - Test token & channel
+- [x] Create POST /api/discord/webhook/message - Receive from Python service
+- [x] Create GET /api/discord/messages - List user's Discord messages
 
-### Frontend UI
-- [ ] Create /discord-integration page with TOS warning
-- [ ] Build TokenInput component for Discord token entry
-- [ ] Create ServerSelector dropdown component
-- [ ] Create ChannelSelector dropdown component
-- [ ] Build ConnectionCard to display active connections
-- [ ] Create ConnectionStatus indicator
-- [ ] Build MessageLog table for recent messages
-- [ ] Add connection settings (auto-execute, confirmation)
+### Frontend UI ✅ COMPLETED
+- [x] Create /discord-integration page with TOS warning
+- [x] Build TokenInput component for Discord token entry
+- [x] Create ServerSelector dropdown component
+- [x] Create ChannelSelector dropdown component
+- [x] Build ConnectionCard to display active connections
+- [x] Create ConnectionStatus indicator
+- [x] Build MessageLog table for recent messages
+- [x] Add connection settings (auto-execute, confirmation)
 
-### Python Service Integration
-- [ ] Build python-service-client.ts (Next.js → Python API client)
-- [ ] Implement client start/stop lifecycle management
-- [ ] Create connection health monitoring
-- [ ] Add error handling for Python service failures
-- [ ] Implement message forwarding webhook authentication
+### Python Service Integration ✅ COMPLETED
+- [x] Build python-service-client.ts (Next.js → Python API client)
+- [x] Implement client start/stop lifecycle management
+- [x] Create connection health monitoring
+- [x] Add error handling for Python service failures
+- [x] Implement message forwarding webhook authentication
 
-### Docker & Deployment
-- [ ] Update docker-compose.yml with discord-selfbot service
-- [ ] Create Dockerfile for Python service
-- [ ] Update .env.example with Discord variables
+### Docker & Deployment ✅ COMPLETED
+- [x] Update docker-compose.yml with discord-selfbot service
+- [x] Create Dockerfile for Python service
+- [x] Update .env.example with Discord variables
 - [ ] Add Discord service to .coolify.json
-- [ ] Document Discord service deployment
+- [x] Document Discord service deployment (IMPLEMENTATION_SUMMARY.md)
 
-### Security & Anti-Detection
-- [ ] Implement AES-256-GCM token encryption
-- [ ] Add rate limiting with randomized delays (1-3s)
+### ⚠️ VPS Deployment Requirement - Discord Selfbot Service
+**CRITICAL**: The Discord selfbot Python service MUST be running on the VPS for Discord signal integration to work.
+
+#### Service Overview
+- **Name**: discord-selfbot
+- **Location**: `services/discord-selfbot/`
+- **Technology**: Python 3.11+ FastAPI + discord.py-self
+- **Port**: 8000 (internal, not exposed publicly)
+- **Purpose**: Monitors Discord channels and forwards trading signals to Next.js API
+
+#### Manual Setup (Linux VPS)
+```bash
+# 1. Navigate to service directory
+cd /path/to/cartelbot/services/discord-selfbot
+
+# 2. Create Python virtual environment
+python3 -m venv venv
+
+# 3. Activate virtual environment
+source venv/bin/activate
+
+# 4. Install dependencies
+pip install -r requirements.txt
+
+# 5. Configure environment
+cp .env.example .env
+nano .env  # Edit with production values
+
+# 6. Test run (foreground)
+python main.py
+```
+
+#### Required Environment Variables
+Create `services/discord-selfbot/.env` with:
+```env
+# MongoDB Connection (same as Next.js)
+DATABASE_URL=mongodb://user:pass@host:port/cartelbot
+
+# Next.js API Configuration
+NEXTJS_API_URL=https://cartelbot.coinspree.cc
+NEXTJS_WEBHOOK_SECRET=<generate-32-byte-hex-secret>
+
+# Encryption Key (Fernet - generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+ENCRYPTION_KEY=<fernet-key>
+
+# Server Configuration
+PORT=8000
+HOST=0.0.0.0
+
+# Logging
+LOG_LEVEL=INFO
+
+# Rate Limiting
+MAX_CLIENTS=10
+MESSAGE_DELAY_MIN=1
+MESSAGE_DELAY_MAX=3
+```
+
+#### Production Deployment Options
+
+**Option 1: systemd Service (Recommended)**
+```bash
+# Create service file
+sudo nano /etc/systemd/system/discord-selfbot.service
+```
+```ini
+[Unit]
+Description=CartelBot Discord Selfbot Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/path/to/cartelbot/services/discord-selfbot
+Environment=PATH=/path/to/cartelbot/services/discord-selfbot/venv/bin
+ExecStart=/path/to/cartelbot/services/discord-selfbot/venv/bin/python main.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+```bash
+# Enable and start
+sudo systemctl daemon-reload
+sudo systemctl enable discord-selfbot
+sudo systemctl start discord-selfbot
+sudo systemctl status discord-selfbot
+```
+
+**Option 2: Docker Container**
+```bash
+cd services/discord-selfbot
+docker build -t discord-selfbot .
+docker run -d \
+  --name discord-selfbot \
+  --restart always \
+  --env-file .env \
+  -p 8000:8000 \
+  discord-selfbot
+```
+
+**Option 3: Docker Compose (with main app)**
+The service is already configured in `docker-compose.yml`:
+```bash
+docker-compose up -d discord-selfbot
+```
+
+#### Health Check & Monitoring
+```bash
+# Check if service is running
+curl http://localhost:8000/health
+# Expected: {"status":"healthy","active_clients":0,"uptime":123.45}
+
+# Check service logs (systemd)
+sudo journalctl -u discord-selfbot -f
+
+# Check service logs (Docker)
+docker logs -f discord-selfbot
+```
+
+#### Troubleshooting
+- **Service not starting**: Check Python version (3.11+ required), verify venv activation
+- **MongoDB connection failed**: Verify DATABASE_URL, check firewall rules
+- **Webhook auth errors**: Ensure NEXTJS_WEBHOOK_SECRET matches DISCORD_WEBHOOK_SECRET in Next.js .env
+- **Token encryption errors**: Regenerate ENCRYPTION_KEY with Fernet.generate_key()
+
+#### Integration with Next.js
+The Next.js app communicates with this service via:
+- `lib/discord/python-service-client.ts` - HTTP client
+- `DISCORD_PYTHON_SERVICE_URL` env var in Next.js (default: http://localhost:8000)
+
+### Security & Anti-Detection ✅ COMPLETED
+- [x] Implement Fernet token encryption (Python side)
+- [x] Add rate limiting with randomized delays (1-3s)
 - [ ] Implement User-Agent spoofing
 - [ ] Add activity simulation (typing indicators, presence)
-- [ ] Implement connection throttling (max 3 per user)
-- [ ] Add graceful error handling for token expiry/ban
-- [ ] Minimal logging to avoid evidence trail
-- [ ] Mandatory TOS acknowledgment UI
+- [x] Implement connection throttling (max 3 per user)
+- [x] Add graceful error handling for token expiry/ban
+- [x] Minimal logging to avoid evidence trail
+- [x] Mandatory TOS acknowledgment UI
+- [x] Timing-safe webhook secret comparison
 
-### Testing
-- [ ] Test Discord token validation
-- [ ] Test multi-user client management
-- [ ] Test message forwarding to Next.js
-- [ ] Test signal parsing from Discord messages
-- [ ] Test auto-execute trade flow
-- [ ] Test connection lifecycle (start/stop/reconnect)
-- [ ] Test error handling (token expiry, channel access lost)
-- [ ] Run code reviewer agent
-- [ ] Run bug-fix-engineer agent if issues found
+### Testing ✅ IN PROGRESS
+- [x] Test Discord token validation
+- [x] Test multi-user client management
+- [x] Test message forwarding to Next.js
+- [x] Test signal parsing from Discord messages
+- [x] Test auto-execute trade flow
+- [x] Test connection lifecycle (start/stop/reconnect)
+- [x] Test error handling (token expiry, channel access lost)
+- [x] Run code reviewer agent
+- [x] Run bug-fix-engineer agent if issues found
+- [x] Create Python unit tests for Discord service
 
 ### Documentation
 - [ ] Create Discord integration user guide
-- [ ] Document token generation process
+- [x] Document token generation process (README.md)
 - [ ] Create troubleshooting guide
-- [ ] Update CLAUDE.md with session summary (< 3 lines)
+- [x] Update CLAUDE.md with session summary (< 3 lines)
 
 **Implementation Priority**:
 1. Phase 1: Python Service Foundation (Days 1-5)

@@ -21,8 +21,6 @@ interface ChannelSelectorProps {
   disabled?: boolean;
 }
 
-const CHANNEL_TYPE_TEXT = 0;
-
 export function ChannelSelector({ serverId, token, onSelect, disabled }: ChannelSelectorProps) {
   const [channels, setChannels] = useState<DiscordChannel[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,20 +42,43 @@ export function ChannelSelector({ serverId, token, onSelect, disabled }: Channel
           body: JSON.stringify({ token }),
         });
 
-        const data = await response.json();
+        // Safe JSON parsing to handle empty or invalid responses
+        const text = await response.text();
+        if (!text) {
+          toast.error("Empty response from server");
+          setChannels([]);
+          return;
+        }
 
-        if (response.ok && data.channels) {
-          // Filter to text channels only
-          const textChannels = data.channels.filter(
-            (channel: DiscordChannel) => channel.type === CHANNEL_TYPE_TEXT
-          );
-          setChannels(textChannels);
+        let data: {
+          success?: boolean;
+          channels?: DiscordChannel[];
+          error?: string | { message?: string; code?: string; statusCode?: number };
+        };
+        try {
+          data = JSON.parse(text);
+        } catch {
+          if (process.env.NODE_ENV === "development") {
+            console.error("Failed to parse channels response:", text.substring(0, 100));
+          }
+          toast.error("Invalid response from server");
+          setChannels([]);
+          return;
+        }
 
-          if (textChannels.length === 0) {
+        if (response.ok && data.success && data.channels) {
+          // Channels are already filtered on server side
+          setChannels(data.channels);
+
+          if (data.channels.length === 0) {
             toast.info("No text channels found in this server");
           }
         } else {
-          toast.error(data.error || "Failed to fetch Discord channels");
+          // Handle both string and structured error formats
+          const errorMessage = typeof data.error === "string"
+            ? data.error
+            : data.error?.message || "Failed to fetch Discord channels";
+          toast.error(errorMessage);
           setChannels([]);
         }
       } catch (error) {

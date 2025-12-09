@@ -56,6 +56,10 @@ export default function DiscordIntegrationClient() {
   const [requireConfirmation, setRequireConfirmation] = useState(false);
   const [tosAccepted, setTosAccepted] = useState(false);
 
+  // Discord user info (set after token validation)
+  const [discordUserId, setDiscordUserId] = useState("");
+  const [discordUsername, setDiscordUsername] = useState("");
+
   const {
     
     setError,
@@ -114,6 +118,8 @@ export default function DiscordIntegrationClient() {
     setRequireConfirmation(false);
     setTosAccepted(false);
     setIsTokenValid(false);
+    setDiscordUserId("");
+    setDiscordUsername("");
     clearErrors();
   };
 
@@ -144,6 +150,21 @@ export default function DiscordIntegrationClient() {
   };
 
   const handleSubmit = async () => {
+    // Debug logging - check state before validation
+    if (process.env.NODE_ENV === "development") {
+      console.log("[Discord Connection] Submit clicked - Current state:", {
+        hasToken: !!token,
+        hasServerId: !!serverId,
+        hasChannelId: !!channelId,
+        tosAccepted,
+        isTokenValid,
+        hasDiscordUserId: !!discordUserId,
+        hasDiscordUsername: !!discordUsername,
+        discordUserId,
+        discordUsername,
+      });
+    }
+
     if (!validateForm()) {
       toast.error("Please complete all required fields");
       return;
@@ -154,22 +175,48 @@ export default function DiscordIntegrationClient() {
       return;
     }
 
+    // Critical validation: Ensure Discord user info is present
+    if (!discordUserId || !discordUsername) {
+      toast.error("Please test your Discord token first to validate your account");
+      if (process.env.NODE_ENV === "development") {
+        console.error("[Discord Connection] Missing Discord user info:", {
+          discordUserId,
+          discordUsername,
+        });
+      }
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
+      const requestBody = {
+        token,
+        serverId,
+        serverName,
+        channelId,
+        channelName,
+        autoExecute,
+        requireConfirmation,
+        tosAccepted,
+        // Pass Discord user info from token validation (avoids redundant API call)
+        discordUserId,
+        discordUsername,
+      };
+
+      if (process.env.NODE_ENV === "development") {
+        console.log("[Discord Connection] Sending request:", {
+          ...requestBody,
+          token: requestBody.token ? `${requestBody.token.slice(0, 10)}...` : "missing",
+          discordUserId: requestBody.discordUserId || "MISSING",
+          discordUsername: requestBody.discordUsername || "MISSING",
+        });
+      }
+
       const response = await fetch("/api/discord/connections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token,
-          serverId,
-          serverName,
-          channelId,
-          channelName,
-          autoExecute,
-          requireConfirmation,
-          tosAccepted,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
@@ -269,7 +316,16 @@ export default function DiscordIntegrationClient() {
                 <TokenInput
                   value={token}
                   onChange={setToken}
-                  onValidate={setIsTokenValid}
+                  onValidate={(isValid, userInfo) => {
+                    setIsTokenValid(isValid);
+                    if (isValid && userInfo) {
+                      setDiscordUserId(userInfo.userId);
+                      setDiscordUsername(userInfo.username);
+                    } else {
+                      setDiscordUserId("");
+                      setDiscordUsername("");
+                    }
+                  }}
                 />
 
                 {/* Server Selector */}
@@ -349,7 +405,7 @@ export default function DiscordIntegrationClient() {
                 </Alert>
 
                 {/* Submit Button */}
-                <div className="flex gap-3">
+                <div className="space-y-2">
                   <Button
                     onClick={handleSubmit}
                     disabled={
@@ -357,6 +413,9 @@ export default function DiscordIntegrationClient() {
                       !serverId ||
                       !channelId ||
                       !tosAccepted ||
+                      !isTokenValid ||
+                      !discordUserId ||
+                      !discordUsername ||
                       isSubmitting
                     }
                     className="w-full"
@@ -370,6 +429,18 @@ export default function DiscordIntegrationClient() {
                       "Connect Discord Channel"
                     )}
                   </Button>
+                  {!isTokenValid && token && (
+                    <Alert variant="default" className="py-2">
+                      <AlertDescription className="text-sm">
+                        Please click &quot;Test Connection&quot; to validate your Discord token before connecting
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  {isTokenValid && discordUsername && (
+                    <p className="text-sm text-green-600 dark:text-green-400">
+                      Connected as: {discordUsername}
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </CollapsibleContent>

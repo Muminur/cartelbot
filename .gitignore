@@ -78,3 +78,15 @@ CLAUDE_Details.md
 
 # Null files (Windows artifact)
 nul
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+.venv/
+env/
+.Python
+*.egg-info/
+.eggs/

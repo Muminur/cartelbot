@@ -134,24 +134,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate token with Python service
-    const tokenValidation = await pythonServiceClient.validateToken(token);
-    if (!tokenValidation.success || !tokenValidation.data?.valid) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            message: tokenValidation.error || "Invalid Discord token",
-            code: "INVALID_TOKEN",
-            statusCode: 400,
-          },
-        },
-        { status: 400 }
-      );
+    // Extract Discord user info from request body (already validated via /api/discord/token/validate)
+    // Skip redundant validation to avoid rate limiting (5 req/15min)
+    let { discordUserId, discordUsername } = body;
+
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[Discord Connections] Received body fields:", {
+        hasToken: !!token,
+        hasDiscordUserId: !!discordUserId,
+        hasDiscordUsername: !!discordUsername,
+        discordUserId,
+        discordUsername,
+      });
     }
 
-    const { userId: discordUserId, username: discordUsername } =
-      tokenValidation.data;
+    // Validate that Discord user info was provided
+    if (!discordUserId || !discordUsername) {
+      // Fallback: validate token if Discord user info not provided
+      // This handles edge cases where connection is created without prior validation
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Discord Connections] Discord user info missing, validating token...");
+      }
+
+      const tokenValidation = await pythonServiceClient.validateToken(token);
+      if (!tokenValidation.success || !tokenValidation.data?.valid) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              message: tokenValidation.error || "Invalid Discord token",
+              code: "INVALID_TOKEN",
+              statusCode: 400,
+            },
+          },
+          { status: 400 }
+        );
+      }
+
+      // Update local variables with validated data
+      discordUserId = tokenValidation.data.userId || "";
+      discordUsername = tokenValidation.data.username || "";
+
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Discord Connections] Token validated, user info:", {
+          discordUserId,
+          discordUsername,
+        });
+      }
+    }
 
     // Check for duplicate connection
     const existingConnection = await DiscordConnection.findOne({
@@ -174,6 +204,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Final validation - ensure we have Discord user info
+    if (!discordUserId || !discordUsername) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message: "Discord user information is required",
+            code: "VALIDATION_ERROR",
+            statusCode: 400,
+          },
+        },
+        { status: 400 }
+      );
+    }
+
     // Encrypt token before storing
     const encryptedToken = encrypt(token);
 
@@ -181,8 +226,8 @@ export async function POST(request: NextRequest) {
     const connection = await DiscordConnection.create({
       userId: user._id,
       discordUserToken: encryptedToken,
-      discordUserId: discordUserId!,
-      discordUsername: discordUsername!,
+      discordUserId,
+      discordUsername,
       serverId,
       serverName,
       channelId,

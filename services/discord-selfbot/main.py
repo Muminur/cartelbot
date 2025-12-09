@@ -256,7 +256,7 @@ class StartClientRequest(BaseModel):
     """Request to start a Discord client."""
     userId: str = Field(..., description="CartelBot user ID")
     connectionId: str = Field(..., description="Discord connection document ID")
-    token: str = Field(..., description="Encrypted Discord token")
+    token: str = Field(..., description="Plain Discord token (decrypted by Next.js)")
     serverId: str = Field(..., description="Discord server/guild ID")
     channelId: str = Field(..., description="Discord channel ID to monitor")
 
@@ -332,7 +332,7 @@ async def start_client(request: StartClientRequest):
     result = await client_manager.start_client(
         user_id=request.userId,
         connection_id=request.connectionId,
-        encrypted_token=request.token,
+        token=request.token,
         server_id=request.serverId,
         channel_id=request.channelId
     )

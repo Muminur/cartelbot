@@ -7,10 +7,16 @@ import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Loader2, CheckCircle2, XCircle, Copy, ExternalLink, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 
+interface DiscordUserInfo {
+  userId: string;
+  username: string;
+  discriminator: string;
+}
+
 interface TokenInputProps {
   value: string;
   onChange: (value: string) => void;
-  onValidate: (isValid: boolean) => void;
+  onValidate: (isValid: boolean, userInfo?: DiscordUserInfo) => void;
 }
 
 export function TokenInput({ value, onChange, onValidate }: TokenInputProps) {
@@ -55,7 +61,12 @@ export function TokenInput({ value, onChange, onValidate }: TokenInputProps) {
 
       if (response.ok && data.valid) {
         setValidationStatus("valid");
-        onValidate(true);
+        // Pass Discord user info back to parent component
+        onValidate(true, {
+          userId: data.userId || "",
+          username: data.username || "",
+          discriminator: data.discriminator || "0",
+        });
         toast.success(
           `Token validated successfully! Connected as ${data.username}#${data.discriminator}`
         );
