@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken, verifyJWT } from "@/lib/auth/jwt";
 
 const PUBLIC_PATHS = ["/", "/login", "/verify", "/admin/login"];
-const API_PUBLIC_PATHS = ["/api/auth/magic-link", "/api/auth/verify"];
+const API_PUBLIC_PATHS = [
+  "/api/auth/magic-link",
+  "/api/auth/verify",
+  "/api/discord/webhook/message" // Discord webhook uses X-Webhook-Secret header for auth
+];
 const ADMIN_AUTH_PATHS = ["/api/admin/auth/login", "/api/admin/auth/session", "/api/admin/auth/change-password", "/api/admin/auth/logout"];
 
 export default function proxy(request: NextRequest) {

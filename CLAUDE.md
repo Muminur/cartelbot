@@ -355,3 +355,6 @@ git push origin main  # Auto-deploys via webhook
 
 ## Session: Dec 10, 2025 - MessageLog Hydration Error Fix ✅ COMPLETED
 **Fixed React hydration error (3463922)**: Resolved "<div> cannot be a descendant of <p>" error in MessageLog dialog. Used Radix UI's asChild prop to replace DialogDescription's default <p> with semantic <div>. Maintains accessibility/ARIA attributes. Code review 9.5/10 (code-reviewer agent), TypeScript clean, production-ready.
+
+## Session: Dec 10, 2025 - Discord Service Setup Scripts + Proxy Fix
+**Created production-ready installation system**: Built install.bat (clean venv, dependency installation), start.bat (env validation, port checks), health-check.bat (service verification), test-discord-webhook-manual.js (tests Next.js pipeline independently). Created SETUP-WINDOWS.md (service docs) + DISCORD-SETUP-GUIDE.md (complete user guide, 300+ LOC). Fixed critical proxy.ts middleware bug blocking webhook with 401 errors - added /api/discord/webhook/message to API_PUBLIC_PATHS (webhook uses X-Webhook-Secret for auth). Verified Next.js pipeline working (webhook → parser → trade executor). User needs: pip install -r requirements.txt, then start.bat.
