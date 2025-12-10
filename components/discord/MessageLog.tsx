@@ -195,14 +195,16 @@ export function MessageLog({ messages, onRefresh }: MessageLogProps) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Message Details</DialogTitle>
-            <DialogDescription>
-              {selectedMessage && (
-                <div className="flex items-center gap-2 text-sm">
-                  <span>#{selectedMessage.channelName}</span>
-                  <span>•</span>
-                  <span>{format(new Date(selectedMessage.timestamp), "PPpp")}</span>
-                </div>
-              )}
+            <DialogDescription asChild>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {selectedMessage && (
+                  <>
+                    <span>#{selectedMessage.channelName}</span>
+                    <span>•</span>
+                    <span>{format(new Date(selectedMessage.timestamp), "PPpp")}</span>
+                  </>
+                )}
+              </div>
             </DialogDescription>
           </DialogHeader>
           {selectedMessage && (
