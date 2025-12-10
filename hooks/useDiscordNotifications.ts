@@ -3,12 +3,13 @@
  *
  * Connects to Discord signal SSE stream for real-time notifications
  * Displays toast notifications for each event type
+ * Tracks recent events for display on the page
  */
 
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-interface DiscordEvent {
+export interface DiscordEvent {
   type: string;
   connectionId: string;
   messageId: string;
@@ -20,12 +21,23 @@ interface DiscordEvent {
   error?: string;
   signalId?: string;
   tradeId?: string;
+  pnlPercentage?: number;
 }
+
+export interface TrackedEvent extends DiscordEvent {
+  id: string; // Unique ID for React keys
+  displayTimestamp: Date;
+}
+
+const MAX_TRACKED_EVENTS = 50;
+const MAX_RETRIES = 5;
 
 export function useDiscordNotifications() {
   const [isConnected, setIsConnected] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
   const [eventCount, setEventCount] = useState(0);
+  const [recentEvents, setRecentEvents] = useState<TrackedEvent[]>([]);
+  const retryCountRef = useRef(0);
 
   useEffect(() => {
     // Only run on client side
@@ -38,6 +50,7 @@ export function useDiscordNotifications() {
     // Connection opened
     eventSource.onopen = () => {
       setIsConnected(true);
+      retryCountRef.current = 0; // Reset retry count on successful connection
       if (process.env.NODE_ENV !== "production") {
         console.log("[Discord Notifications] Connected to SSE stream");
       }
@@ -54,6 +67,21 @@ export function useDiscordNotifications() {
         }
 
         setEventCount((prev) => prev + 1);
+
+        // Add to recent events (keep last MAX_TRACKED_EVENTS)
+        const trackedEvent: TrackedEvent = {
+          ...data,
+          id: `${data.messageId}-${data.type}-${Date.now()}`,
+          displayTimestamp: new Date(),
+        };
+
+        setRecentEvents((prev) => {
+          // Avoid spread if at max capacity (performance optimization)
+          if (prev.length >= MAX_TRACKED_EVENTS) {
+            return [trackedEvent, ...prev.slice(0, MAX_TRACKED_EVENTS - 1)];
+          }
+          return [trackedEvent, ...prev];
+        });
 
         // Show toast notification based on event type
         switch (data.type) {
@@ -113,14 +141,18 @@ export function useDiscordNotifications() {
 
           case "target_hit":
             toast.success(`Target hit: ${data.symbol}`, {
-              description: `Profit: ${data.pnlPercentage?.toFixed(2)}%`,
+              description: data.pnlPercentage !== undefined
+                ? `Profit: ${data.pnlPercentage.toFixed(2)}%`
+                : "Target reached",
               duration: 5000,
             });
             break;
 
           case "stop_loss":
             toast.error(`Stop loss triggered: ${data.symbol}`, {
-              description: `Loss: ${data.pnlPercentage?.toFixed(2)}%`,
+              description: data.pnlPercentage !== undefined
+                ? `Loss: ${data.pnlPercentage.toFixed(2)}%`
+                : "Stop loss triggered",
               duration: 5000,
             });
             break;
@@ -139,14 +171,26 @@ export function useDiscordNotifications() {
     // Handle errors
     eventSource.onerror = (error) => {
       setIsConnected(false);
+
       if (process.env.NODE_ENV !== "production") {
         console.error("[Discord Notifications] SSE error:", error);
       }
 
-      // Auto-reconnect will be handled by EventSource
-      // Just show user-friendly message
+      // Check retry limit
+      if (retryCountRef.current >= MAX_RETRIES) {
+        toast.error("Failed to connect to notifications", {
+          description: "Please refresh the page to reconnect",
+          duration: 10000,
+        });
+        eventSource.close();
+        return;
+      }
+
+      retryCountRef.current++;
+
+      // EventSource will auto-reconnect - show user-friendly message
       toast.error("Disconnected from live notifications", {
-        description: "Reconnecting...",
+        description: `Reconnecting (attempt ${retryCountRef.current}/${MAX_RETRIES})...`,
         duration: 3000,
       });
     };
@@ -163,9 +207,16 @@ export function useDiscordNotifications() {
   return {
     isConnected,
     eventCount,
+    recentEvents,
     disconnect: () => {
-      eventSourceRef.current?.close();
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null; // Clear reference to prevent memory leak
+      }
       setIsConnected(false);
+    },
+    clearEvents: () => {
+      setRecentEvents([]);
     },
   };
 }

@@ -19,6 +19,7 @@ import { ServerSelector } from "@/components/discord/ServerSelector";
 import { ChannelSelector } from "@/components/discord/ChannelSelector";
 import { ConnectionCard } from "@/components/discord/ConnectionCard";
 import { MessageLog } from "@/components/discord/MessageLog";
+import { SignalNotificationPanel } from "@/components/discord/SignalNotificationPanel";
 import { AlertTriangle, ChevronDown, ChevronUp, Loader2, Plus, MessageSquare, Radio } from "lucide-react";
 import { toast } from "sonner";
 import { IDiscordConnection, IDiscordMessage } from "@/types/discord";
@@ -48,7 +49,7 @@ export default function DiscordIntegrationClient() {
   const [isTokenValid, setIsTokenValid] = useState(false);
 
   // Real-time Discord notifications via SSE
-  const { isConnected: isNotificationsConnected, eventCount } = useDiscordNotifications();
+  const { isConnected: isNotificationsConnected, eventCount, recentEvents, clearEvents } = useDiscordNotifications();
 
   // Form state
   const [token, setToken] = useState("");
@@ -480,6 +481,9 @@ export default function DiscordIntegrationClient() {
             </div>
           </div>
         )}
+
+        {/* Live Signal Notifications Panel */}
+        <SignalNotificationPanel events={recentEvents} onClear={clearEvents} />
 
         {/* Recent Messages */}
         <MessageLog messages={recentMessages} onRefresh={fetchData} />
