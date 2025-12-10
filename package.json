@@ -40,7 +40,6 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "date-fns": "^3.3.0",
-    "discord.js": "^14.25.1",
     "jsonwebtoken": "^9.0.0",
     "lucide-react": "^0.400.0",
     "mongodb": "^6.3.0",
