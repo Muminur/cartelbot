@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
 
     if (process.env.NODE_ENV !== "production") {
       console.log(`[Discord Stream] User ${userId} connecting to SSE stream`);
+      console.log(`[Discord Stream] Current listener count for user:`, discordEventEmitter.getUserListenerCount(userId));
     }
 
     // Create SSE response with proper headers
@@ -42,6 +43,16 @@ export async function GET(request: NextRequest) {
           userId,
           (event: DiscordSignalEvent) => {
             try {
+              if (process.env.NODE_ENV !== "production") {
+                console.log(`[Discord Stream] 🔔 Received event for user ${userId}:`, {
+                  type: event.type,
+                  eventUserId: event.userId,
+                  userIdMatch: event.userId === userId,
+                  messageId: event.messageId,
+                  symbol: event.data.symbol,
+                });
+              }
+
               // Format SSE message
               const data = JSON.stringify({
                 type: event.type,
@@ -55,15 +66,19 @@ export async function GET(request: NextRequest) {
               controller.enqueue(encoder.encode(message));
 
               if (process.env.NODE_ENV !== "production") {
-                console.log(`[Discord Stream] Sent ${event.type} to user ${userId}`);
+                console.log(`[Discord Stream] ✅ Sent ${event.type} to user ${userId} (${data.length} bytes)`);
               }
             } catch (error) {
               if (process.env.NODE_ENV !== "production") {
-                console.error(`[Discord Stream] Error encoding event:`, error);
+                console.error(`[Discord Stream] ❌ Error encoding event:`, error);
               }
             }
           }
         );
+
+        if (process.env.NODE_ENV !== "production") {
+          console.log(`[Discord Stream] 📡 Subscribed! Listener count:`, discordEventEmitter.getUserListenerCount(userId));
+        }
 
         // Send keepalive every 30 seconds
         const keepaliveInterval = setInterval(() => {

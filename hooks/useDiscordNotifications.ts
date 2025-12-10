@@ -47,26 +47,51 @@ export function useDiscordNotifications() {
     const eventSource = new EventSource("/api/discord/stream");
     eventSourceRef.current = eventSource;
 
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[Discord Notifications] 🔌 Connecting to /api/discord/stream...");
+      console.log("[Discord Notifications] ReadyState:", eventSource.readyState);
+    }
+
     // Connection opened
     eventSource.onopen = () => {
       setIsConnected(true);
       retryCountRef.current = 0; // Reset retry count on successful connection
       if (process.env.NODE_ENV !== "production") {
-        console.log("[Discord Notifications] Connected to SSE stream");
+        console.log("[Discord Notifications] ✅ Connected to SSE stream");
+        console.log("[Discord Notifications] ReadyState:", eventSource.readyState);
       }
     };
 
     // Handle messages
     eventSource.onmessage = (event) => {
       try {
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[Discord Notifications] 📨 Raw SSE message:", event.data);
+        }
+
         const data: DiscordEvent = JSON.parse(event.data);
+
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[Discord Notifications] 📦 Parsed event:", {
+            type: data.type,
+            symbol: data.symbol,
+            messageId: data.messageId,
+          });
+        }
 
         // Ignore keepalive and connected events
         if (data.type === "connected") {
+          if (process.env.NODE_ENV !== "production") {
+            console.log("[Discord Notifications] 🤝 Initial connection message received");
+          }
           return;
         }
 
         setEventCount((prev) => prev + 1);
+
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[Discord Notifications] 📊 Event count incremented to:", eventCount + 1);
+        }
 
         // Add to recent events (keep last MAX_TRACKED_EVENTS)
         const trackedEvent: TrackedEvent = {
@@ -84,12 +109,19 @@ export function useDiscordNotifications() {
         });
 
         // Show toast notification based on event type
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[Discord Notifications] 🎯 Showing toast for:", data.type);
+        }
+
         switch (data.type) {
           case "message_received":
             toast.info(data.message || "New Discord message received", {
               description: "Processing signal...",
               duration: 3000,
             });
+            if (process.env.NODE_ENV !== "production") {
+              console.log("[Discord Notifications] 🔵 INFO toast shown");
+            }
             break;
 
           case "parsing":
