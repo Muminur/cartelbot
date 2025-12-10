@@ -501,4 +501,13 @@ export interface IDiscordMessage extends Document {
   executionError?: string;
   createdAt: Date;
   updatedAt: Date;
+
+  // Virtual/computed fields (not in database, added via aggregation/population)
+  connection?: {
+    _id: string;
+    serverName: string;
+    channelName: string;
+    serverId: string;
+    channelId: string;
+  };
 }

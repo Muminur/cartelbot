@@ -26,25 +26,43 @@ export interface IDiscordConnection extends Document {
 /**
  * Discord Message Interface
  * Tracks messages received from Discord channels
+ *
+ * NOTE: This interface matches the Mongoose schema exactly.
+ * Field names and types must stay synchronized with lib/db/models/DiscordMessage.ts
  */
 export interface IDiscordMessage extends Document {
   connectionId: string; // Reference to DiscordConnection
   userId: string;
   discordMessageId: string; // Discord's message ID
+  serverId: string; // Discord server (guild) ID
   channelId: string;
-  channelName: string;
   content: string;
   authorId: string;
   authorUsername: string;
   timestamp: Date; // Discord message timestamp
-  status: "pending" | "processing" | "parsed" | "executed" | "ignored" | "error";
+  processingStatus: "pending" | "parsed" | "executed" | "failed" | "ignored";
+  parsedSignal?: {
+    symbol: string;
+    entries: number[];
+    targets: number[];
+    stopLoss: number;
+    confidence: number;
+  };
   signalId?: string; // Reference to Signal if parsed
   tradeId?: string; // Reference to Trade if executed
-  parseError?: string;
+  parseErrors: string[]; // Array of parsing errors
   executionError?: string;
-  isSignal: boolean; // Whether message contains trading signal
   createdAt: Date;
   updatedAt: Date;
+
+  // Virtual/computed fields (not in database, added via aggregation/population)
+  connection?: {
+    _id: string;
+    serverName: string;
+    channelName: string;
+    serverId: string;
+    channelId: string;
+  };
 }
 
 /**

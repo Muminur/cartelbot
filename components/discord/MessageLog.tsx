@@ -83,7 +83,7 @@ export function MessageLog({ messages, onRefresh }: MessageLogProps) {
     return content.slice(0, maxLength) + "...";
   };
 
-  const MessageStatus = ({ status }: { status: IDiscordMessage["status"] }) => {
+  const MessageStatus = ({ status }: { status: IDiscordMessage["processingStatus"] }) => {
     const config = statusConfig[status] || statusConfig.pending; // Fallback to pending if status not found
     const Icon = config.icon;
 
@@ -139,7 +139,7 @@ export function MessageLog({ messages, onRefresh }: MessageLogProps) {
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Hash className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm">{message.channelName}</span>
+                          <span className="text-sm">{message.connection?.channelName || message.channelId}</span>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -149,7 +149,7 @@ export function MessageLog({ messages, onRefresh }: MessageLogProps) {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <MessageStatus status={message.status} />
+                        <MessageStatus status={message.processingStatus} />
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDistanceToNow(new Date(message.timestamp), { addSuffix: true })}
@@ -199,7 +199,7 @@ export function MessageLog({ messages, onRefresh }: MessageLogProps) {
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 {selectedMessage && (
                   <>
-                    <span>#{selectedMessage.channelName}</span>
+                    <span>#{selectedMessage.connection?.channelName || selectedMessage.channelId}</span>
                     <span>•</span>
                     <span>{format(new Date(selectedMessage.timestamp), "PPpp")}</span>
                   </>
@@ -211,7 +211,7 @@ export function MessageLog({ messages, onRefresh }: MessageLogProps) {
             <div className="space-y-4">
               <div>
                 <h4 className="text-sm font-semibold mb-2">Status</h4>
-                <MessageStatus status={selectedMessage.status} />
+                <MessageStatus status={selectedMessage.processingStatus} />
               </div>
 
               <div>
@@ -228,19 +228,29 @@ export function MessageLog({ messages, onRefresh }: MessageLogProps) {
                 </div>
               </div>
 
-              {selectedMessage.isSignal && (
+              {(selectedMessage.signalId || selectedMessage.parsedSignal) && (
                 <div>
                   <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-400">
                     Trading Signal Detected
                   </Badge>
+                  {selectedMessage.parsedSignal && (
+                    <div className="mt-2 text-sm">
+                      <p><strong>Symbol:</strong> {selectedMessage.parsedSignal.symbol}</p>
+                      <p><strong>Confidence:</strong> {selectedMessage.parsedSignal.confidence}%</p>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {selectedMessage.parseError && (
+              {selectedMessage.parseErrors && selectedMessage.parseErrors.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-semibold mb-2 text-destructive">Parse Error</h4>
+                  <h4 className="text-sm font-semibold mb-2 text-destructive">Parse Errors</h4>
                   <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
-                    <p className="text-sm text-destructive">{selectedMessage.parseError}</p>
+                    <ul className="text-sm text-destructive space-y-1">
+                      {selectedMessage.parseErrors.map((error, idx) => (
+                        <li key={idx}>• {error}</li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
               )}
