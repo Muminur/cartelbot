@@ -1,6 +1,7 @@
 """
 Discord message event handler with filtering and sanitization.
 """
+import os
 import re
 import logging
 import asyncio
@@ -56,27 +57,44 @@ class MessageHandler:
             message: discord.Message object
         """
         try:
+            # Enhanced diagnostic logging for ALL messages
+            if os.getenv("NODE_ENV") != "production":
+                logger.info(
+                    f"[MESSAGE RECEIVED] ID={message.id}, Channel={message.channel.id}, "
+                    f"Author={message.author} (bot={getattr(message.author, 'bot', False)}), "
+                    f"Content preview: {message.content[:50] if message.content else '(empty)'}"
+                )
+
             # Filter 1: Check if message is from monitored channel
             if str(message.channel.id) != self.monitored_channel_id:
+                if os.getenv("NODE_ENV") != "production":
+                    logger.info(
+                        f"[FILTER 1: SKIP] Message {message.id} from channel {message.channel.id} "
+                        f"(monitoring {self.monitored_channel_id})"
+                    )
                 return
 
             # Filter 2: Ignore bot messages (if author is a bot)
             if hasattr(message.author, 'bot') and message.author.bot:
-                logger.debug(f"Ignoring bot message {message.id}")
+                logger.info(f"[FILTER 2: SKIP] Message {message.id} from bot {message.author}")
                 return
 
             # Filter 3: Check for duplicate (in-memory)
             message_id = str(message.id)
             if message_id in self.processed_messages:
-                logger.debug(f"Duplicate message {message_id} (in-memory)")
+                logger.debug(f"[FILTER 3: SKIP] Duplicate message {message_id} (in-memory)")
                 return
 
             # Filter 4: Check for duplicate in database
             is_duplicate = await self._check_duplicate_in_db(message_id)
             if is_duplicate:
-                logger.debug(f"Duplicate message {message_id} (database)")
+                logger.debug(f"[FILTER 4: SKIP] Duplicate message {message_id} (database)")
                 self.processed_messages.add(message_id)
                 return
+
+            # Message passed all filters
+            if os.getenv("NODE_ENV") != "production":
+                logger.info(f"[FILTERS PASSED] Message {message_id} will be processed")
 
             # Add random delay to appear more human-like
             delay = random.uniform(self.min_delay, self.max_delay)
