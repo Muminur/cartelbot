@@ -132,27 +132,38 @@ class ClientManager:
                 max_delay=self.max_delay
             )
 
-            # Create Discord client
-            client = discord.Client()
+            # Create Discord client with required intents for message events
+            intents = discord.Intents.default()
+            intents.messages = True  # Required for on_message events
+            intents.guilds = True    # Required for guild messages
+            intents.message_content = True  # Required to read message content
+            client = discord.Client(intents=intents)
 
-            # Set up event handlers
-            @client.event
-            async def on_ready():
+            # Define event handler functions (direct assignment works in function scope)
+            async def _on_ready():
                 logger.info(f"Discord client connected as {client.user} (user_id: {user_id})")
+                if os.getenv("NODE_ENV") != "production":
+                    logger.info(f"[Event System] on_ready handler registered and fired for user {user_id}")
 
-            @client.event
-            async def on_message(message):
+            async def _on_message(message):
+                # Log every message event (diagnostic)
+                if os.getenv("NODE_ENV") != "production":
+                    logger.info(f"[Event System] on_message fired: channel={message.channel.id}, author={message.author}")
                 await handler.on_message(message)
 
-            @client.event
-            async def on_disconnect():
+            async def _on_disconnect():
                 logger.warning(f"Discord client disconnected (user_id: {user_id})")
 
-            @client.event
-            async def on_error(event, *args, **kwargs):
+            async def _on_error(event, *args, **kwargs):
                 logger.error(f"Discord client error in {event} (user_id: {user_id})", exc_info=True)
                 if user_id in self.clients:
                     self.clients[user_id].last_error = f"Error in {event}"
+
+            # Directly assign event handlers (proper way in function scope)
+            client.event(_on_ready)
+            client.event(_on_message)
+            client.event(_on_disconnect)
+            client.event(_on_error)
 
             # Create managed client
             managed = ManagedClient(
