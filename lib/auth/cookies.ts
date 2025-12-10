@@ -10,14 +10,14 @@ export async function setSessionCookie(token: string): Promise<void> {
   const cookieOptions: {
     httpOnly: boolean;
     secure: boolean;
-    sameSite: "strict";
+    sameSite: "lax" | "strict";
     maxAge: number;
     path: string;
     domain?: string;
   } = {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
-    sameSite: "strict",
+    sameSite: "lax",
     maxAge: COOKIE_MAX_AGE,
     path: "/",
   };

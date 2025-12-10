@@ -8,35 +8,92 @@ export * from "./jwt";
 export * from "./cookies";
 
 export async function getCurrentUser(): Promise<IUser | null> {
+  const diagnosticId = `auth-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
   try {
+    // Step 1: Get session cookie
     const token = await getSessionCookie();
     if (!token) {
       // Normal case - no session cookie found
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[${diagnosticId}] No session cookie found`);
+      }
       return null;
     }
 
-    const payload = verifySessionToken(token);
-    await connectDB();
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[${diagnosticId}] Session cookie found (length: ${token.length})`);
+    }
 
+    // Step 2: Verify JWT token
+    let payload;
+    try {
+      payload = verifySessionToken(token);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[${diagnosticId}] JWT verified successfully`, {
+          userId: payload.userId,
+          email: payload.email,
+          type: payload.type
+        });
+      }
+    } catch (jwtError) {
+      // JWT verification failed - this is the most likely cause of logout
+      console.error(`[${diagnosticId}] JWT verification failed:`, {
+        error: jwtError instanceof Error ? jwtError.message : String(jwtError),
+        name: jwtError instanceof Error ? jwtError.name : "Unknown",
+        tokenLength: token.length,
+        tokenPreview: token.substring(0, 20) + "...",
+      });
+      return null;
+    }
+
+    // Step 3: Connect to database
+    const dbStartTime = Date.now();
+    await connectDB();
+    const dbConnectTime = Date.now() - dbStartTime;
+
+    if (process.env.NODE_ENV !== 'production' || dbConnectTime > 1000) {
+      console.log(`[${diagnosticId}] Database connected in ${dbConnectTime}ms`);
+    }
+
+    // Step 4: Query user
+    const queryStartTime = Date.now();
     // Select encrypted API key fields to check if user has configured keys
     const user = await User.findById(payload.userId).select("+encryptedApiKey +encryptedApiSecret");
+    const queryTime = Date.now() - queryStartTime;
+
+    if (process.env.NODE_ENV !== 'production' || queryTime > 500) {
+      console.log(`[${diagnosticId}] User query completed in ${queryTime}ms`);
+    }
+
     if (!user) {
-      console.warn(`getCurrentUser: User not found for ID: ${payload.userId}`);
+      console.warn(`[${diagnosticId}] User not found for ID: ${payload.userId} (possible deleted account)`);
       return null;
     }
 
+    // Step 5: Check user status
     if (!user.isActive) {
-      console.warn(`getCurrentUser: User account is inactive for ID: ${payload.userId}`);
+      console.warn(`[${diagnosticId}] User account is inactive`, {
+        userId: payload.userId,
+        email: user.email,
+        isActive: user.isActive
+      });
       return null;
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[${diagnosticId}] Authentication successful for user ${payload.userId}`);
     }
 
     return user;
   } catch (error) {
-    // Log errors with context for debugging
-    console.error("getCurrentUser: Error retrieving current user", {
+    // Log errors with comprehensive context for debugging
+    console.error(`[${diagnosticId}] getCurrentUser: Unexpected error`, {
       error: error instanceof Error ? error.message : String(error),
       name: error instanceof Error ? error.name : "Unknown",
       stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString(),
+      nodeEnv: process.env.NODE_ENV,
     });
     return null;
   }
