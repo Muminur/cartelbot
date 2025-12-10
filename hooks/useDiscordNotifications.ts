@@ -1,0 +1,171 @@
+/**
+ * useDiscordNotifications Hook
+ *
+ * Connects to Discord signal SSE stream for real-time notifications
+ * Displays toast notifications for each event type
+ */
+
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+
+interface DiscordEvent {
+  type: string;
+  connectionId: string;
+  messageId: string;
+  timestamp: string;
+  symbol?: string;
+  message?: string;
+  status?: string;
+  confidence?: number;
+  error?: string;
+  signalId?: string;
+  tradeId?: string;
+}
+
+export function useDiscordNotifications() {
+  const [isConnected, setIsConnected] = useState(false);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const [eventCount, setEventCount] = useState(0);
+
+  useEffect(() => {
+    // Only run on client side
+    if (typeof window === "undefined") return;
+
+    // Connect to SSE stream
+    const eventSource = new EventSource("/api/discord/stream");
+    eventSourceRef.current = eventSource;
+
+    // Connection opened
+    eventSource.onopen = () => {
+      setIsConnected(true);
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Discord Notifications] Connected to SSE stream");
+      }
+    };
+
+    // Handle messages
+    eventSource.onmessage = (event) => {
+      try {
+        const data: DiscordEvent = JSON.parse(event.data);
+
+        // Ignore keepalive and connected events
+        if (data.type === "connected") {
+          return;
+        }
+
+        setEventCount((prev) => prev + 1);
+
+        // Show toast notification based on event type
+        switch (data.type) {
+          case "message_received":
+            toast.info(data.message || "New Discord message received", {
+              description: "Processing signal...",
+              duration: 3000,
+            });
+            break;
+
+          case "parsing":
+            toast.loading(data.message || "Parsing signal...", {
+              id: `parsing-${data.messageId}`,
+              duration: 2000,
+            });
+            break;
+
+          case "parsed":
+            toast.success(data.message || `Signal parsed: ${data.symbol}`, {
+              id: `parsing-${data.messageId}`, // Replace loading toast
+              description: `Confidence: ${data.confidence}%`,
+              duration: 4000,
+            });
+            break;
+
+          case "executing":
+            toast.loading(data.message || `Executing trade: ${data.symbol}`, {
+              id: `executing-${data.messageId}`,
+              description: "Placing orders on Binance...",
+              duration: 5000,
+            });
+            break;
+
+          case "completed":
+            toast.success(data.message || `Trade executed: ${data.symbol}`, {
+              id: `executing-${data.messageId}`, // Replace loading toast
+              description: "Position opened successfully",
+              duration: 5000,
+              action: data.tradeId
+                ? {
+                    label: "View Trade",
+                    onClick: () => {
+                      window.location.href = `/trades?tradeId=${data.tradeId}`;
+                    },
+                  }
+                : undefined,
+            });
+            break;
+
+          case "failed":
+            toast.error(data.message || "Signal processing failed", {
+              id: `executing-${data.messageId}`, // Replace any existing toast
+              description: data.error || "Check logs for details",
+              duration: 7000,
+            });
+            break;
+
+          case "target_hit":
+            toast.success(`Target hit: ${data.symbol}`, {
+              description: `Profit: ${data.pnlPercentage?.toFixed(2)}%`,
+              duration: 5000,
+            });
+            break;
+
+          case "stop_loss":
+            toast.error(`Stop loss triggered: ${data.symbol}`, {
+              description: `Loss: ${data.pnlPercentage?.toFixed(2)}%`,
+              duration: 5000,
+            });
+            break;
+        }
+
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[Discord Notifications] Event received:", data.type, data);
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[Discord Notifications] Error parsing event:", error);
+        }
+      }
+    };
+
+    // Handle errors
+    eventSource.onerror = (error) => {
+      setIsConnected(false);
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[Discord Notifications] SSE error:", error);
+      }
+
+      // Auto-reconnect will be handled by EventSource
+      // Just show user-friendly message
+      toast.error("Disconnected from live notifications", {
+        description: "Reconnecting...",
+        duration: 3000,
+      });
+    };
+
+    // Cleanup on unmount
+    return () => {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Discord Notifications] Disconnecting from SSE stream");
+      }
+      eventSource.close();
+    };
+  }, []); // Empty dependency array - only run once
+
+  return {
+    isConnected,
+    eventCount,
+    disconnect: () => {
+      eventSourceRef.current?.close();
+      setIsConnected(false);
+    },
+  };
+}

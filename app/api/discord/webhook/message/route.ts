@@ -7,6 +7,7 @@ import { parseSignal } from "@/lib/parser";
 import { executeSignalTrade } from "@/lib/binance";
 import { serializeResponse } from "@/lib/utils/serialize";
 import { Types } from "mongoose";
+import { discordEventEmitter } from "@/lib/discord/event-emitter";
 
 interface WebhookMessagePayload {
   userId: string;
@@ -192,7 +193,32 @@ export async function POST(request: NextRequest) {
       parseErrors: [],
     });
 
+    // Emit: Message received event
+    discordEventEmitter.emitSignalEvent({
+      type: "message_received",
+      userId,
+      connectionId,
+      messageId: String(discordMessage._id),
+      timestamp: new Date(),
+      data: {
+        message: `New message from ${authorUsername}`,
+        status: "pending",
+      },
+    });
+
     // Parse signal from message content
+    discordEventEmitter.emitSignalEvent({
+      type: "parsing",
+      userId,
+      connectionId,
+      messageId: String(discordMessage._id),
+      timestamp: new Date(),
+      data: {
+        message: "Parsing signal...",
+        status: "parsing",
+      },
+    });
+
     const parsed = parseSignal(content);
 
     if (process.env.NODE_ENV !== "production") {
@@ -216,6 +242,21 @@ export async function POST(request: NextRequest) {
           errors: parsed.errors,
         });
       }
+
+      // Emit: Parsing failed event
+      discordEventEmitter.emitSignalEvent({
+        type: "failed",
+        userId,
+        connectionId,
+        messageId: String(discordMessage._id),
+        timestamp: new Date(),
+        data: {
+          message: `Low confidence (${parsed.confidence}%). Signal ignored.`,
+          status: "ignored",
+          confidence: parsed.confidence,
+          error: parsed.errors.join(", "),
+        },
+      });
 
       return NextResponse.json({
         success: true,
@@ -255,6 +296,22 @@ export async function POST(request: NextRequest) {
     discordMessage.signalId = signal._id as Types.ObjectId;
     await discordMessage.save();
 
+    // Emit: Signal parsed successfully
+    discordEventEmitter.emitSignalEvent({
+      type: "parsed",
+      userId,
+      connectionId,
+      messageId: String(discordMessage._id),
+      timestamp: new Date(),
+      data: {
+        symbol: parsed.symbol,
+        message: `Signal parsed: ${parsed.symbol}`,
+        status: "parsed",
+        confidence: parsed.confidence,
+        signalId: String(signal._id),
+      },
+    });
+
     // Check if auto-execute is enabled
     if (!connection.autoExecute) {
       if (process.env.NODE_ENV !== "production") {
@@ -276,6 +333,21 @@ export async function POST(request: NextRequest) {
         console.log("[Discord Webhook] Executing trade for signal:", signal._id);
       }
 
+      // Emit: Starting trade execution
+      discordEventEmitter.emitSignalEvent({
+        type: "executing",
+        userId,
+        connectionId,
+        messageId: String(discordMessage._id),
+        timestamp: new Date(),
+        data: {
+          symbol: parsed.symbol,
+          message: `Executing trade for ${parsed.symbol}...`,
+          status: "executing",
+          signalId: String(signal._id),
+        },
+      });
+
       const tradeResult = await executeSignalTrade({
         userId: userObjectId,
         signalId: signal._id as Types.ObjectId,
@@ -295,6 +367,22 @@ export async function POST(request: NextRequest) {
           { _id: signal._id },
           { status: "executing" }
         );
+
+        // Emit: Trade executed successfully
+        discordEventEmitter.emitSignalEvent({
+          type: "completed",
+          userId,
+          connectionId,
+          messageId: String(discordMessage._id),
+          timestamp: new Date(),
+          data: {
+            symbol: parsed.symbol,
+            message: `Trade executed: ${parsed.symbol}`,
+            status: "executed",
+            signalId: String(signal._id),
+            tradeId: String(tradeResult.tradeId),
+          },
+        });
 
         // Update connection last processed time
         await DiscordConnection.updateOne(
@@ -348,6 +436,22 @@ export async function POST(request: NextRequest) {
         console.error("[Discord Webhook] Trade execution failed:", {
           signalId: signal._id,
           error: tradeResult.error,
+        });
+
+        // Emit: Trade execution failed
+        discordEventEmitter.emitSignalEvent({
+          type: "failed",
+          userId,
+          connectionId,
+          messageId: String(discordMessage._id),
+          timestamp: new Date(),
+          data: {
+            symbol: parsed.symbol,
+            message: `Trade execution failed: ${tradeResult.error}`,
+            status: "failed",
+            signalId: String(signal._id),
+            error: tradeResult.error,
+          },
         });
 
         return NextResponse.json({

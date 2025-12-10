@@ -19,9 +19,10 @@ import { ServerSelector } from "@/components/discord/ServerSelector";
 import { ChannelSelector } from "@/components/discord/ChannelSelector";
 import { ConnectionCard } from "@/components/discord/ConnectionCard";
 import { MessageLog } from "@/components/discord/MessageLog";
-import { AlertTriangle, ChevronDown, ChevronUp, Loader2, Plus, MessageSquare } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, Loader2, Plus, MessageSquare, Radio } from "lucide-react";
 import { toast } from "sonner";
 import { IDiscordConnection, IDiscordMessage } from "@/types/discord";
+import { useDiscordNotifications } from "@/hooks/useDiscordNotifications";
 
 const connectionSchema = z.object({
   token: z.string().min(50, "Invalid Discord token"),
@@ -45,6 +46,9 @@ export default function DiscordIntegrationClient() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isTokenValid, setIsTokenValid] = useState(false);
+
+  // Real-time Discord notifications via SSE
+  const { isConnected: isNotificationsConnected, eventCount } = useDiscordNotifications();
 
   // Form state
   const [token, setToken] = useState("");
@@ -274,6 +278,20 @@ export default function DiscordIntegrationClient() {
             <p className="text-muted-foreground mt-2">
               Connect Discord channels to automatically monitor and execute trading signals
             </p>
+          </div>
+          {/* Live Notifications Status */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-card">
+            <Radio className={`h-4 w-4 ${isNotificationsConnected ? "text-green-500 animate-pulse" : "text-gray-400"}`} />
+            <div className="text-sm">
+              <div className="font-medium">
+                {isNotificationsConnected ? "Live Notifications" : "Connecting..."}
+              </div>
+              {eventCount > 0 && (
+                <div className="text-xs text-muted-foreground">
+                  {eventCount} event{eventCount !== 1 ? "s" : ""} received
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

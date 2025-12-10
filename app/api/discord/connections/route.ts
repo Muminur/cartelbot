@@ -70,10 +70,25 @@ export async function POST(request: NextRequest) {
       tosAccepted,
     } = body;
 
+    // Debug: Log all received fields
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[Discord Connections] Full request body:", {
+        hasToken: !!token,
+        hasServerId: !!serverId,
+        hasServerName: !!serverName,
+        hasChannelId: !!channelId,
+        hasChannelName: !!channelName,
+        hasTosAccepted: tosAccepted !== undefined,
+        tosAcceptedValue: tosAccepted,
+        tosAcceptedType: typeof tosAccepted,
+        tosAcceptedStrictCheck: tosAccepted === true,
+      });
+    }
+
     // Validate required fields
     if (!token || !serverId || !serverName || !channelId || !channelName) {
       if (process.env.NODE_ENV !== "production") {
-        console.log("[Discord Connections] Missing fields:", {
+        console.log("[Discord Connections] ❌ RETURNING 400 - Missing fields:", {
           hasToken: !!token,
           hasServerId: !!serverId,
           hasServerName: !!serverName,
@@ -81,35 +96,41 @@ export async function POST(request: NextRequest) {
           hasChannelName: !!channelName,
         });
       }
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            message: "Missing required fields",
-            code: "VALIDATION_ERROR",
-            statusCode: 400,
-          },
+      const errorResponse = {
+        success: false,
+        error: {
+          message: "Missing required fields",
+          code: "VALIDATION_ERROR",
+          statusCode: 400,
         },
-        { status: 400 }
-      );
+      };
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Discord Connections] Response being sent:", errorResponse);
+      }
+      return NextResponse.json(errorResponse, { status: 400 });
     }
 
     // Validate TOS acceptance (mandatory)
     if (tosAccepted !== true) {
       if (process.env.NODE_ENV !== "production") {
-        console.log("[Discord Connections] TOS not accepted:", { tosAccepted });
+        console.log("[Discord Connections] ❌ RETURNING 400 - TOS validation failed:", {
+          tosAccepted,
+          tosAcceptedType: typeof tosAccepted,
+          strictCheck: tosAccepted === true,
+        });
       }
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            message: "You must accept the Terms of Service",
-            code: "TOS_NOT_ACCEPTED",
-            statusCode: 400,
-          },
+      const errorResponse = {
+        success: false,
+        error: {
+          message: "You must accept the Terms of Service",
+          code: "TOS_NOT_ACCEPTED",
+          statusCode: 400,
         },
-        { status: 400 }
-      );
+      };
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Discord Connections] Response being sent:", errorResponse);
+      }
+      return NextResponse.json(errorResponse, { status: 400 });
     }
 
     // Check max connections limit
@@ -139,12 +160,13 @@ export async function POST(request: NextRequest) {
     let { discordUserId, discordUsername } = body;
 
     if (process.env.NODE_ENV !== "production") {
-      console.log("[Discord Connections] Received body fields:", {
+      console.log("[Discord Connections] Step 1 - Extracted from body:", {
         hasToken: !!token,
         hasDiscordUserId: !!discordUserId,
         hasDiscordUsername: !!discordUsername,
         discordUserId,
         discordUsername,
+        bodyKeys: Object.keys(body),
       });
     }
 
@@ -153,10 +175,22 @@ export async function POST(request: NextRequest) {
       // Fallback: validate token if Discord user info not provided
       // This handles edge cases where connection is created without prior validation
       if (process.env.NODE_ENV !== "production") {
-        console.log("[Discord Connections] Discord user info missing, validating token...");
+        console.log("[Discord Connections] Step 2 - Discord user info missing, validating token...");
       }
 
       const tokenValidation = await pythonServiceClient.validateToken(token);
+
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Discord Connections] Step 3 - Token validation result:", {
+          success: tokenValidation.success,
+          hasData: !!tokenValidation.data,
+          isValid: tokenValidation.data?.valid,
+          userId: tokenValidation.data?.userId,
+          username: tokenValidation.data?.username,
+          error: tokenValidation.error,
+        });
+      }
+
       if (!tokenValidation.success || !tokenValidation.data?.valid) {
         return NextResponse.json(
           {
@@ -176,7 +210,7 @@ export async function POST(request: NextRequest) {
       discordUsername = tokenValidation.data.username || "";
 
       if (process.env.NODE_ENV !== "production") {
-        console.log("[Discord Connections] Token validated, user info:", {
+        console.log("[Discord Connections] Step 4 - After token validation:", {
           discordUserId,
           discordUsername,
         });
@@ -205,18 +239,37 @@ export async function POST(request: NextRequest) {
     }
 
     // Final validation - ensure we have Discord user info
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[Discord Connections] Step 5 - Final validation check:", {
+        hasDiscordUserId: !!discordUserId,
+        hasDiscordUsername: !!discordUsername,
+        discordUserId,
+        discordUsername,
+        willPass: !(!discordUserId || !discordUsername),
+      });
+    }
+
     if (!discordUserId || !discordUsername) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            message: "Discord user information is required",
-            code: "VALIDATION_ERROR",
-            statusCode: 400,
-          },
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Discord Connections] ❌ RETURNING 400 - Step 6 - FINAL VALIDATION FAILED!", {
+          discordUserId,
+          discordUsername,
+          hasDiscordUserId: !!discordUserId,
+          hasDiscordUsername: !!discordUsername,
+        });
+      }
+      const errorResponse = {
+        success: false,
+        error: {
+          message: "Discord user information is required",
+          code: "VALIDATION_ERROR",
+          statusCode: 400,
         },
-        { status: 400 }
-      );
+      };
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Discord Connections] Response being sent:", errorResponse);
+      }
+      return NextResponse.json(errorResponse, { status: 400 });
     }
 
     // Encrypt token before storing
@@ -310,8 +363,19 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("POST /api/discord/connections error:", error);
+    if (process.env.NODE_ENV !== "production") {
+      console.error("POST /api/discord/connections - CATCH BLOCK ERROR:", {
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+      });
+    }
     const errorResponse = formatErrorResponse(error);
+
+    if (process.env.NODE_ENV !== "production") {
+      console.error("POST /api/discord/connections - ERROR RESPONSE:", errorResponse);
+    }
+
     return NextResponse.json(
       { success: false, ...errorResponse },
       { status: errorResponse.error.statusCode }
