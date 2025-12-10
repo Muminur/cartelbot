@@ -27,7 +27,10 @@ interface MessageLogProps {
   onRefresh: () => void;
 }
 
-const statusConfig = {
+const statusConfig: Record<
+  string,
+  { label: string; icon: typeof Clock; className: string }
+> = {
   pending: {
     label: "Pending",
     icon: Clock,
@@ -58,6 +61,11 @@ const statusConfig = {
     icon: XCircle,
     className: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
   },
+  failed: {
+    label: "Failed",
+    icon: XCircle,
+    className: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
+  },
 };
 
 export function MessageLog({ messages, onRefresh }: MessageLogProps) {
@@ -76,7 +84,7 @@ export function MessageLog({ messages, onRefresh }: MessageLogProps) {
   };
 
   const MessageStatus = ({ status }: { status: IDiscordMessage["status"] }) => {
-    const config = statusConfig[status];
+    const config = statusConfig[status] || statusConfig.pending; // Fallback to pending if status not found
     const Icon = config.icon;
 
     return (
