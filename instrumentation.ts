@@ -12,6 +12,16 @@ export async function register() {
       console.error('Failed to load Sentry server config:', error);
       // App continues to run even if Sentry fails
     }
+
+    // Start Discord bot for signal monitoring
+    try {
+      const { startDiscordBot } = await import('./lib/discord/bot-startup');
+      await startDiscordBot();
+      console.log('[Instrumentation] Discord bot started successfully');
+    } catch (error) {
+      console.error('[Instrumentation] Failed to start Discord bot:', error);
+      // App continues to run even if Discord bot fails
+    }
   }
 
   if (process.env.NEXT_RUNTIME === 'edge') {
