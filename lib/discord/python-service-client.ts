@@ -88,9 +88,11 @@ export class PythonServiceClient {
     if (axios.isAxiosError(error)) {
       const isConnError = this.isConnectionError(error);
 
+      // Try to extract error message from multiple possible locations
       const errorMessage = isConnError
         ? "Discord selfbot service is not running"
-        : error.response?.data?.error ||
+        : error.response?.data?.detail || // FastAPI uses 'detail'
+          error.response?.data?.error ||
           error.response?.data?.message ||
           error.message;
 
@@ -100,6 +102,7 @@ export class PythonServiceClient {
           code: error.code,
           message: errorMessage,
           isConnectionError: isConnError,
+          responseData: error.response?.data, // Log full response for debugging
           ...metadata,
         });
       }
