@@ -225,6 +225,16 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingConnection) {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[Discord Connections] ❌ DUPLICATE CONNECTION DETECTED:", {
+          existingConnectionId: existingConnection._id,
+          status: existingConnection.status,
+          isActive: existingConnection.isActive,
+          serverId,
+          channelId,
+        });
+      }
+
       return NextResponse.json(
         {
           success: false,
