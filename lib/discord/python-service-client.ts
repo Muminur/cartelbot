@@ -180,6 +180,13 @@ export class PythonServiceClient {
       );
       return response.data;
     } catch (error) {
+      // Special handling for 404 - client not found is a valid state
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        return {
+          success: false,
+          error: "Client not found (already stopped or never started)",
+        };
+      }
       return this.handleAxiosError(error, "Stop client error", { userId });
     }
   }

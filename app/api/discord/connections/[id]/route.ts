@@ -199,12 +199,24 @@ export async function DELETE(
       );
 
       if (!stopResult.success) {
+        // 404 means client not found (already stopped or never started) - this is fine
+        const isClientNotFound = stopResult.error?.includes("not found") ||
+                                 stopResult.error?.includes("404");
+
         if (process.env.NODE_ENV !== "production") {
-          console.error("[Discord] Failed to stop client before deletion:", {
-            connectionId: connection._id,
-            error: stopResult.error,
-          });
+          if (isClientNotFound) {
+            console.log("[Discord] Client already stopped or not running:", {
+              connectionId: connection._id,
+              userId: user._id,
+            });
+          } else {
+            console.warn("[Discord] Failed to stop client before deletion:", {
+              connectionId: connection._id,
+              error: stopResult.error,
+            });
+          }
         }
+        // Continue with deletion regardless - client cleanup is not critical
       }
     }
 
