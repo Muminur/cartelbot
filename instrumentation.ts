@@ -12,6 +12,18 @@ export async function register() {
       console.error('Failed to load Sentry server config:', error);
       // App continues to run even if Sentry fails
     }
+
+    // Initialize global Discord client manager
+    try {
+      const { getDiscordClientManager } = await import('./lib/discord/client-manager');
+      const manager = getDiscordClientManager();
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[Instrumentation] Discord client manager initialized');
+      }
+    } catch (error) {
+      console.error('Failed to initialize Discord client manager:', error);
+      // App continues to run even if Discord manager fails
+    }
   }
 
   if (process.env.NEXT_RUNTIME === 'edge') {
