@@ -60,19 +60,18 @@ export function generateTestUser(type: 'regular' | 'premium' = 'regular') {
 export const TEST_USERS = {
   regular: generateTestUser('regular'),
   premium: generateTestUser('premium'),
-  admin: {
-    username: process.env.ADMIN_USERNAME || 'admin',
-    password: (() => {
-      const pw = process.env.TEST_ADMIN_PASSWORD;
-      if (!pw) {
-        throw new Error(
-          'TEST_ADMIN_PASSWORD environment variable is required for E2E tests.\n' +
-          'This prevents hardcoded passwords in source code.\n' +
-          'Example: export TEST_ADMIN_PASSWORD=aDmin@7878'
-        );
-      }
-      return pw;
-    })(),
+  // Admin credentials are lazily loaded only when needed
+  get admin() {
+    const username = process.env.ADMIN_USERNAME || 'admin';
+    const password = process.env.TEST_ADMIN_PASSWORD;
+    if (!password) {
+      throw new Error(
+        'TEST_ADMIN_PASSWORD environment variable is required for admin E2E tests.\n' +
+        'This prevents hardcoded passwords in source code.\n' +
+        'Example: export TEST_ADMIN_PASSWORD=aDmin@7878'
+      );
+    }
+    return { username, password };
   },
 };
 
