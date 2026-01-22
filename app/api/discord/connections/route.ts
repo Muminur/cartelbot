@@ -7,7 +7,6 @@ import { encrypt } from "@/lib/encryption";
 import { getDiscordClientManager } from "@/lib/discord/client-manager";
 import { validateDiscordToken } from "@/lib/discord/token-validator";
 import { serializeResponse } from "@/lib/utils/serialize";
-import mongoose from "mongoose";
 
 /**
  * GET /api/discord/connections
@@ -188,150 +187,87 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use MongoDB transaction to prevent race conditions
-    // This ensures atomic check-and-create for max connections and duplicates
-    const session = await mongoose.startSession();
+    // Check max connections limit
+    const maxConnections = parseInt(process.env.DISCORD_MAX_CONNECTIONS_PER_USER || "3", 10);
+    const existingCount = await DiscordConnection.countDocuments({
+      userId: user._id,
+      isActive: true,
+    });
 
-    // Store connection data for use after transaction
-    interface ConnectionResult {
-      _id: mongoose.Types.ObjectId;
-      userId: mongoose.Types.ObjectId;
-      discordUserId: string;
-      discordUsername: string;
-      serverId: string;
-      serverName: string;
-      channelId: string;
-      channelName: string;
-      status: string;
-      isActive: boolean;
-      autoExecute: boolean;
-      requireConfirmation: boolean;
-      errorCount: number;
-      tosAccepted: boolean;
-      tosAcceptedAt: Date;
-    }
-    let connectionResult: ConnectionResult | null = null;
-
-    try {
-      await session.withTransaction(async () => {
-        // Check max connections limit (atomic within transaction)
-        const maxConnections = parseInt(process.env.DISCORD_MAX_CONNECTIONS_PER_USER || "3", 10);
-        const existingCount = await DiscordConnection.countDocuments({
-          userId: user._id,
-          isActive: true,
-        }).session(session);
-
-        if (existingCount >= maxConnections) {
-          throw new Error(`MAX_CONNECTIONS:Maximum ${maxConnections} active connections allowed`);
-        }
-
-        // Check for duplicate connection (atomic within transaction)
-        const existingConnection = await DiscordConnection.findOne({
-          userId: user._id,
-          serverId,
-          channelId,
-        }).session(session);
-
-        if (existingConnection) {
-          throw new Error("DUPLICATE:Connection already exists for this server and channel");
-        }
-
-        // Encrypt token and create connection (atomic within transaction)
-        const encryptedToken = encrypt(token);
-        const [newConnection] = await DiscordConnection.create(
-          [
-            {
-              userId: user._id,
-              discordUserToken: encryptedToken,
-              discordUserId,
-              discordUsername,
-              serverId,
-              serverName,
-              channelId,
-              channelName,
-              status: "active",
-              isActive: true,
-              lastMessageId: "",
-              autoExecute,
-              requireConfirmation,
-              errorCount: 0,
-              tosAccepted: true,
-              tosAcceptedAt: new Date(),
-            },
-          ],
-          { session }
-        );
-
-        connectionResult = {
-          _id: newConnection._id as mongoose.Types.ObjectId,
-          userId: newConnection.userId as mongoose.Types.ObjectId,
-          discordUserId: newConnection.discordUserId,
-          discordUsername: newConnection.discordUsername,
-          serverId: newConnection.serverId,
-          serverName: newConnection.serverName,
-          channelId: newConnection.channelId,
-          channelName: newConnection.channelName,
-          status: newConnection.status,
-          isActive: newConnection.isActive,
-          autoExecute: newConnection.autoExecute,
-          requireConfirmation: newConnection.requireConfirmation,
-          errorCount: newConnection.errorCount,
-          tosAccepted: newConnection.tosAccepted,
-          tosAcceptedAt: newConnection.tosAcceptedAt,
-        };
-      });
-    } catch (txError) {
-      // Handle specific transaction errors (return early)
-      if (txError instanceof Error) {
-        if (txError.message.startsWith("MAX_CONNECTIONS:")) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: {
-                message: txError.message.replace("MAX_CONNECTIONS:", ""),
-                code: "MAX_CONNECTIONS_EXCEEDED",
-                statusCode: 400,
-              },
-            },
-            { status: 400 }
-          );
-        }
-        if (txError.message.startsWith("DUPLICATE:")) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: {
-                message: txError.message.replace("DUPLICATE:", ""),
-                code: "DUPLICATE_CONNECTION",
-                statusCode: 400,
-              },
-            },
-            { status: 400 }
-          );
-        }
-      }
-      throw txError;
-    } finally {
-      // Ensure session is always closed regardless of success/failure
-      await session.endSession();
-    }
-
-    if (!connectionResult) {
+    if (existingCount >= maxConnections) {
       return NextResponse.json(
         {
           success: false,
           error: {
-            message: "Failed to create connection",
-            code: "CREATE_FAILED",
-            statusCode: 500,
+            message: `Maximum ${maxConnections} active connections allowed`,
+            code: "MAX_CONNECTIONS_EXCEEDED",
+            statusCode: 400,
           },
         },
-        { status: 500 }
+        { status: 400 }
       );
     }
 
-    // TypeScript can't narrow types assigned in async callbacks, use explicit variable
-    const connection: ConnectionResult = connectionResult;
+    // Check for duplicate connection
+    const existingConnection = await DiscordConnection.findOne({
+      userId: user._id,
+      serverId,
+      channelId,
+    });
+
+    if (existingConnection) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message: "Connection already exists for this server and channel",
+            code: "DUPLICATE_CONNECTION",
+            statusCode: 400,
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    // Encrypt token and create connection
+    const encryptedToken = encrypt(token);
+    let connection;
+    try {
+      connection = await DiscordConnection.create({
+        userId: user._id,
+        discordUserToken: encryptedToken,
+        discordUserId,
+        discordUsername,
+        serverId,
+        serverName,
+        channelId,
+        channelName,
+        status: "active",
+        isActive: true,
+        lastMessageId: "",
+        autoExecute,
+        requireConfirmation,
+        errorCount: 0,
+        tosAccepted: true,
+        tosAcceptedAt: new Date(),
+      });
+    } catch (createError) {
+      // Handle duplicate key error (E11000) from unique index
+      if (createError instanceof Error && createError.message.includes("E11000")) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              message: "Connection already exists for this server and channel",
+              code: "DUPLICATE_CONNECTION",
+              statusCode: 400,
+            },
+          },
+          { status: 400 }
+        );
+      }
+      throw createError;
+    }
 
     // Start JavaScript Discord client
     const manager = getDiscordClientManager();
