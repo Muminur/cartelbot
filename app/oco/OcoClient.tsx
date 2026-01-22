@@ -343,7 +343,7 @@ export default function OCOOrdersPage() {
     );
   };
 
-  const OrderDetailsCell = ({ orders }: { orders: OCOOrder['orders'] }) => {
+  const OrderDetailsCell = ({ orders, signalTargetIndex }: { orders: OCOOrder['orders']; signalTargetIndex?: number }) => {
     const takeProfitOrders = orders.filter(o => o.type === "LIMIT_MAKER");
     const stopLossOrders = orders.filter(o => o.type === "STOP_LOSS_LIMIT");
 
@@ -360,7 +360,7 @@ export default function OCOOrdersPage() {
       <div className="space-y-2">
         {takeProfitOrders.map((order, idx) => (
           <div key={order.orderId} className="flex items-center gap-2">
-            <span className="text-xs text-green-600 dark:text-green-400 font-semibold">TP #{order.targetIndex || idx + 1}:</span>
+            <span className="text-xs text-green-600 dark:text-green-400 font-semibold">TP #{order.targetIndex || signalTargetIndex || idx + 1}:</span>
             <Badge
               className={
                 order.status === "FILLED"
@@ -468,6 +468,15 @@ export default function OCOOrdersPage() {
     acc[key].push(order);
     return acc;
   }, {} as Record<string, OCOOrder[]>);
+
+  // Sort each signal group by TP price (ascending) to determine correct target order
+  Object.values(groupedOrders).forEach(signalOrders => {
+    signalOrders.sort((a, b) => {
+      const priceA = a.orders.find(o => o.type === "LIMIT_MAKER")?.price || 0;
+      const priceB = b.orders.find(o => o.type === "LIMIT_MAKER")?.price || 0;
+      return priceA - priceB;
+    });
+  });
 
   if (loadingOrders) {
     return (
@@ -616,7 +625,7 @@ export default function OCOOrdersPage() {
                           </div>
                         </TableCell>
                       </TableRow>
-                      {signalOrders.map((order) => {
+                      {signalOrders.map((order, ocoIdx) => {
                         const priceData = prices.get(order.symbol);
                         return (
                           <TableRow
@@ -648,7 +657,7 @@ export default function OCOOrdersPage() {
                               <PriceCell priceData={priceData} isMainnet={false} />
                             </TableCell>
                             <TableCell>
-                              <OrderDetailsCell orders={order.orders} />
+                              <OrderDetailsCell orders={order.orders} signalTargetIndex={ocoIdx + 1} />
                             </TableCell>
                             <TableCell>{getStatusBadge(order.status)}</TableCell>
                             <TableCell>
