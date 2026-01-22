@@ -90,3 +90,4 @@ env/
 .Python
 *.egg-info/
 .eggs/
+CLAUDE.md
