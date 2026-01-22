@@ -4,7 +4,8 @@ import { formatErrorResponse } from "@/lib/utils/errors";
 import { connectDB } from "@/lib/db";
 import { DiscordConnection, DiscordMessage, Signal, User } from "@/lib/db/models";
 import { parseSignal } from "@/lib/parser";
-import { executeSignalTrade } from "@/lib/binance";
+import { executeSignalTrade, createOCOOrders } from "@/lib/binance";
+import { TRADE_EXECUTION } from "@/lib/constants";
 import { serializeResponse } from "@/lib/utils/serialize";
 import { Types } from "mongoose";
 import { discordEventEmitter } from "@/lib/discord/event-emitter";
@@ -362,51 +363,151 @@ export async function POST(request: NextRequest) {
         discordMessage.tradeId = tradeResult.tradeId as Types.ObjectId;
         await discordMessage.save();
 
-        // Update signal status
+        // Update signal status to executing (buy complete, OCO pending)
         await Signal.updateOne(
           { _id: signal._id },
           { status: "executing" }
         );
 
-        // Emit: Trade executed successfully
+        // Emit: Buy order executed, creating OCO orders
         discordEventEmitter.emitSignalEvent({
-          type: "completed",
+          type: "executing",
           userId,
           connectionId,
           messageId: String(discordMessage._id),
           timestamp: new Date(),
           data: {
             symbol: parsed.symbol,
-            message: `Trade executed: ${parsed.symbol}`,
-            status: "executed",
+            message: `Buy order filled for ${parsed.symbol}. Creating OCO orders...`,
+            status: "executing",
             signalId: String(signal._id),
             tradeId: String(tradeResult.tradeId),
           },
         });
 
+        // CRITICAL: Create OCO orders for take profit and stop loss
+        // Wait for balance settlement (testnet needs more time)
+        const testnet = user.useTestnet || false;
+        const settlementDelay = testnet
+          ? TRADE_EXECUTION.TESTNET_SETTLEMENT_DELAY_MS
+          : TRADE_EXECUTION.MAINNET_SETTLEMENT_DELAY_MS;
+
+        if (process.env.NODE_ENV !== "production") {
+          console.log(
+            `[Discord Webhook] Waiting ${settlementDelay}ms for balance settlement ` +
+            `(${testnet ? "testnet" : "mainnet"}) before creating OCO orders`
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, settlementDelay));
+
+        // Create OCO orders
+        const ocoResult = await createOCOOrders(
+          tradeResult.tradeId as Types.ObjectId,
+          testnet
+        );
+
+        if (ocoResult.success) {
+          if (process.env.NODE_ENV !== "production") {
+            console.log("[Discord Webhook] OCO orders created successfully:", {
+              signalId: signal._id,
+              tradeId: tradeResult.tradeId,
+              ocoOrderCount: ocoResult.orders?.length || 0,
+            });
+          }
+
+          // Update signal status to active (trade fully executed)
+          await Signal.updateOne(
+            { _id: signal._id },
+            { status: "active" }
+          );
+
+          // Emit: Trade completed successfully
+          discordEventEmitter.emitSignalEvent({
+            type: "completed",
+            userId,
+            connectionId,
+            messageId: String(discordMessage._id),
+            timestamp: new Date(),
+            data: {
+              symbol: parsed.symbol,
+              message: `Trade executed: ${parsed.symbol} with ${ocoResult.orders?.length || 0} OCO orders`,
+              status: "executed",
+              signalId: String(signal._id),
+              tradeId: String(tradeResult.tradeId),
+            },
+          });
+        } else {
+          // OCO creation failed but buy order succeeded
+          console.error("[Discord Webhook] OCO creation failed:", {
+            signalId: signal._id,
+            tradeId: tradeResult.tradeId,
+            error: ocoResult.error,
+          });
+
+          // Update signal with OCO error (but keep as executing since buy succeeded)
+          await Signal.updateOne(
+            { _id: signal._id },
+            {
+              status: "executing",
+              executionError: `OCO creation failed: ${ocoResult.error}`,
+            }
+          );
+
+          // Emit: OCO creation failed
+          discordEventEmitter.emitSignalEvent({
+            type: "failed",
+            userId,
+            connectionId,
+            messageId: String(discordMessage._id),
+            timestamp: new Date(),
+            data: {
+              symbol: parsed.symbol,
+              message: `Buy order succeeded but OCO creation failed: ${ocoResult.error}`,
+              status: "partial",
+              signalId: String(signal._id),
+              tradeId: String(tradeResult.tradeId),
+              error: ocoResult.error,
+            },
+          });
+        }
+
         // Update connection last processed time
+        // Track partial execution (buy succeeded but OCO failed) in error state
         await DiscordConnection.updateOne(
           { _id: connectionObjectId },
-          {
-            lastMessageId: discordMessageId,
-            lastProcessedAt: new Date(),
-            errorCount: 0,
-          }
+          ocoResult.success
+            ? {
+                lastMessageId: discordMessageId,
+                lastProcessedAt: new Date(),
+                errorCount: 0,
+              }
+            : {
+                lastMessageId: discordMessageId,
+                lastProcessedAt: new Date(),
+                $inc: { errorCount: 1 },
+                lastError: `OCO creation failed: ${ocoResult.error}`,
+                lastErrorAt: new Date(),
+              }
         );
 
         if (process.env.NODE_ENV !== "production") {
           console.log("[Discord Webhook] Trade executed successfully:", {
             signalId: signal._id,
             tradeId: tradeResult.tradeId,
+            ocoCreated: ocoResult.success,
           });
         }
 
         return NextResponse.json({
           success: true,
           data: serializeResponse({
-            message: "Signal parsed and trade executed",
+            message: ocoResult.success
+              ? "Signal parsed, trade executed, and OCO orders created"
+              : "Signal parsed and trade executed (OCO creation failed)",
             signalId: signal._id,
             tradeId: tradeResult.tradeId,
+            ocoCreated: ocoResult.success,
+            ocoError: ocoResult.success ? undefined : ocoResult.error,
           }),
         });
       } else {
