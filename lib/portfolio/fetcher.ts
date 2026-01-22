@@ -49,7 +49,16 @@ export async function fetchPortfolioData(signal?: AbortSignal): Promise<Portfoli
   const accountData = await safeJsonParse<{ success: boolean; data?: any; error?: any }>(accountResponse, 'Portfolio Account Fetch');
 
   if (!accountData.success) {
-    throw new Error(accountData.error?.message || 'Failed to fetch account data');
+    // Create error with preserved structure (code, requiresSetup) for UI handling
+    const error = new Error(accountData.error?.message || 'Failed to fetch account data') as Error & {
+      code?: string;
+      requiresSetup?: boolean;
+      statusCode?: number;
+    };
+    error.code = accountData.error?.code;
+    error.requiresSetup = accountData.error?.requiresSetup;
+    error.statusCode = accountData.error?.statusCode;
+    throw error;
   }
 
   const balances: BalanceData[] = accountData.data.balances;

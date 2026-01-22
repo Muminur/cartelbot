@@ -132,16 +132,23 @@ export function usePortfolioData(options: UsePortfolioDataOptions = {}) {
         return null;
       }
 
-      // Handle all other errors
+      // Handle all other errors - preserve structured error info (code, requiresSetup)
       console.error(`[usePortfolioData:${fetchId}] Fetch error:`, err);
 
       if (isMountedRef.current) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to fetch portfolio data';
+
+        // Check if error has structured data from API (code, requiresSetup)
+        const typedError = err as Error & { code?: string; requiresSetup?: boolean };
+        const errorCode = typedError?.code || 'FETCH_ERROR';
+        const requiresSetup = typedError?.requiresSetup;
+
         setError({
           message: errorMessage,
-          code: 'FETCH_ERROR',
+          code: errorCode,
+          requiresSetup,
         });
-        console.log(`[usePortfolioData:${fetchId}] Error state set`);
+        console.log(`[usePortfolioData:${fetchId}] Error state set:`, { code: errorCode, requiresSetup });
       }
 
       return null;
