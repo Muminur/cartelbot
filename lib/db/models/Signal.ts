@@ -14,8 +14,8 @@ const signalSchema = new Schema<ISignal>(
       uppercase: true,
       trim: true,
       validate: {
-        validator: (symbol: string) => /^[A-Z]{3,10}USDT$/.test(symbol),
-        message: "Symbol must end with USDT and be 3-10 characters",
+        validator: (symbol: string) => /^[A-Z]{2,10}USDT$/.test(symbol),
+        message: "Symbol must end with USDT and be 2-10 characters",
       },
     },
     entries: {

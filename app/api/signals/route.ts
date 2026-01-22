@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     // Validate parsed signal has all required fields
     const validationErrors: string[] = [];
 
-    if (!parsed.symbol || !/^[A-Z]{3,10}USDT$/.test(parsed.symbol)) {
+    if (!parsed.symbol || !/^[A-Z]{2,10}USDT$/.test(parsed.symbol)) {
       validationErrors.push("Invalid or missing symbol");
     }
 

@@ -87,8 +87,8 @@ const tradeSchema = new Schema<ITrade>(
       required: [true, "Symbol is required"],
       uppercase: true,
       validate: {
-        validator: (symbol: string) => /^[A-Z]{3,10}USDT$/.test(symbol),
-        message: "Symbol must end with USDT",
+        validator: (symbol: string) => /^[A-Z]{2,10}USDT$/.test(symbol),
+        message: "Symbol must be 2-10 characters and end with USDT",
       },
     },
     buyOrder: {

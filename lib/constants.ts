@@ -94,7 +94,7 @@ export const PAGINATION_DEFAULTS = {
 
 export const REGEX_PATTERNS = {
   EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-  SYMBOL: /^[A-Z]{3,10}USDT$/,
+  SYMBOL: /^[A-Z]{2,10}USDT$/,
   TRON_ADDRESS: /^T[a-zA-Z0-9]{33}$/,
   TX_HASH: /^(0x)?[0-9a-fA-F]{64}$/,
 } as const;
