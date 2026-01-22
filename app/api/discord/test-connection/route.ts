@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { formatErrorResponse } from "@/lib/utils/errors";
-import { pythonServiceClient } from "@/lib/discord/python-service-client";
-import axios from "axios";
+import { validateDiscordToken } from "@/lib/discord/token-validator";
+import { getDiscordHeaders } from "@/lib/discord/tls-fingerprint";
 
 /**
  * POST /api/discord/test-connection
@@ -38,9 +38,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Step 1: Validate token with Python service
-    const tokenValidation = await pythonServiceClient.validateToken(token);
-    if (!tokenValidation.success || !tokenValidation.data?.valid) {
+    // Step 1: Validate token
+    const tokenValidation = await validateDiscordToken(token);
+    if (!tokenValidation.valid) {
       return NextResponse.json(
         {
           success: false,
@@ -54,19 +54,81 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Step 2: Test channel accessibility
+    // Step 2: Test channel accessibility with TLS fingerprinting
     try {
-      const channelResponse = await axios.get(
+      const channelResponse = await fetch(
         `https://discord.com/api/v10/channels/${channelId}`,
         {
-          headers: {
-            Authorization: token,
-          },
-          timeout: 10000,
+          method: "GET",
+          headers: getDiscordHeaders(token),
         }
       );
 
-      const channelData = channelResponse.data;
+      if (!channelResponse.ok) {
+        const status = channelResponse.status;
+
+        if (status === 401) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: {
+                message: "Discord token expired or invalid",
+                code: "TOKEN_EXPIRED",
+                statusCode: 401,
+              },
+            },
+            { status: 401 }
+          );
+        }
+
+        if (status === 403) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: {
+                message: "No access to this channel",
+                code: "FORBIDDEN",
+                statusCode: 403,
+              },
+            },
+            { status: 403 }
+          );
+        }
+
+        if (status === 404) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: {
+                message: "Channel not found",
+                code: "NOT_FOUND",
+                statusCode: 404,
+              },
+            },
+            { status: 404 }
+          );
+        }
+
+        const errorData = await channelResponse.json().catch(() => ({}));
+        console.error("[Discord Test Connection] Discord API error:", {
+          status,
+          message: errorData.message,
+        });
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              message: errorData.message || "Failed to access Discord channel",
+              code: "DISCORD_API_ERROR",
+              statusCode: status,
+            },
+          },
+          { status }
+        );
+      }
+
+      const channelData = await channelResponse.json();
       const channelName = channelData.name;
 
       // Verify channel belongs to the specified server
@@ -111,76 +173,26 @@ export async function POST(request: NextRequest) {
         data: {
           message: "Connection test successful",
           channelName,
-          userId: tokenValidation.data.userId,
-          username: tokenValidation.data.username,
+          userId: tokenValidation.userId,
+          username: tokenValidation.username,
         },
       });
     } catch (discordError: unknown) {
-      if (axios.isAxiosError(discordError)) {
-        const status = discordError.response?.status;
-        const errorMessage = discordError.response?.data?.message || discordError.message;
-
-        if (status === 401) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: {
-                message: "Discord token expired or invalid",
-                code: "TOKEN_EXPIRED",
-                statusCode: 401,
-              },
-            },
-            { status: 401 }
-          );
-        }
-
-        if (status === 403) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: {
-                message: "No access to this channel",
-                code: "FORBIDDEN",
-                statusCode: 403,
-              },
-            },
-            { status: 403 }
-          );
-        }
-
-        if (status === 404) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: {
-                message: "Channel not found",
-                code: "NOT_FOUND",
-                statusCode: 404,
-              },
-            },
-            { status: 404 }
-          );
-        }
-
-        console.error("[Discord Test Connection] Discord API error:", {
-          status,
-          message: errorMessage,
-        });
-
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              message: errorMessage || "Failed to access Discord channel",
-              code: "DISCORD_API_ERROR",
-              statusCode: status || 500,
-            },
-          },
-          { status: status || 500 }
-        );
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[Discord Test Connection] Unexpected error:", discordError);
       }
 
-      throw discordError;
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message: discordError instanceof Error ? discordError.message : "Failed to test connection",
+            code: "DISCORD_API_ERROR",
+            statusCode: 500,
+          },
+        },
+        { status: 500 }
+      );
     }
   } catch (error) {
     console.error("POST /api/discord/test-connection error:", error);

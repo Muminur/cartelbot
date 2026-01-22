@@ -1,20 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { formatErrorResponse } from "@/lib/utils/errors";
-import { pythonServiceClient } from "@/lib/discord/python-service-client";
+import { validateDiscordToken } from "@/lib/discord/token-validator";
 import { rateLimit } from "@/lib/middleware/rate-limiter";
-import axios from "axios";
-
-interface DiscordUser {
-  id: string;
-  username: string;
-  discriminator: string;
-  avatar: string | null;
-}
 
 /**
  * POST /api/discord/token/validate
- * Validates a Discord user token by testing it with the Python service
+ * Validates a Discord user token by testing it with the Discord API
  * Rate limit: 5 requests per 15 minutes per user (auth tier)
  */
 export async function POST(request: NextRequest) {
@@ -65,42 +57,14 @@ export async function POST(request: NextRequest) {
       console.log("[Discord Token Validate] Validating token for user:", user._id);
     }
 
-    // Try Python service first
-    const result = await pythonServiceClient.validateToken(token);
+    // Validate token using TLS-fingerprinted Discord API call
+    const result = await validateDiscordToken(token);
 
-    if (result.success && result.data?.valid) {
-      // Python service succeeded
-      return NextResponse.json({
-        success: true,
-        valid: true,
-        userId: result.data.userId,
-        username: result.data.username,
-        discriminator: result.data.discriminator || "0",
-      });
-    }
-
-    // Python service failed - fallback to direct Discord API validation
-    if (process.env.NODE_ENV !== "production") {
-      console.log("[Discord Token Validate] Python service failed, using Discord API fallback");
-    }
-
-    try {
-      const discordResponse = await axios.get<DiscordUser>(
-        "https://discord.com/api/v10/users/@me",
-        {
-          headers: {
-            Authorization: token,
-          },
-          timeout: 10000,
-        }
-      );
-
-      const discordUser = discordResponse.data;
-
+    if (result.valid) {
       if (process.env.NODE_ENV !== "production") {
-        console.log("[Discord Token Validate] Direct API validation successful:", {
-          userId: discordUser.id,
-          username: discordUser.username,
+        console.log("[Discord Token Validate] Validation successful:", {
+          userId: result.userId,
+          username: result.username,
         });
       }
 
@@ -108,49 +72,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         valid: true,
-        userId: discordUser.id,
-        username: discordUser.username,
-        discriminator: discordUser.discriminator || "0",
+        userId: result.userId,
+        username: result.username,
+        discriminator: result.discriminator || "0",
       });
-    } catch (discordError: unknown) {
-      if (axios.isAxiosError(discordError)) {
-        const status = discordError.response?.status;
-
-        if (status === 401) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: {
-                message: "Invalid Discord token",
-                code: "INVALID_TOKEN",
-                statusCode: 400,
-              },
-            },
-            { status: 400 }
-          );
-        }
-
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[Discord Token Validate] Discord API error:", {
-            status,
-            message: discordError.message,
-          });
-        }
-      }
-
-      // Return the original Python service error or a generic one
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            message: result.error || "Failed to validate Discord token",
-            code: "INVALID_TOKEN",
-            statusCode: 400,
-          },
-        },
-        { status: 400 }
-      );
     }
+
+    // Token validation failed
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          message: result.error || "Invalid Discord token",
+          code: "INVALID_TOKEN",
+          statusCode: 400,
+        },
+      },
+      { status: 400 }
+    );
   } catch (error) {
     console.error("POST /api/discord/token/validate error:", error);
     const errorResponse = formatErrorResponse(error);

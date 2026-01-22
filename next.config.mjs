@@ -3,8 +3,18 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
-  serverExternalPackages: ["mongoose"],
-  output: "standalone",
+  serverExternalPackages: [
+    "mongoose",
+    // Discord selfbot packages - externalize to avoid ffmpeg-static/prism-media build errors
+    // These are only used server-side for message monitoring (no voice features)
+    "discord.js-selfbot-v13",
+    "prism-media",
+    "ffmpeg-static",
+  ],
+  // NOTE: standalone output disabled on Windows due to Next.js 16 Turbopack bug
+  // (EINVAL: Windows can't handle colons in filenames like [externals]_node:inspector_*.js)
+  // Re-enable for Docker/Linux deployment: output: "standalone",
+  // output: "standalone",
   typescript: {
     ignoreBuildErrors: false,
   },

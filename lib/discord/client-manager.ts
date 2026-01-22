@@ -15,7 +15,7 @@
  * - Error recovery
  */
 
-import { Client, Intents } from "discord.js-selfbot-v13";
+import { Client } from "discord.js-selfbot-v13";
 import type {
   ManagedClient,
   ClientStatus,
@@ -25,9 +25,16 @@ import type {
   MessageHandlerConfig,
 } from "./types";
 import { DiscordMessageHandler } from "./message-handler";
+import { encrypt, decrypt } from "@/lib/encryption";
+
+/** Login timeout in milliseconds (30 seconds) */
+const LOGIN_TIMEOUT_MS = 30000;
+/** Maximum reconnect delay in milliseconds (30 seconds) */
+const MAX_RECONNECT_DELAY_MS = 30000;
 
 /**
  * Wrapper for Discord client with metadata
+ * Stores encrypted token for secure reconnection
  */
 class ManagedClientWrapper implements ManagedClient {
   userId: string;
@@ -39,6 +46,8 @@ class ManagedClientWrapper implements ManagedClient {
   startedAt: Date;
   reconnectCount: number;
   lastError: string | null;
+  /** Encrypted token for secure storage - decrypted only when needed for reconnect */
+  private encryptedToken: string;
 
   constructor(
     userId: string,
@@ -46,7 +55,8 @@ class ManagedClientWrapper implements ManagedClient {
     client: Client,
     handler: DiscordMessageHandler,
     serverId: string,
-    channelId: string
+    channelId: string,
+    token: string
   ) {
     this.userId = userId;
     this.connectionId = connectionId;
@@ -57,6 +67,18 @@ class ManagedClientWrapper implements ManagedClient {
     this.startedAt = new Date();
     this.reconnectCount = 0;
     this.lastError = null;
+    // Encrypt token immediately - never store plaintext
+    this.encryptedToken = encrypt(token);
+  }
+
+  /** Get decrypted token for login (use sparingly) */
+  getToken(): string {
+    return decrypt(this.encryptedToken);
+  }
+
+  /** Clear sensitive data from memory */
+  clearSensitiveData(): void {
+    this.encryptedToken = "";
   }
 
   getStatus(): ClientStatus {
@@ -164,15 +186,13 @@ export class DiscordClientManager {
       };
       const handler = new DiscordMessageHandler(handlerConfig);
 
-      // Create Discord client with required intents
-      // discord.js-selfbot-v13 has different type definitions than standard discord.js
+      // Create Discord client for selfbot
+      // discord.js-selfbot-v13 doesn't require intents for user accounts
+      // Using numeric intent values to avoid deprecation warning
+      // GUILDS = 1, GUILD_MESSAGES = 512, DIRECT_MESSAGES = 4096
       const client = new Client({
-        intents: [
-          Intents.FLAGS.GUILDS,
-          Intents.FLAGS.GUILD_MESSAGES,
-          Intents.FLAGS.DIRECT_MESSAGES,
-        ],
-      } as any);
+        checkUpdate: false, // Disable update check
+      } as unknown as ConstructorParameters<typeof Client>[0]);
 
       // Set up event handlers
       client.on("ready", () => {
@@ -211,21 +231,22 @@ export class DiscordClientManager {
         }
       });
 
-      // Create managed client wrapper
+      // Create managed client wrapper (token is encrypted internally)
       const managed = new ManagedClientWrapper(
         userId,
         connectionId,
         client,
         handler,
         serverId,
-        channelId
+        channelId,
+        token
       );
 
       // Store client before login
       this.clients.set(userId, managed);
 
-      // Start client with auto-reconnect
-      this.runClientWithReconnect(userId, token);
+      // Start client with auto-reconnect (no plaintext token passed)
+      this.runClientWithReconnect(userId);
 
       if (process.env.NODE_ENV !== "production") {
         console.log(`[DiscordClientManager] Started Discord client for user ${userId}`);
@@ -250,21 +271,33 @@ export class DiscordClientManager {
   }
 
   /**
-   * Run Discord client with auto-reconnect logic
+   * Login with timeout to prevent hanging indefinitely
    */
-  private async runClientWithReconnect(
-    userId: string,
-    token: string
-  ): Promise<void> {
+  private async loginWithTimeout(client: Client, token: string): Promise<string> {
+    return Promise.race([
+      client.login(token),
+      new Promise<string>((_, reject) =>
+        setTimeout(() => reject(new Error("Login timeout")), LOGIN_TIMEOUT_MS)
+      ),
+    ]);
+  }
+
+  /**
+   * Run Discord client with auto-reconnect logic
+   * Token is retrieved from encrypted storage when needed
+   */
+  private async runClientWithReconnect(userId: string): Promise<void> {
     const maxReconnectAttempts = 5;
     const baseDelay = 5000; // 5 seconds
 
     while (this.clients.has(userId)) {
-      const managed = this.clients.get(userId);
+      const managed = this.clients.get(userId) as ManagedClientWrapper | undefined;
       if (!managed) break;
 
       try {
-        await managed.client.login(token);
+        // Decrypt token only when needed for login
+        const token = managed.getToken();
+        await this.loginWithTimeout(managed.client, token);
       } catch (error) {
         if (process.env.NODE_ENV !== "production") {
           console.error(
@@ -273,16 +306,17 @@ export class DiscordClientManager {
           );
         }
 
-        // Check if it's an invalid token error
+        // Check if it's an invalid token or timeout error
         if (
           error instanceof Error &&
           (error.message.includes("TOKEN_INVALID") ||
-            error.message.includes("Improper token"))
+            error.message.includes("Improper token") ||
+            error.message.includes("Login timeout"))
         ) {
           if (process.env.NODE_ENV !== "production") {
-            console.error(`[DiscordClientManager] Invalid Discord token for user ${userId}`);
+            console.error(`[DiscordClientManager] ${error.message} for user ${userId}`);
           }
-          managed.lastError = "Invalid token";
+          managed.lastError = error.message;
           await this.stopClient(userId);
           break;
         }
@@ -303,8 +337,11 @@ export class DiscordClientManager {
           break;
         }
 
-        // Exponential backoff
-        const delay = baseDelay * Math.pow(2, managed.reconnectCount - 1);
+        // Exponential backoff with max cap
+        const delay = Math.min(
+          baseDelay * Math.pow(2, managed.reconnectCount - 1),
+          MAX_RECONNECT_DELAY_MS
+        );
         if (process.env.NODE_ENV !== "production") {
           console.log(
             `[DiscordClientManager] Reconnecting in ${delay / 1000}s ` +
@@ -317,10 +354,10 @@ export class DiscordClientManager {
   }
 
   /**
-   * Stop a Discord client
+   * Stop a Discord client and cleanup all resources
    */
   async stopClient(userId: string): Promise<StopClientResult> {
-    const managed = this.clients.get(userId);
+    const managed = this.clients.get(userId) as ManagedClientWrapper | undefined;
     if (!managed) {
       return {
         success: false,
@@ -332,6 +369,14 @@ export class DiscordClientManager {
       // Destroy Discord client
       if (managed.client.readyAt !== null) {
         await managed.client.destroy();
+      }
+
+      // Clear sensitive data from memory
+      managed.clearSensitiveData();
+
+      // Cleanup message handler resources
+      if (managed.handler && typeof managed.handler.destroy === "function") {
+        managed.handler.destroy();
       }
 
       // Remove from clients map

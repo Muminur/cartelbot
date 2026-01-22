@@ -4,7 +4,7 @@ import { formatErrorResponse, NotFoundError } from "@/lib/utils/errors";
 import { connectDB } from "@/lib/db";
 import { DiscordConnection, User } from "@/lib/db/models";
 import { decrypt } from "@/lib/encryption";
-import { pythonServiceClient } from "@/lib/discord/python-service-client";
+import { getDiscordClientManager } from "@/lib/discord/client-manager";
 import { serializeResponse } from "@/lib/utils/serialize";
 import { Types } from "mongoose";
 
@@ -70,18 +70,20 @@ export async function PUT(
 
     await connection.save();
 
-    // Handle Python client start/stop if isActive changed
+    // Handle JS Discord client start/stop if isActive changed
     if (needsClientUpdate) {
+      const manager = getDiscordClientManager();
+
       if (shouldStartClient) {
         // Start client
         const token = decrypt(connection.discordUserToken);
-        const startResult = await pythonServiceClient.startClient({
-          userId: String(user._id),
-          connectionId: String(connection._id),
+        const startResult = await manager.startClient(
+          String(user._id),
+          String(connection._id),
           token,
-          serverId: connection.serverId,
-          channelId: connection.channelId,
-        });
+          connection.serverId,
+          connection.channelId
+        );
 
         if (!startResult.success) {
           // Update connection with error
@@ -110,9 +112,7 @@ export async function PUT(
         }
       } else {
         // Stop client
-        const stopResult = await pythonServiceClient.stopClient(
-          String(user._id)
-        );
+        const stopResult = await manager.stopClient(String(user._id));
 
         if (!stopResult.success) {
           if (process.env.NODE_ENV !== "production") {
@@ -192,11 +192,10 @@ export async function DELETE(
       throw new NotFoundError("Connection");
     }
 
-    // Stop Python client if active
+    // Stop JS Discord client if active
     if (connection.isActive) {
-      const stopResult = await pythonServiceClient.stopClient(
-        String(user._id)
-      );
+      const manager = getDiscordClientManager();
+      const stopResult = await manager.stopClient(String(user._id));
 
       if (!stopResult.success) {
         // 404 means client not found (already stopped or never started) - this is fine

@@ -25,6 +25,13 @@ import { DiscordMessage } from "@/lib/db/models/DiscordMessage";
 import { discordEventEmitter } from "./event-emitter";
 import axios from "axios";
 
+/** Maximum cached message IDs to prevent memory leaks */
+const MAX_CACHE_SIZE = 10000;
+/** Cache TTL in milliseconds (1 hour) */
+const CACHE_TTL_MS = 3600000;
+/** Cleanup interval in milliseconds (5 minutes) */
+const CLEANUP_INTERVAL_MS = 300000;
+
 /**
  * Message handler class for filtering and processing Discord messages
  */
@@ -34,9 +41,11 @@ export class DiscordMessageHandler {
   private monitoredChannelId: string;
   private minDelay: number;
   private maxDelay: number;
-  private processedMessages: Set<string>;
+  /** Map of messageId -> timestamp for TTL-based cache */
+  private processedMessages: Map<string, number>;
   private webhookUrl: string;
   private webhookSecret: string;
+  private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor(config: MessageHandlerConfig) {
     this.userId = config.userId;
@@ -44,15 +53,62 @@ export class DiscordMessageHandler {
     this.monitoredChannelId = String(config.monitoredChannelId);
     this.minDelay = config.minDelay;
     this.maxDelay = config.maxDelay;
-    this.processedMessages = new Set();
+    this.processedMessages = new Map();
 
     // Configure webhook URL
     this.webhookUrl = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"}/api/discord/webhook/message`;
-    this.webhookSecret = process.env.NEXTJS_WEBHOOK_SECRET || "";
+    // Support both env var names for compatibility
+    this.webhookSecret = process.env.DISCORD_WEBHOOK_SECRET || process.env.NEXTJS_WEBHOOK_SECRET || "";
 
     if (!this.webhookSecret && process.env.NODE_ENV !== "production") {
-      console.warn("[DiscordMessageHandler] NEXTJS_WEBHOOK_SECRET not set");
+      console.warn("[DiscordMessageHandler] DISCORD_WEBHOOK_SECRET not set - messages won't be forwarded securely");
     }
+
+    // Start cache cleanup interval to prevent memory leaks
+    this.cleanupInterval = setInterval(() => this.cleanupCache(), CLEANUP_INTERVAL_MS);
+  }
+
+  /**
+   * Cleanup stale entries from processed messages cache
+   * Prevents unbounded memory growth in long-running clients
+   */
+  private cleanupCache(): void {
+    const now = Date.now();
+    let removedCount = 0;
+
+    // Remove expired entries (TTL-based)
+    for (const [id, timestamp] of this.processedMessages) {
+      if (now - timestamp > CACHE_TTL_MS) {
+        this.processedMessages.delete(id);
+        removedCount++;
+      }
+    }
+
+    // Hard limit: remove oldest entries if still over max size
+    if (this.processedMessages.size > MAX_CACHE_SIZE) {
+      const entries = Array.from(this.processedMessages.entries())
+        .sort((a, b) => a[1] - b[1]);
+      const toRemove = entries.slice(0, this.processedMessages.size - MAX_CACHE_SIZE);
+      for (const [id] of toRemove) {
+        this.processedMessages.delete(id);
+        removedCount++;
+      }
+    }
+
+    if (removedCount > 0 && process.env.NODE_ENV !== "production") {
+      console.log(`[DiscordMessageHandler] Cache cleanup: removed ${removedCount} entries, ${this.processedMessages.size} remaining`);
+    }
+  }
+
+  /**
+   * Stop the handler and cleanup resources
+   */
+  destroy(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    this.processedMessages.clear();
   }
 
   /**
@@ -90,7 +146,7 @@ export class DiscordMessageHandler {
         return;
       }
 
-      // FILTER 3: Check for duplicate (in-memory)
+      // FILTER 3: Check for duplicate (in-memory with TTL)
       const messageId = String(message.id);
       if (this.processedMessages.has(messageId)) {
         if (process.env.NODE_ENV !== "production") {
@@ -109,7 +165,7 @@ export class DiscordMessageHandler {
             `[FILTER 4: SKIP] Duplicate message ${messageId} (database)`
           );
         }
-        this.processedMessages.add(messageId);
+        this.processedMessages.set(messageId, Date.now());
         return;
       }
 
@@ -162,7 +218,7 @@ export class DiscordMessageHandler {
 
       if (success) {
         // Mark as processed
-        this.processedMessages.add(messageId);
+        this.processedMessages.set(messageId, Date.now());
 
         // Store in database for deduplication across restarts
         await this.storeProcessedMessage(messageId);

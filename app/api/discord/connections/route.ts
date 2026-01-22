@@ -4,8 +4,10 @@ import { formatErrorResponse } from "@/lib/utils/errors";
 import { connectDB } from "@/lib/db";
 import { DiscordConnection, User } from "@/lib/db/models";
 import { encrypt } from "@/lib/encryption";
-import { pythonServiceClient } from "@/lib/discord/python-service-client";
+import { getDiscordClientManager } from "@/lib/discord/client-manager";
+import { validateDiscordToken } from "@/lib/discord/token-validator";
 import { serializeResponse } from "@/lib/utils/serialize";
+import mongoose from "mongoose";
 
 /**
  * GET /api/discord/connections
@@ -133,30 +135,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(errorResponse, { status: 400 });
     }
 
-    // Check max connections limit
-    const maxConnections =
-      parseInt(process.env.DISCORD_MAX_CONNECTIONS_PER_USER || "3", 10);
-    const existingCount = await DiscordConnection.countDocuments({
-      userId: user._id,
-      isActive: true,
-    });
-
-    if (existingCount >= maxConnections) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            message: `Maximum ${maxConnections} active connections allowed`,
-            code: "MAX_CONNECTIONS_EXCEEDED",
-            statusCode: 400,
-          },
-        },
-        { status: 400 }
-      );
-    }
-
     // Extract Discord user info from request body (already validated via /api/discord/token/validate)
-    // Skip redundant validation to avoid rate limiting (5 req/15min)
     let { discordUserId, discordUsername } = body;
 
     if (process.env.NODE_ENV !== "production") {
@@ -166,32 +145,18 @@ export async function POST(request: NextRequest) {
         hasDiscordUsername: !!discordUsername,
         discordUserId,
         discordUsername,
-        bodyKeys: Object.keys(body),
       });
     }
 
     // Validate that Discord user info was provided
     if (!discordUserId || !discordUsername) {
-      // Fallback: validate token if Discord user info not provided
-      // This handles edge cases where connection is created without prior validation
       if (process.env.NODE_ENV !== "production") {
         console.log("[Discord Connections] Step 2 - Discord user info missing, validating token...");
       }
 
-      const tokenValidation = await pythonServiceClient.validateToken(token);
+      const tokenValidation = await validateDiscordToken(token);
 
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[Discord Connections] Step 3 - Token validation result:", {
-          success: tokenValidation.success,
-          hasData: !!tokenValidation.data,
-          isValid: tokenValidation.data?.valid,
-          userId: tokenValidation.data?.userId,
-          username: tokenValidation.data?.username,
-          error: tokenValidation.error,
-        });
-      }
-
-      if (!tokenValidation.success || !tokenValidation.data?.valid) {
+      if (!tokenValidation.valid) {
         return NextResponse.json(
           {
             success: false,
@@ -205,42 +170,17 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Update local variables with validated data
-      discordUserId = tokenValidation.data.userId || "";
-      discordUsername = tokenValidation.data.username || "";
-
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[Discord Connections] Step 4 - After token validation:", {
-          discordUserId,
-          discordUsername,
-        });
-      }
+      discordUserId = tokenValidation.userId || "";
+      discordUsername = tokenValidation.username || "";
     }
 
-    // Check for duplicate connection
-    const existingConnection = await DiscordConnection.findOne({
-      userId: user._id,
-      serverId,
-      channelId,
-    });
-
-    if (existingConnection) {
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[Discord Connections] ❌ DUPLICATE CONNECTION DETECTED:", {
-          existingConnectionId: existingConnection._id,
-          status: existingConnection.status,
-          isActive: existingConnection.isActive,
-          serverId,
-          channelId,
-        });
-      }
-
+    if (!discordUserId || !discordUsername) {
       return NextResponse.json(
         {
           success: false,
           error: {
-            message: "Connection already exists for this server and channel",
-            code: "DUPLICATE_CONNECTION",
+            message: "Discord user information is required",
+            code: "VALIDATION_ERROR",
             statusCode: 400,
           },
         },
@@ -248,83 +188,178 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Final validation - ensure we have Discord user info
-    if (process.env.NODE_ENV !== "production") {
-      console.log("[Discord Connections] Step 5 - Final validation check:", {
-        hasDiscordUserId: !!discordUserId,
-        hasDiscordUsername: !!discordUsername,
-        discordUserId,
-        discordUsername,
-        willPass: !(!discordUserId || !discordUsername),
+    // Use MongoDB transaction to prevent race conditions
+    // This ensures atomic check-and-create for max connections and duplicates
+    const session = await mongoose.startSession();
+
+    // Store connection data for use after transaction
+    interface ConnectionResult {
+      _id: mongoose.Types.ObjectId;
+      userId: mongoose.Types.ObjectId;
+      discordUserId: string;
+      discordUsername: string;
+      serverId: string;
+      serverName: string;
+      channelId: string;
+      channelName: string;
+      status: string;
+      isActive: boolean;
+      autoExecute: boolean;
+      requireConfirmation: boolean;
+      errorCount: number;
+      tosAccepted: boolean;
+      tosAcceptedAt: Date;
+    }
+    let connectionResult: ConnectionResult | null = null;
+
+    try {
+      await session.withTransaction(async () => {
+        // Check max connections limit (atomic within transaction)
+        const maxConnections = parseInt(process.env.DISCORD_MAX_CONNECTIONS_PER_USER || "3", 10);
+        const existingCount = await DiscordConnection.countDocuments({
+          userId: user._id,
+          isActive: true,
+        }).session(session);
+
+        if (existingCount >= maxConnections) {
+          throw new Error(`MAX_CONNECTIONS:Maximum ${maxConnections} active connections allowed`);
+        }
+
+        // Check for duplicate connection (atomic within transaction)
+        const existingConnection = await DiscordConnection.findOne({
+          userId: user._id,
+          serverId,
+          channelId,
+        }).session(session);
+
+        if (existingConnection) {
+          throw new Error("DUPLICATE:Connection already exists for this server and channel");
+        }
+
+        // Encrypt token and create connection (atomic within transaction)
+        const encryptedToken = encrypt(token);
+        const [newConnection] = await DiscordConnection.create(
+          [
+            {
+              userId: user._id,
+              discordUserToken: encryptedToken,
+              discordUserId,
+              discordUsername,
+              serverId,
+              serverName,
+              channelId,
+              channelName,
+              status: "active",
+              isActive: true,
+              lastMessageId: "",
+              autoExecute,
+              requireConfirmation,
+              errorCount: 0,
+              tosAccepted: true,
+              tosAcceptedAt: new Date(),
+            },
+          ],
+          { session }
+        );
+
+        connectionResult = {
+          _id: newConnection._id as mongoose.Types.ObjectId,
+          userId: newConnection.userId as mongoose.Types.ObjectId,
+          discordUserId: newConnection.discordUserId,
+          discordUsername: newConnection.discordUsername,
+          serverId: newConnection.serverId,
+          serverName: newConnection.serverName,
+          channelId: newConnection.channelId,
+          channelName: newConnection.channelName,
+          status: newConnection.status,
+          isActive: newConnection.isActive,
+          autoExecute: newConnection.autoExecute,
+          requireConfirmation: newConnection.requireConfirmation,
+          errorCount: newConnection.errorCount,
+          tosAccepted: newConnection.tosAccepted,
+          tosAcceptedAt: newConnection.tosAcceptedAt,
+        };
       });
+    } catch (txError) {
+      // Handle specific transaction errors (return early)
+      if (txError instanceof Error) {
+        if (txError.message.startsWith("MAX_CONNECTIONS:")) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: {
+                message: txError.message.replace("MAX_CONNECTIONS:", ""),
+                code: "MAX_CONNECTIONS_EXCEEDED",
+                statusCode: 400,
+              },
+            },
+            { status: 400 }
+          );
+        }
+        if (txError.message.startsWith("DUPLICATE:")) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: {
+                message: txError.message.replace("DUPLICATE:", ""),
+                code: "DUPLICATE_CONNECTION",
+                statusCode: 400,
+              },
+            },
+            { status: 400 }
+          );
+        }
+      }
+      throw txError;
+    } finally {
+      // Ensure session is always closed regardless of success/failure
+      await session.endSession();
     }
 
-    if (!discordUserId || !discordUsername) {
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[Discord Connections] ❌ RETURNING 400 - Step 6 - FINAL VALIDATION FAILED!", {
-          discordUserId,
-          discordUsername,
-          hasDiscordUserId: !!discordUserId,
-          hasDiscordUsername: !!discordUsername,
-        });
-      }
-      const errorResponse = {
-        success: false,
-        error: {
-          message: "Discord user information is required",
-          code: "VALIDATION_ERROR",
-          statusCode: 400,
+    if (!connectionResult) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message: "Failed to create connection",
+            code: "CREATE_FAILED",
+            statusCode: 500,
+          },
         },
-      };
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[Discord Connections] Response being sent:", errorResponse);
-      }
-      return NextResponse.json(errorResponse, { status: 400 });
+        { status: 500 }
+      );
     }
 
-    // Encrypt token before storing
-    const encryptedToken = encrypt(token);
+    // TypeScript can't narrow types assigned in async callbacks, use explicit variable
+    const connection: ConnectionResult = connectionResult;
 
-    // Create connection document
-    const connection = await DiscordConnection.create({
-      userId: user._id,
-      discordUserToken: encryptedToken,
-      discordUserId,
-      discordUsername,
-      serverId,
-      serverName,
-      channelId,
-      channelName,
-      status: "active",
-      isActive: true,
-      lastMessageId: "",
-      autoExecute,
-      requireConfirmation,
-      errorCount: 0,
-      tosAccepted: true,
-      tosAcceptedAt: new Date(),
-    });
-
-    // Start Python Discord client
-    const startResult = await pythonServiceClient.startClient({
-      userId: String(user._id),
-      connectionId: String(connection._id),
+    // Start JavaScript Discord client
+    const manager = getDiscordClientManager();
+    const startResult = await manager.startClient(
+      String(user._id),
+      String(connection._id),
       token,
       serverId,
-      channelId,
-    });
+      channelId
+    );
 
     if (!startResult.success) {
       // Client start failed - update connection status
-      await DiscordConnection.updateOne(
-        { _id: connection._id },
-        {
-          status: "error",
-          lastError: startResult.error || "Failed to start Discord client",
-          lastErrorAt: new Date(),
-          errorCount: 1,
+      try {
+        await DiscordConnection.updateOne(
+          { _id: connection._id },
+          {
+            status: "error",
+            lastError: startResult.error || "Failed to start Discord client",
+            lastErrorAt: new Date(),
+            errorCount: 1,
+          }
+        );
+      } catch (updateError) {
+        if (process.env.NODE_ENV !== "production") {
+          console.error("[Discord] Failed to update connection error status:", updateError);
         }
-      );
+      }
 
       return NextResponse.json(
         {
@@ -358,16 +393,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Return connection without encrypted token
-    const connectionData = connection.toObject();
-    delete (connectionData as any).discordUserToken;
-
+    // Return connection data without encrypted token
     return NextResponse.json(
       {
         success: true,
         data: serializeResponse({
           connectionId: connection._id,
-          ...connectionData,
+          ...connection,
         }),
       },
       { status: 201 }
