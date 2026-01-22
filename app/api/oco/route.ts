@@ -5,9 +5,9 @@ import { Trade } from "@/lib/db/models/Trade";
 import type { ITrade, IOrder } from "@/types";
 import { serializeResponse } from "@/lib/utils/serialize";
 
-// Type for lean queries (no Mongoose Document methods)
 type LeanTrade = {
   _id: string;
+  signalId: string;
   symbol: string;
   sellOrders?: IOrder[];
   testnet?: boolean;
@@ -113,13 +113,12 @@ export async function GET(request: NextRequest) {
       query.testnet = true;
     }
 
-    // 5. Fetch trades from database with timeout protection
     let tradesResult;
     try {
       tradesResult = await Trade.find(query)
-        .select("symbol sellOrders testnet createdAt")
+        .select("signalId symbol sellOrders testnet createdAt")
         .sort({ createdAt: -1 })
-        .maxTimeMS(5000) // H4: 5-second timeout
+        .maxTimeMS(5000)
         .lean()
         .exec();
     } catch (error: unknown) {
@@ -227,6 +226,7 @@ export async function GET(request: NextRequest) {
         return {
           orderListId,
           symbol: trade.symbol,
+          signalId: trade.signalId,
           orders: orders.map((order: IOrder) => ({
             orderId: order.orderId,
             type: order.type,
@@ -235,6 +235,7 @@ export async function GET(request: NextRequest) {
             quantity: order.quantity,
             status: order.status,
             executedQty: order.executedQty || 0,
+            targetIndex: order.targetIndex,
           })),
           status: listOrderStatus,
           createdAt:

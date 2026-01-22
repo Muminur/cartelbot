@@ -49,6 +49,7 @@ interface TickerData {
 interface OCOOrder {
   orderListId: number;
   symbol: string;
+  signalId: string;
   orders: Array<{
     orderId: number;
     type: OrderType;
@@ -56,6 +57,7 @@ interface OCOOrder {
     stopPrice?: number;
     quantity: number;
     status: OrderStatus;
+    targetIndex?: number;
   }>;
   status: OrderStatus;
   createdAt: string;
@@ -341,12 +343,10 @@ export default function OCOOrdersPage() {
     );
   };
 
-  // Component to display individual TP/SL orders
   const OrderDetailsCell = ({ orders }: { orders: OCOOrder['orders'] }) => {
     const takeProfitOrders = orders.filter(o => o.type === "LIMIT_MAKER");
     const stopLossOrders = orders.filter(o => o.type === "STOP_LOSS_LIMIT");
 
-    // Show helpful message if no orders are available
     if (orders.length === 0) {
       return (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -358,10 +358,9 @@ export default function OCOOrdersPage() {
 
     return (
       <div className="space-y-2">
-        {/* Take Profit Orders */}
         {takeProfitOrders.map((order, idx) => (
           <div key={order.orderId} className="flex items-center gap-2">
-            <span className="text-xs text-green-600 dark:text-green-400 font-semibold">TP #{idx + 1}:</span>
+            <span className="text-xs text-green-600 dark:text-green-400 font-semibold">TP #{order.targetIndex || idx + 1}:</span>
             <Badge
               className={
                 order.status === "FILLED"
@@ -378,7 +377,6 @@ export default function OCOOrdersPage() {
             </span>
           </div>
         ))}
-        {/* Stop Loss Orders */}
         {stopLossOrders.map((order) => (
           <div key={order.orderId} className="flex items-center gap-2">
             <span className="text-xs text-red-600 dark:text-red-400 font-semibold">SL:</span>
@@ -461,6 +459,15 @@ export default function OCOOrdersPage() {
       </div>
     );
   };
+
+  const groupedOrders = orders.reduce((acc, order) => {
+    const key = order.signalId || 'unknown';
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+    acc[key].push(order);
+    return acc;
+  }, {} as Record<string, OCOOrder[]>);
 
   if (loadingOrders) {
     return (
@@ -592,65 +599,84 @@ export default function OCOOrdersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orders.map((order) => {
-                    const priceData = prices.get(order.symbol);
-                    return (
+                  {Object.entries(groupedOrders).map(([signalId, signalOrders], groupIdx) => (
+                    <>
                       <TableRow
-                        key={order.orderListId}
-                        className={getRowClassName(order.status)}
+                        key={`header-${signalId}`}
+                        className={`${groupIdx % 2 === 0 ? 'bg-slate-100 dark:bg-slate-800' : 'bg-slate-50 dark:bg-slate-900'} border-t-2 border-slate-300 dark:border-slate-600`}
                       >
-                        <TableCell className="font-mono">
-                          {order.orderListId}
-                        </TableCell>
-                        <TableCell className="font-bold">
-                          {order.symbol}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={
-                              order.testnet
-                                ? "bg-orange-100 text-orange-800 border-orange-300"
-                                : "bg-green-100 text-green-800 border-green-300"
-                            }
-                          >
-                            {order.testnet ? "TESTNET" : "MAINNET"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <PriceCell priceData={priceData} isMainnet={true} />
-                        </TableCell>
-                        <TableCell>
-                          <PriceCell priceData={priceData} isMainnet={false} />
-                        </TableCell>
-                        <TableCell>
-                          <OrderDetailsCell orders={order.orders} />
-                        </TableCell>
-                        <TableCell>{getStatusBadge(order.status)}</TableCell>
-                        <TableCell>
-                          {new Date(order.createdAt).toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() =>
-                              router.push(`/oco/${order.orderListId}`)
-                            }
-                            aria-label={`View details for OCO order ${order.orderListId} for ${order.symbol}`}
-                          >
-                            <Eye className="h-4 w-4 mr-2" aria-hidden="true" />
-                            Details
-                          </Button>
+                        <TableCell colSpan={9} className="py-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="font-mono text-xs">
+                              Signal: {signalId.slice(-8)}
+                            </Badge>
+                            <Badge className="bg-purple-500 text-white">
+                              {signalOrders.length} OCO{signalOrders.length > 1 ? 's' : ''}
+                            </Badge>
+                          </div>
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
+                      {signalOrders.map((order) => {
+                        const priceData = prices.get(order.symbol);
+                        return (
+                          <TableRow
+                            key={order.orderListId}
+                            className={getRowClassName(order.status)}
+                          >
+                            <TableCell className="font-mono">
+                              {order.orderListId}
+                            </TableCell>
+                            <TableCell className="font-bold">
+                              {order.symbol}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={
+                                  order.testnet
+                                    ? "bg-orange-100 text-orange-800 border-orange-300"
+                                    : "bg-green-100 text-green-800 border-green-300"
+                                }
+                              >
+                                {order.testnet ? "TESTNET" : "MAINNET"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <PriceCell priceData={priceData} isMainnet={true} />
+                            </TableCell>
+                            <TableCell>
+                              <PriceCell priceData={priceData} isMainnet={false} />
+                            </TableCell>
+                            <TableCell>
+                              <OrderDetailsCell orders={order.orders} />
+                            </TableCell>
+                            <TableCell>{getStatusBadge(order.status)}</TableCell>
+                            <TableCell>
+                              {new Date(order.createdAt).toLocaleString()}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  router.push(`/oco/${order.orderListId}`)
+                                }
+                                aria-label={`View details for OCO order ${order.orderListId} for ${order.symbol}`}
+                              >
+                                <Eye className="h-4 w-4 mr-2" aria-hidden="true" />
+                                Details
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </>
+                  ))}
                 </TableBody>
               </Table>
             </div>
 
-            {orders.length === 0 && (
+            {Object.keys(groupedOrders).length === 0 && (
               <div className="text-center py-12 text-muted-foreground">
                 No OCO orders found. Execute a signal to create OCO orders.
               </div>

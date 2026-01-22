@@ -1476,6 +1476,7 @@ export async function createOCOOrders(
             cummulativeQuoteQty: parseFloat(limitMakerOrder.cummulativeQuoteQty),
             status: limitMakerOrder.status,
             timestamp: new Date(limitMakerOrder.transactTime),
+            targetIndex: i + 1,
           });
         }
 
@@ -1493,6 +1494,7 @@ export async function createOCOOrders(
             cummulativeQuoteQty: parseFloat(stopLossOrder.cummulativeQuoteQty),
             status: stopLossOrder.status,
             timestamp: new Date(stopLossOrder.transactTime),
+            targetIndex: i + 1,
           });
         }
       } catch (error) {
@@ -1665,6 +1667,7 @@ export async function createOCOOrders(
                     cummulativeQuoteQty: parseFloat(cleanupLimitMaker.cummulativeQuoteQty),
                     status: cleanupLimitMaker.status,
                     timestamp: new Date(cleanupLimitMaker.transactTime),
+                    targetIndex: lastSuccessfulTargetIndex + 1,
                   });
                 }
 
@@ -1687,6 +1690,7 @@ export async function createOCOOrders(
                     cummulativeQuoteQty: parseFloat(cleanupStopLoss.cummulativeQuoteQty),
                     status: cleanupStopLoss.status,
                     timestamp: new Date(cleanupStopLoss.transactTime),
+                    targetIndex: lastSuccessfulTargetIndex + 1,
                   });
                 }
 

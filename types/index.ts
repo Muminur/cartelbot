@@ -71,7 +71,8 @@ export interface ISignal extends Document {
 
 export interface IOrder {
   orderId: number;
-  orderListId?: number; // For OCO orders - used to cancel the entire OCO group
+  orderListId?: number;
+  targetIndex?: number;
   symbol: string;
   side: "BUY" | "SELL";
   type: "MARKET" | "LIMIT" | "OCO" | "LIMIT_MAKER" | "STOP_LOSS_LIMIT";
