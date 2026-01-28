@@ -32,7 +32,7 @@ export async function GET(
     const trade = await Trade.findOne({
       _id: id,
       userId: user._id,
-    }).populate("signalId", "symbol entries targets stopLoss rawSignal");
+    }).populate("signalId", "symbol entries targets stopLoss rawSignal").lean();
 
     if (!trade) {
       return NextResponse.json(

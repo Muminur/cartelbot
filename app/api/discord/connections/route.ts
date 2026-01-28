@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
     // Fetch connections (excluding encrypted token by default)
     const connections = await DiscordConnection.find(query)
       .sort({ createdAt: -1 })
+      .limit(50) // User-facing list - limit to 50 most recent connections
       .lean();
 
     return NextResponse.json({

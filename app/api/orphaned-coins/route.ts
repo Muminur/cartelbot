@@ -68,7 +68,9 @@ export async function GET(
     const orphanedCoins = await OrphanedCoin.find({
       userId: String(user._id),
       status: "active",
-    }).sort({ createdAt: -1 });
+    })
+      .sort({ createdAt: -1 })
+      .limit(100); // User-facing list - limit to 100 most recent orphaned coins
 
     if (orphanedCoins.length === 0) {
       return NextResponse.json({

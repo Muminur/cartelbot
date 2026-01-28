@@ -52,7 +52,8 @@ export async function GET(request: NextRequest) {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate("signalId", "symbol entries targets stopLoss"),
+        .populate("signalId", "symbol entries targets stopLoss")
+        .lean(),
       Trade.countDocuments(query),
     ]);
 

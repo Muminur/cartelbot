@@ -62,6 +62,7 @@ async function analyzeSignals(): Promise<AnalysisResult> {
   // Fetch all signals with only required fields (60% less data transfer)
   const signals = (await Signal.find({})
     .select("_id symbol status createdAt")
+    .limit(5000) // Prevent memory spikes from unbounded queries
     .lean()
     .exec()) as unknown as LeanSignal[];
 
@@ -75,6 +76,7 @@ async function analyzeSignals(): Promise<AnalysisResult> {
     signalId: { $in: signalIds },
   })
     .select("signalId status buyOrder.orderId buyOrder.executedQty")
+    .limit(5000) // Prevent memory spikes from unbounded queries
     .lean()
     .exec()) as unknown as LeanTrade[];
 

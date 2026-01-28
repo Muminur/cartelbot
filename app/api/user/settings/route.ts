@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     await connectDB();
 
-    const userDoc = await User.findOne({ email: user.email });
+    const userDoc = await User.findOne({ email: user.email }).lean<any>();
     if (!userDoc) {
       return NextResponse.json(
         { success: false, error: "User not found" },

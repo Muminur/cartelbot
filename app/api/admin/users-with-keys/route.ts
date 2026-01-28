@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
     })
       .select("_id email useTestnet createdAt")
       .sort({ email: 1 })
+      .limit(1000) // Admin endpoint - reasonable limit for users with API keys
       .lean();
 
     return createSuccessResponse({

@@ -275,7 +275,7 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     const [signals, total] = await Promise.all([
-      Signal.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Signal.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       Signal.countDocuments(query),
     ]);
 

@@ -39,7 +39,9 @@ export async function POST(request: NextRequest) {
     const users = await User.find({
       isActive: true,
       "emailNotifications.dailySummary": true,
-    }).select("_id email");
+    })
+      .select("_id email")
+      .limit(5000); // Reasonable limit for cron job processing
 
     if (process.env.NODE_ENV !== 'production') console.log(`[Daily Summary] Processing ${users.length} users`);
 

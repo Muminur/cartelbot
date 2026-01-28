@@ -58,6 +58,7 @@ export async function getUserActiveSignals(userId: string) {
     status: { $in: ["pending", "parsed", "executing"] },
   })
     .sort({ createdAt: -1 })
+    .limit(100) // Prevent unbounded queries - limit to 100 most recent active signals
     .lean();
 }
 
@@ -70,6 +71,7 @@ export async function getUserOpenTrades(userId: string) {
     status: { $in: ["open", "partial"] },
   })
     .sort({ createdAt: -1 })
+    .limit(100) // Prevent unbounded queries - limit to 100 most recent open trades
     .lean();
 }
 
@@ -130,7 +132,10 @@ export async function getTradesBySignal(signalId: string) {
   if (!Types.ObjectId.isValid(signalId)) {
     throw new Error("Invalid signal ID format");
   }
-  return await Trade.find({ signalId }).sort({ createdAt: -1 }).lean();
+  return await Trade.find({ signalId })
+    .sort({ createdAt: -1 })
+    .limit(50) // Prevent unbounded queries - limit to 50 trades per signal
+    .lean();
 }
 
 export async function getUserTradeStats(userId: string) {
@@ -138,7 +143,9 @@ export async function getUserTradeStats(userId: string) {
     throw new Error("Invalid user ID format");
   }
 
-  const trades = await Trade.find({ userId }).lean();
+  const trades = await Trade.find({ userId })
+    .limit(1000) // Prevent unbounded queries - limit to 1000 most recent trades for stats
+    .lean();
 
   const totalTrades = trades.length;
   const openTrades = trades.filter((t) => t.status === "open" || t.status === "partial").length;

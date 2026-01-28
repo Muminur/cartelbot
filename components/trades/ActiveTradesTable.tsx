@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -35,30 +35,30 @@ export function ActiveTradesTable({ trades, onTradeUpdated }: ActiveTradesTableP
   }, [trades]);
 
   // Fetch live prices for all symbols
-  const { prices, getPrice, calculateUnrealizedPnL } = useLivePrices({
+  const { getPrice, calculateUnrealizedPnL } = useLivePrices({
     symbols,
     enabled: symbols.length > 0,
     refreshInterval: 5000, // 5 seconds
   });
 
-  const handleViewDetails = (tradeId: string) => {
+  const handleViewDetails = useCallback((tradeId: string) => {
     setSelectedTradeId(tradeId);
     setDetailModalOpen(true);
-  };
+  }, []);
 
-  const handleClosePosition = (trade: ITrade) => {
+  const handleClosePosition = useCallback((trade: ITrade) => {
     setTradeToClose(trade);
     setCloseDialogOpen(true);
-  };
+  }, []);
 
-  const handlePositionClosed = () => {
+  const handlePositionClosed = useCallback(() => {
     setTradeToClose(null);
     if (onTradeUpdated) {
       onTradeUpdated();
     }
-  };
+  }, [onTradeUpdated]);
 
-  const columns: ColumnDef<ITrade>[] = [
+  const columns: ColumnDef<ITrade>[] = useMemo(() => [
     {
       accessorKey: "symbol",
       header: "Symbol",
@@ -193,7 +193,7 @@ export function ActiveTradesTable({ trades, onTradeUpdated }: ActiveTradesTableP
         );
       },
     },
-  ];
+  ], [getPrice, calculateUnrealizedPnL, handleViewDetails, handleClosePosition]);
 
   return (
     <>

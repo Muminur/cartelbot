@@ -12,7 +12,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     await connectDB();
 
     const { id } = await params;
-    const signal = await Signal.findOne({ _id: id, userId: user._id });
+    const signal = await Signal.findOne({ _id: id, userId: user._id }).lean();
 
     if (!signal) {
       return NextResponse.json(

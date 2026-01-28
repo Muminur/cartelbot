@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -27,12 +27,12 @@ export function TradeHistoryTable({ trades, onTradeUpdated }: TradeHistoryTableP
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
 
-  const handleViewDetails = (tradeId: string) => {
+  const handleViewDetails = useCallback((tradeId: string) => {
     setSelectedTradeId(tradeId);
     setDetailModalOpen(true);
-  };
+  }, []);
 
-  const handleExportCSV = () => {
+  const handleExportCSV = useCallback(() => {
     try {
       exportTradesToCSV(trades);
       toast.success("Trades exported to CSV successfully");
@@ -40,7 +40,7 @@ export function TradeHistoryTable({ trades, onTradeUpdated }: TradeHistoryTableP
       console.error("Error exporting trades:", error);
       toast.error("Failed to export trades");
     }
-  };
+  }, [trades]);
 
   const getCloseReasonColor = (reason?: string) => {
     switch (reason) {
@@ -57,7 +57,7 @@ export function TradeHistoryTable({ trades, onTradeUpdated }: TradeHistoryTableP
     }
   };
 
-  const columns: ColumnDef<ITrade>[] = [
+  const columns: ColumnDef<ITrade>[] = useMemo(() => [
     {
       id: "dateClosed",
       header: "Date Closed",
@@ -174,7 +174,7 @@ export function TradeHistoryTable({ trades, onTradeUpdated }: TradeHistoryTableP
         );
       },
     },
-  ];
+  ], [handleViewDetails]);
 
   return (
     <>

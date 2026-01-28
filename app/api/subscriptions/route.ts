@@ -36,7 +36,8 @@ export async function GET(request: NextRequest) {
     // Get all subscriptions for this user, sorted by most recent
     const subscriptions = await Subscription.find({ userId: String(user._id) })
       .sort({ createdAt: -1 })
-      .limit(50); // Limit to last 50 subscriptions
+      .limit(50)
+      .lean(); // Limit to last 50 subscriptions
 
     return NextResponse.json({
       success: true,
@@ -134,7 +135,7 @@ export async function POST(request: NextRequest) {
     await connectDB();
 
     // Check if transaction hash already exists
-    const existingSubscription = await Subscription.findOne({ txHash });
+    const existingSubscription = await Subscription.findOne({ txHash }).lean();
     if (existingSubscription) {
       return NextResponse.json(
         {

@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
       isActive: true,
     })
       .select("+discordUserToken")
+      .limit(10) // Max active connections per user
       .lean();
 
     if (connections.length === 0) {

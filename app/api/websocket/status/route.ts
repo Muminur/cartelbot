@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest) {
 
     const session = await WebSocketSession.findOne({
       userId,
-    }).sort({ createdAt: -1 });
+    }).sort({ createdAt: -1 }).lean<any>();
 
     if (wsManager) {
       const connectionStatus = wsManager.getConnectionStatus();
