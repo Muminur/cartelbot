@@ -27,6 +27,7 @@ interface SignalNotificationPanelProps {
 
 /**
  * Get icon for event type
+ * Pure helper function moved outside component to prevent recreation on every render
  */
 function getEventIcon(type: string) {
   switch (type) {
@@ -53,6 +54,7 @@ function getEventIcon(type: string) {
 
 /**
  * Get badge variant and text for event type
+ * Pure helper function moved outside component to prevent recreation on every render
  */
 function getEventBadge(type: string, status?: string) {
   switch (type) {
@@ -79,6 +81,7 @@ function getEventBadge(type: string, status?: string) {
 
 /**
  * Get color classes for event type
+ * Pure helper function moved outside component to prevent recreation on every render
  */
 function getEventColorClasses(type: string) {
   switch (type) {
@@ -95,6 +98,33 @@ function getEventColorClasses(type: string) {
       return "border-purple-200 bg-purple-50 dark:border-purple-900 dark:bg-purple-950/20";
     default:
       return "border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-900/20";
+  }
+}
+
+/**
+ * Get default message for event type
+ * Pure helper function moved outside component to prevent recreation on every render
+ */
+function getDefaultMessage(event: TrackedEvent): string {
+  switch (event.type) {
+    case "message_received":
+      return "New Discord message received";
+    case "parsing":
+      return `Parsing signal${event.symbol ? ` for ${event.symbol}` : ""}...`;
+    case "parsed":
+      return `Signal parsed${event.symbol ? `: ${event.symbol}` : ""}`;
+    case "executing":
+      return `Executing trade${event.symbol ? ` for ${event.symbol}` : ""}...`;
+    case "completed":
+      return `Trade executed${event.symbol ? ` for ${event.symbol}` : ""}`;
+    case "failed":
+      return `Processing failed${event.symbol ? ` for ${event.symbol}` : ""}`;
+    case "target_hit":
+      return `Target hit${event.symbol ? ` for ${event.symbol}` : ""}`;
+    case "stop_loss":
+      return `Stop loss triggered${event.symbol ? ` for ${event.symbol}` : ""}`;
+    default:
+      return event.status || "Event received";
   }
 }
 
@@ -245,30 +275,4 @@ export function SignalNotificationPanel({ events, onClear }: SignalNotificationP
       </CardContent>
     </Card>
   );
-}
-
-/**
- * Get default message for event type
- */
-function getDefaultMessage(event: TrackedEvent): string {
-  switch (event.type) {
-    case "message_received":
-      return "New Discord message received";
-    case "parsing":
-      return `Parsing signal${event.symbol ? ` for ${event.symbol}` : ""}...`;
-    case "parsed":
-      return `Signal parsed${event.symbol ? `: ${event.symbol}` : ""}`;
-    case "executing":
-      return `Executing trade${event.symbol ? ` for ${event.symbol}` : ""}...`;
-    case "completed":
-      return `Trade executed${event.symbol ? ` for ${event.symbol}` : ""}`;
-    case "failed":
-      return `Processing failed${event.symbol ? ` for ${event.symbol}` : ""}`;
-    case "target_hit":
-      return `Target hit${event.symbol ? ` for ${event.symbol}` : ""}`;
-    case "stop_loss":
-      return `Stop loss triggered${event.symbol ? ` for ${event.symbol}` : ""}`;
-    default:
-      return event.status || "Event received";
-  }
 }

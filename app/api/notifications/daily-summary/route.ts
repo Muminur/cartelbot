@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectDB } from "@/lib/db";
 import { User, Trade } from "@/lib/db/models";
 import { sendDailySummaryNotification } from "@/lib/email/notifications";
@@ -41,7 +42,8 @@ export async function POST(request: NextRequest) {
       "emailNotifications.dailySummary": true,
     })
       .select("_id email")
-      .limit(5000); // Reasonable limit for cron job processing
+      .limit(5000) // Reasonable limit for cron job processing
+      .lean<Array<{ _id: mongoose.Types.ObjectId; email: string }>>();
 
     if (process.env.NODE_ENV !== 'production') console.log(`[Daily Summary] Processing ${users.length} users`);
 

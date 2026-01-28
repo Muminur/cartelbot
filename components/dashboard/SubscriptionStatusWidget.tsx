@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,7 @@ interface SubscriptionData {
   };
 }
 
-export default function SubscriptionStatusWidget() {
+function SubscriptionStatusWidget() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<SubscriptionData | null>(null);
@@ -187,3 +187,5 @@ export default function SubscriptionStatusWidget() {
     </Card>
   );
 }
+
+export default memo(SubscriptionStatusWidget);

@@ -5,6 +5,7 @@ import { connectDB } from "@/lib/db";
 import { DiscordConnection, DiscordMessage, Signal, User } from "@/lib/db/models";
 import { parseSignal } from "@/lib/parser";
 import { executeSignalTrade, createOCOOrders } from "@/lib/binance";
+import { PositionSizingMethod } from "@/lib/binance/position-sizing";
 import { TRADE_EXECUTION } from "@/lib/constants";
 import { serializeResponse } from "@/lib/utils/serialize";
 import { Types } from "mongoose";
@@ -127,7 +128,11 @@ export async function POST(request: NextRequest) {
     const connectionObjectId = new Types.ObjectId(connectionId);
 
     const [user, connection] = await Promise.all([
-      User.findById(userObjectId),
+      User.findById(userObjectId).lean<{
+        investmentAmount?: number;
+        positionSizingMethod?: PositionSizingMethod;
+        useTestnet?: boolean;
+      }>(),
       DiscordConnection.findOne({
         _id: connectionObjectId,
         userId: userObjectId,

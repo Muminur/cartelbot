@@ -28,16 +28,15 @@ export async function GET(request: NextRequest) {
     const user = await requireAuth();
     await connectDB();
 
-    // Get user's active Discord connections
-    const connections = await DiscordConnection.find({
+    // Get user's active Discord connection (only need one)
+    const connection = await DiscordConnection.findOne({
       userId: user._id,
       isActive: true,
     })
       .select("+discordUserToken")
-      .limit(10) // Max active connections per user
-      .lean();
+      .lean<{ discordUserToken: string }>();
 
-    if (connections.length === 0) {
+    if (!connection) {
       return NextResponse.json({
         success: true,
         data: [],
@@ -45,8 +44,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Use the first active connection's token
-    const token = decrypt(connections[0].discordUserToken);
+    // Use the active connection's token
+    const token = decrypt(connection.discordUserToken);
 
     try {
       // Fetch guilds from Discord API

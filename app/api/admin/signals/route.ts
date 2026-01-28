@@ -78,38 +78,42 @@ export async function GET(request: Request) {
       });
     }
 
-    // Add sorting, skip, and limit
-    aggregationPipeline.push(
-      { $sort: { createdAt: -1 } },
-      { $skip: skip },
-      { $limit: limit }
-    );
+    // Use $facet to combine all 3 aggregations into a single database call
+    // This reduces from 3 DB queries to 1 and ensures filters are applied consistently
+    aggregationPipeline.push({
+      $facet: {
+        data: [
+          { $sort: { createdAt: -1 } },
+          { $skip: skip },
+          { $limit: limit }
+        ],
+        totalCount: [
+          { $count: "count" }
+        ],
+        statusStats: [
+          {
+            $group: {
+              _id: "$status",
+              count: { $sum: 1 }
+            }
+          }
+        ]
+      }
+    });
 
-    // Create total count pipeline (excludes $skip and $limit, includes userEmail filter)
-    const totalPipeline = [...aggregationPipeline.slice(0, -3), { $count: "total" }];
+    const [result] = await Signal.aggregate(aggregationPipeline);
 
-    const [signals, totalResult, stats] = await Promise.all([
-      Signal.aggregate(aggregationPipeline),
-      Signal.aggregate(totalPipeline),
-      Signal.aggregate([
-        {
-          $group: {
-            _id: "$status",
-            count: { $sum: 1 },
-          },
-        },
-      ]),
-    ]);
-
-    const total = totalResult[0]?.total || 0;
+    const signals = result.data || [];
+    const total = result.totalCount[0]?.count || 0;
+    const stats: Array<{ _id: string; count: number }> = result.statusStats || [];
 
     const statusStats = {
-      pending: stats.find((s) => s._id === "pending")?.count || 0,
-      parsed: stats.find((s) => s._id === "parsed")?.count || 0,
-      executing: stats.find((s) => s._id === "executing")?.count || 0,
-      completed: stats.find((s) => s._id === "completed")?.count || 0,
-      failed: stats.find((s) => s._id === "failed")?.count || 0,
-      cancelled: stats.find((s) => s._id === "cancelled")?.count || 0,
+      pending: stats.find((s: { _id: string; count: number }) => s._id === "pending")?.count || 0,
+      parsed: stats.find((s: { _id: string; count: number }) => s._id === "parsed")?.count || 0,
+      executing: stats.find((s: { _id: string; count: number }) => s._id === "executing")?.count || 0,
+      completed: stats.find((s: { _id: string; count: number }) => s._id === "completed")?.count || 0,
+      failed: stats.find((s: { _id: string; count: number }) => s._id === "failed")?.count || 0,
+      cancelled: stats.find((s: { _id: string; count: number }) => s._id === "cancelled")?.count || 0,
     };
 
     // Serialize MongoDB ObjectIds to strings (prevents [object Object] in admin UI)
