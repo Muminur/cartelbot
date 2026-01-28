@@ -93,23 +93,57 @@ export async function POST(
       trade.sellOrders.some((sellOrder: { orderId: number }) => sellOrder.orderId === order.orderId)
     );
 
-    for (const order of tradeOrders) {
-      try {
-        await client.cancelOrder(trade.symbol, order.orderId);
-      } catch (error) {
-        console.error(`Failed to cancel order ${order.orderId}:`, error);
+    // PERF: Parallel order cancellations instead of sequential
+    const cancellationResults = await Promise.allSettled(
+      tradeOrders.map((order) => client.cancelOrder(trade.symbol, order.orderId))
+    );
+
+    // Log any cancellation failures
+    cancellationResults.forEach((result, index) => {
+      if (result.status === "rejected") {
+        console.error(`Failed to cancel order ${tradeOrders[index].orderId}:`, result.reason);
       }
+    });
+
+    // PERF: Parallel fetch of account info and ticker data with error resilience
+    const [accountResult, tickerResult] = await Promise.allSettled([
+      client.getAccount(),
+      client.get24hrTicker(trade.symbol),
+    ]);
+
+    // Handle API failures gracefully
+    if (accountResult.status === "rejected") {
+      console.error("Failed to fetch account balance:", accountResult.reason);
+      return NextResponse.json(
+        {
+          success: false,
+          error: { message: "Failed to fetch account balance from Binance", statusCode: 502 },
+        },
+        { status: 502 }
+      );
     }
 
-    const accountInfo = await client.getAccount();
+    if (tickerResult.status === "rejected") {
+      console.error("Failed to fetch ticker data:", tickerResult.reason);
+      return NextResponse.json(
+        {
+          success: false,
+          error: { message: "Failed to fetch price data from Binance", statusCode: 502 },
+        },
+        { status: 502 }
+      );
+    }
+
+    const accountInfo = accountResult.value;
+    const tickerData = tickerResult.value;
     const balance = accountInfo.balances.find((b) => b.asset === trade.symbol.replace("USDT", ""));
     const availableQty = parseFloat(balance?.free || "0");
 
     let marketSellOrder;
     if (availableQty > 0) {
       try {
-        const ticker = await client.get24hrTicker(trade.symbol);
-        const currentPrice = parseFloat(ticker.lastPrice);
+        // Use pre-fetched ticker data
+        const currentPrice = parseFloat(tickerData.lastPrice);
         const quoteAmount = availableQty * currentPrice;
 
         if (quoteAmount >= 10) {
@@ -160,9 +194,8 @@ export async function POST(
         timestamp: new Date(marketSellOrder.transactTime || Date.now()),
       });
     } else {
-      // If no market sell (all positions already sold via OCO), use current ticker price as estimate
-      const ticker = await client.get24hrTicker(trade.symbol);
-      exitPrice = parseFloat(ticker.lastPrice);
+      // If no market sell (all positions already sold via OCO), use pre-fetched ticker price as estimate
+      exitPrice = parseFloat(tickerData.lastPrice);
       // Estimate revenue based on remaining quantity at current price
       sellRevenue = exitPrice * trade.quantity;
     }

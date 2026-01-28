@@ -58,7 +58,7 @@ export default function NotFound() {
                 marginBottom: "24px",
               }}
             >
-              The page you are looking for doesn't exist or has been moved.
+              The page you are looking for doesn&apos;t exist or has been moved.
             </p>
             <Link
               href="/"
