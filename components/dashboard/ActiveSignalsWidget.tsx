@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Signal } from "lucide-react";
@@ -12,7 +12,7 @@ interface SignalData {
   createdAt: string;
 }
 
-export function ActiveSignalsWidget() {
+function ActiveSignalsWidget() {
   const [signals, setSignals] = useState<SignalData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -89,3 +89,5 @@ export function ActiveSignalsWidget() {
     </Card>
   );
 }
+
+export default memo(ActiveSignalsWidget);

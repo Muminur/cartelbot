@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +41,14 @@ export function TradeDetailModal({
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [fetchingPrice, setFetchingPrice] = useState(false);
+
+  // Refs to hold trade data for stable callbacks
+  const tradeRef = useRef<ITrade | null>(null);
+
+  // Keep tradeRef in sync with trade state
+  useEffect(() => {
+    tradeRef.current = trade;
+  }, [trade]);
 
   useEffect(() => {
     if (open && tradeId) {
@@ -89,13 +97,14 @@ export function TradeDetailModal({
 
   // Fetch real-time order statuses from Binance API (NOT database)
   const fetchOrderStatuses = useCallback(async () => {
-    if (!trade || !trade.sellOrders || trade.sellOrders.length === 0) return;
+    const currentTrade = tradeRef.current;
+    if (!currentTrade || !currentTrade.sellOrders || currentTrade.sellOrders.length === 0) return;
 
     // Only fetch if we have order IDs
-    const ordersToCheck = trade.sellOrders
+    const ordersToCheck = currentTrade.sellOrders
       .filter((order: IOrder) => order.orderListId !== undefined)
       .map((order: IOrder) => ({
-        symbol: trade.symbol,
+        symbol: currentTrade.symbol,
         orderId: order.orderId,
         orderListId: order.orderListId!,
       }));
@@ -116,7 +125,7 @@ export function TradeDetailModal({
 
       if (orderStatusData.success && orderStatusData.data?.orders) {
         // Update trade.sellOrders with real-time statuses from Binance
-        const updatedSellOrders = trade.sellOrders.map((order: IOrder) => {
+        const updatedSellOrders = currentTrade.sellOrders.map((order: IOrder) => {
           const liveStatus = orderStatusData.data.orders.find(
             (o: any) => o.orderId === order.orderId
           );
@@ -150,7 +159,7 @@ export function TradeDetailModal({
     } finally {
       setFetchingOrderStatus(false);
     }
-  }, [trade]);
+  }, []); // No dependencies - uses tradeRef
 
   // Fetch order statuses when trade is loaded
   useEffect(() => {

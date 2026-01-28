@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { BarChart3 } from "lucide-react";
@@ -18,7 +18,7 @@ interface ChartData {
   cumulative: number;
 }
 
-export function PnLChartWidget() {
+function PnLChartWidget() {
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -109,3 +109,5 @@ export function PnLChartWidget() {
     </Card>
   );
 }
+
+export default memo(PnLChartWidget);

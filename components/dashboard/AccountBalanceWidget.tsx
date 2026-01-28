@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Wallet, Settings, AlertCircle } from "lucide-react";
@@ -20,7 +20,7 @@ interface ErrorResponse {
   binanceCode?: number;
 }
 
-export function AccountBalanceWidget() {
+function AccountBalanceWidget() {
   const [balances, setBalances] = useState<AccountBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ErrorResponse | null>(null);
@@ -203,3 +203,5 @@ export function AccountBalanceWidget() {
     </Card>
   );
 }
+
+export default memo(AccountBalanceWidget);

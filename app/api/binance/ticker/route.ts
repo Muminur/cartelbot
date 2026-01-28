@@ -5,6 +5,7 @@ import { getUserFromRequest } from "@/lib/auth";
 import { connectDB } from "@/lib/db/connection";
 import { User } from "@/lib/db/models/User";
 import { resolveTestnetPreference } from "@/lib/binance/helpers";
+import { getCachedTicker, setCachedTicker } from "@/lib/binance/ticker-cache";
 
 export async function GET(request: NextRequest) {
   // FIX BUG 4: Wrap ENTIRE function in try-catch to prevent any uncaught errors
@@ -79,6 +80,17 @@ export async function GET(request: NextRequest) {
       useTestnet = testnetParam === "true";
     }
 
+    // Check cache first
+    const network = useTestnet ? 'testnet' : 'mainnet';
+    const cachedData = getCachedTicker(symbol.toUpperCase(), network);
+    if (cachedData) {
+      return NextResponse.json({
+        success: true,
+        data: cachedData,
+        cached: true,
+      });
+    }
+
     // FIX BUG 4: Add validation that BinanceClient can be instantiated
     if (!BinanceClient) {
       throw new Error("BinanceClient not available");
@@ -103,13 +115,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Fix #2: Ensure network field is always included
+    const tickerData = {
+      ...ticker,
+      price: ticker.lastPrice || ticker.price, // Alias for easier access with fallback
+      network: useTestnet ? "testnet" : "mainnet", // Always set network (Fix #2)
+    };
+
+    // Cache the result
+    setCachedTicker(symbol.toUpperCase(), network, tickerData);
+
     return NextResponse.json({
       success: true,
-      data: {
-        ...ticker,
-        price: ticker.lastPrice || ticker.price, // Alias for easier access with fallback
-        network: useTestnet ? "testnet" : "mainnet", // Always set network (Fix #2)
-      },
+      data: tickerData,
     });
   } catch (error) {
     // FIX BUG 4: Enhanced error handling with detailed logging

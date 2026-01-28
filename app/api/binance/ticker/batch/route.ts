@@ -5,6 +5,7 @@ import { getUserFromRequest } from "@/lib/auth";
 import { connectDB } from "@/lib/db/connection";
 import { User } from "@/lib/db/models/User";
 import { resolveTestnetPreference } from "@/lib/binance/helpers";
+import { getCachedTicker, setCachedTicker } from "@/lib/binance/ticker-cache";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -121,30 +122,61 @@ export async function GET(request: NextRequest) {
       useTestnet = testnetParam === "true";
     }
 
-    const client = new BinanceClient({
-      apiKey: "",
-      apiSecret: "",
-      testnet: useTestnet,
-    });
-
     // Uppercase all symbols
     const uppercaseSymbols = symbols.map(s => s.toUpperCase());
 
-    const tickers = await client.getBatch24hrTicker(uppercaseSymbols);
+    // Check which symbols are already cached
+    const cachedResults: any[] = [];
+    const symbolsToFetch: string[] = [];
+    const network = useTestnet ? 'testnet' : 'mainnet';
 
-    // Add network info and price alias to each ticker
-    const enrichedTickers = tickers.map(ticker => ({
-      ...ticker,
-      price: ticker.lastPrice, // Alias for easier access
-      network: useTestnet ? "testnet" : "mainnet",
-    }));
+    for (const symbol of uppercaseSymbols) {
+      const cached = getCachedTicker(symbol, network);
+      if (cached) {
+        cachedResults.push({ ...cached, cached: true });
+      } else {
+        symbolsToFetch.push(symbol);
+      }
+    }
+
+    let freshResults: any[] = [];
+
+    // Only fetch non-cached symbols from Binance
+    if (symbolsToFetch.length > 0) {
+      const client = new BinanceClient({
+        apiKey: "",
+        apiSecret: "",
+        testnet: useTestnet,
+      });
+
+      const tickers = await client.getBatch24hrTicker(symbolsToFetch);
+
+      // Add network info and price alias to each ticker, then cache
+      freshResults = tickers.map(ticker => {
+        const tickerData = {
+          ...ticker,
+          price: ticker.lastPrice, // Alias for easier access
+          network: useTestnet ? "testnet" : "mainnet",
+        };
+
+        // Cache the result
+        setCachedTicker(ticker.symbol, network, tickerData);
+
+        return tickerData;
+      });
+    }
+
+    // Combine cached and fresh results
+    const allResults = [...cachedResults, ...freshResults];
 
     return NextResponse.json({
       success: true,
-      data: enrichedTickers,
+      data: allResults,
       meta: {
-        count: enrichedTickers.length,
+        count: allResults.length,
         requested: uppercaseSymbols.length,
+        cached: cachedResults.length,
+        fetched: freshResults.length,
         network: useTestnet ? "testnet" : "mainnet",
       },
     });

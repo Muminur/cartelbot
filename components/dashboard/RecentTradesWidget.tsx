@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown } from "lucide-react";
@@ -17,7 +17,7 @@ interface TradeData {
   createdAt: string;
 }
 
-export function RecentTradesWidget() {
+function RecentTradesWidget() {
   const [trades, setTrades] = useState<TradeData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -120,3 +120,5 @@ export function RecentTradesWidget() {
     </Card>
   );
 }
+
+export default memo(RecentTradesWidget);

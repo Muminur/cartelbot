@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
 import { ColumnDef } from "@tanstack/react-table";
@@ -22,7 +22,7 @@ interface TradeData {
   status: string;
 }
 
-export function OpenPositionsWidget() {
+function OpenPositionsWidget() {
   const [trades, setTrades] = useState<TradeData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -44,7 +44,7 @@ export function OpenPositionsWidget() {
     fetchTrades();
   }, []);
 
-  const columns: ColumnDef<TradeData>[] = [
+  const columns = useMemo<ColumnDef<TradeData>[]>(() => [
     {
       accessorKey: "symbol",
       header: "Symbol",
@@ -71,7 +71,7 @@ export function OpenPositionsWidget() {
         );
       },
     },
-  ];
+  ], []);
 
   if (loading) {
     return (
@@ -111,3 +111,5 @@ export function OpenPositionsWidget() {
     </Card>
   );
 }
+
+export default memo(OpenPositionsWidget);
