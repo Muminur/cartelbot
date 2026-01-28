@@ -20,44 +20,35 @@ export function useLivePrices({ symbols, enabled = true, refreshInterval = 5000 
     }
 
     try {
-      // Make parallel requests for each symbol (avoids 400 error with comma-separated symbols)
-      const pricePromises = symbols.map(async (symbol) => {
-        try {
-          const response = await fetch(`/api/binance/ticker?symbol=${symbol}`);
+      // Use batch endpoint instead of individual calls (fixes N+1)
+      const response = await fetch(
+        `/api/binance/ticker/batch?symbols=${encodeURIComponent(JSON.stringify(symbols))}`
+      );
 
-          if (!response.ok) {
-            console.warn(`Failed to fetch price for ${symbol}: ${response.statusText}`);
-            return null;
-          }
+      if (!response.ok) {
+        console.warn(`Failed to fetch batch prices: ${response.statusText}`);
+        setError(`Failed to fetch prices: ${response.statusText}`);
+        setLoading(false);
+        return;
+      }
 
-          const data = await response.json();
+      const data = await response.json();
 
-          if (!data.success) {
-            console.warn(`Error fetching ${symbol}:`, data.error?.message);
-            return null;
-          }
+      if (!data.success) {
+        console.warn("Error fetching batch prices:", data.error?.message);
+        setError(data.error?.message || "Failed to fetch prices");
+        setLoading(false);
+        return;
+      }
 
-          return {
-            symbol: data.data.symbol,
-            price: parseFloat(data.data.lastPrice),
-          };
-        } catch (error) {
-          console.warn(`Exception fetching ${symbol}:`, error);
-          return null;
-        }
-      });
-
-      // Wait for all requests to complete
-      const results = await Promise.all(pricePromises);
-
-      // Filter out failed requests and update prices map
+      // Build prices map from batch response
       const newPrices = new Map<string, number>();
 
-      results.forEach((result) => {
-        if (result && result.symbol && result.price) {
-          newPrices.set(result.symbol, result.price);
+      for (const ticker of data.data) {
+        if (ticker.symbol && ticker.lastPrice) {
+          newPrices.set(ticker.symbol, parseFloat(ticker.lastPrice));
         }
-      });
+      }
 
       setPrices(newPrices);
       setError(null);

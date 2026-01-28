@@ -138,6 +138,10 @@ userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ subscriptionTier: 1, subscriptionExpiry: 1 });
 userSchema.index({ isActive: 1, subscriptionExpiry: 1 });
 
+// Discord-related indexes for connection management
+userSchema.index({ discordUserId: 1 }, { sparse: true });
+userSchema.index({ discordConnected: 1, createdAt: -1 });
+
 if (process.env.NODE_ENV === "development") {
   const models = mongoose.models as { [key: string]: any };
   if (models.User) {

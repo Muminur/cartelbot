@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseSignal, parseImageSignal } from "@/lib/parser";
+import { parseSignal } from "@/lib/parser";
 import { formatErrorResponse } from "@/lib/utils/errors";
 
 export async function POST(request: NextRequest) {
@@ -33,6 +33,8 @@ export async function POST(request: NextRequest) {
       const buffer = Buffer.from(await imageFile.arrayBuffer());
       if (process.env.NODE_ENV !== 'production') console.log("[API] Buffer created, size:", buffer.length);
 
+      if (process.env.NODE_ENV !== 'production') console.log("[API] Dynamically importing parseImageSignal...");
+      const { parseImageSignal } = await import("@/lib/parser/image-parser");
       if (process.env.NODE_ENV !== 'production') console.log("[API] Calling parseImageSignal...");
       const parsed = await parseImageSignal(buffer);
 
