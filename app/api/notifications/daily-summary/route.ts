@@ -22,7 +22,19 @@ export async function POST(request: NextRequest) {
   try {
     // Security check: Verify cron job authorization
     const authHeader = request.headers.get("authorization");
-    const cronSecret = process.env.CRON_SECRET || "dev_cron_secret_change_in_production";
+    const cronSecret = process.env.CRON_SECRET;
+
+    // Fail securely if CRON_SECRET is not configured
+    if (!cronSecret) {
+      console.error("[Daily Summary] CRON_SECRET not configured - endpoint disabled for security");
+      return NextResponse.json(
+        {
+          success: false,
+          error: { message: "Endpoint not configured" },
+        },
+        { status: 503 }
+      );
+    }
 
     if (authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json(

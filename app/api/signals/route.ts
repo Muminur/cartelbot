@@ -10,6 +10,7 @@ import { serializeDocument, serializeDocuments, serializeResponse } from "@/lib/
 import { limitSignalTargets } from "@/lib/parser/target-limiter";
 import { rateLimit } from "@/lib/middleware";
 import { sanitizeSignalText } from "@/lib/security";
+import { escapeRegex } from "@/lib/utils/validation";
 import { logSignalAction } from "@/lib/audit";
 
 export async function POST(request: NextRequest) {
@@ -252,7 +253,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (symbol) {
-      query.symbol = { $regex: symbol, $options: "i" };
+      query.symbol = { $regex: escapeRegex(symbol), $options: "i" };
     }
 
     if (isImageSignal !== null && isImageSignal !== undefined) {

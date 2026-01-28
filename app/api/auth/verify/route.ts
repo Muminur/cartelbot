@@ -5,6 +5,7 @@ import { AuthenticationError, ValidationError } from "@/lib/utils/errors";
 import { verifyMagicLinkToken, generateSessionToken, setSessionCookie } from "@/lib/auth";
 import { User } from "@/lib/db/models";
 import { connectDB } from "@/lib/db";
+import { rateLimit } from "@/lib/middleware";
 
 const verifySchema = z.object({
   token: z.string().min(1, "Token is required"),
@@ -12,6 +13,11 @@ const verifySchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit by IP to prevent token brute-force attempts
+    const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown";
+    const rateLimitError = await rateLimit(ip, "auth");
+    if (rateLimitError) return rateLimitError;
+
     const body = await request.json();
 
     const result = verifySchema.safeParse(body);
