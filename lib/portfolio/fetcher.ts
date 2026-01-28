@@ -213,12 +213,6 @@ async function fetchBatchTickers(
     batches.push(uncommonSymbols.slice(i, i + BATCH_SIZE));
   }
 
-  console.log('[Portfolio] 🔄 Fetching tickers:', {
-    total: symbolsArray.length,
-    common: commonSymbols.length,
-    uncommon: uncommonSymbols.length,
-    batches: batches.length
-  });
 
   try {
     // Fetch all batches in parallel
@@ -235,14 +229,11 @@ async function fetchBatchTickers(
           // If batch failed with 404, some symbols might not exist on testnet
           // Return the batch symbols so we can retry them individually
           if (data.error?.statusCode === 404 || data.error?.binanceCode === -1121) {
-            console.log(`[Portfolio] ℹ️ Batch ${batchIndex + 1}/${batches.length}: Failed with 404/1121, will retry ${batch.length} symbols individually`);
             return { failed: true, symbols: batch, batchIndex };
           }
-          console.warn(`[Portfolio] ⚠️ Batch ${batchIndex + 1}/${batches.length} failed:`, data.error?.message);
           return { failed: true, symbols: batch, batchIndex };
         }
 
-        console.log(`[Portfolio] ✅ Batch ${batchIndex + 1}/${batches.length}: ${data.data?.length || 0} prices loaded`);
         return { failed: false, data: data.data || [], batchIndex };
       })
     );
@@ -277,8 +268,6 @@ async function fetchBatchTickers(
 
     // Retry failed symbols individually
     if (failedSymbols.length > 0) {
-      console.log(`[Portfolio] 🔄 Retrying ${failedSymbols.length} symbols individually...`);
-
       const individualResults = await Promise.allSettled(
         failedSymbols.map(async (symbol) => {
           try {
@@ -312,18 +301,7 @@ async function fetchBatchTickers(
           individualSuccessCount++;
         }
       });
-
-      console.log(`[Portfolio] ✅ Individual retry: ${individualSuccessCount}/${failedSymbols.length} symbols fetched successfully`);
     }
-
-    console.log('[Portfolio] 📊 Batch summary:', {
-      totalSymbols: symbolsArray.length,
-      batches: batches.length,
-      successfulBatches: successCount,
-      failedBatches: failureCount,
-      retriedIndividually: failedSymbols.length,
-      pricesLoaded: tickerMap.size,
-    });
 
     // Update conversion rates cache
     if (tickerMap.has('BTCUSDT')) {
@@ -437,10 +415,7 @@ async function retryFailedAssets(
         asset.valueUSDT = result.valueUSDT;
         asset.priceChangePercent = result.priceChangePercent;
       } catch (error) {
-        // Ignore errors from individual retries
-        if (error instanceof Error && error.name !== 'AbortError') {
-          console.warn(`[Portfolio] ${asset.asset}: Fallback failed`);
-        }
+        // Ignore errors from individual retries (silently)
       }
     })
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, memo } from "react";
+import { useEffect, useState, useMemo, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { BarChart3 } from "lucide-react";
@@ -19,7 +19,7 @@ interface ChartData {
 }
 
 function PnLChartWidget() {
-  const [chartData, setChartData] = useState<ChartData[]>([]);
+  const [trades, setTrades] = useState<TradeData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,21 +28,7 @@ function PnLChartWidget() {
         const response = await fetch("/api/trades?status=closed&limit=30");
         const data = await response.json();
         if (data.success && data.data.trades) {
-          const trades: TradeData[] = data.data.trades;
-
-          const processed = trades
-            .filter((t) => t.realizedPnL !== undefined && t.closedAt)
-            .sort((a, b) => new Date(a.closedAt!).getTime() - new Date(b.closedAt!).getTime())
-            .reduce((acc: ChartData[], trade) => {
-              const date = new Date(trade.closedAt!).toLocaleDateString();
-              const pnl = trade.realizedPnL || 0;
-              const cumulative = acc.length > 0 ? acc[acc.length - 1].cumulative + pnl : pnl;
-
-              acc.push({ date, pnl, cumulative });
-              return acc;
-            }, []);
-
-          setChartData(processed);
+          setTrades(data.data.trades);
         }
       } catch (error) {
         console.error("Error fetching trade history:", error);
@@ -53,6 +39,22 @@ function PnLChartWidget() {
 
     fetchTrades();
   }, []);
+
+  const chartData = useMemo(() => {
+    if (!trades?.length) return [];
+
+    return trades
+      .filter((t) => t.realizedPnL !== undefined && t.closedAt)
+      .sort((a, b) => new Date(a.closedAt!).getTime() - new Date(b.closedAt!).getTime())
+      .reduce((acc: ChartData[], trade) => {
+        const date = new Date(trade.closedAt!).toLocaleDateString();
+        const pnl = trade.realizedPnL || 0;
+        const cumulative = acc.length > 0 ? acc[acc.length - 1].cumulative + pnl : pnl;
+
+        acc.push({ date, pnl, cumulative });
+        return acc;
+      }, []);
+  }, [trades]);
 
   if (loading) {
     return (
