@@ -28,31 +28,66 @@ export async function GET(req: NextRequest) {
     }
 
     const encoder = new TextEncoder();
+    let heartbeat: ReturnType<typeof setInterval> | null = null;
+    let eventHandler: ((event: { eventType: string; eventTime: number; data: Record<string, unknown> }) => void) | null = null;
+
+    const cleanup = () => {
+      if (heartbeat) {
+        clearInterval(heartbeat);
+        heartbeat = null;
+      }
+      if (eventHandler && wsManager) {
+        try {
+          wsManager.off("event", eventHandler);
+        } catch (e) {
+          console.error("[SSE] Error removing event handler:", e);
+        }
+        eventHandler = null;
+      }
+    };
 
     const stream = new ReadableStream({
       start(controller) {
-        const eventHandler = (event: { eventType: string; eventTime: number; data: Record<string, unknown> }) => {
-          const data = JSON.stringify({
-            eventType: event.eventType,
-            eventTime: event.eventTime,
-            data: event.data,
-          });
-
-          const message = `data: ${data}\n\n`;
-          controller.enqueue(encoder.encode(message));
+        eventHandler = (event: { eventType: string; eventTime: number; data: Record<string, unknown> }) => {
+          try {
+            const data = JSON.stringify({
+              eventType: event.eventType,
+              eventTime: event.eventTime,
+              data: event.data,
+            });
+            const message = `data: ${data}\n\n`;
+            controller.enqueue(encoder.encode(message));
+          } catch (e) {
+            // Stream may be closed, trigger cleanup
+            console.error("[SSE] Error sending event:", e);
+            cleanup();
+          }
         };
 
         wsManager.on("event", eventHandler);
 
-        const heartbeat = setInterval(() => {
-          controller.enqueue(encoder.encode(": heartbeat\n\n"));
+        heartbeat = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(": heartbeat\n\n"));
+          } catch (_e) {
+            // Stream closed, cleanup
+            cleanup();
+          }
         }, 30000);
 
+        // Handle abort signal
         req.signal.addEventListener("abort", () => {
-          clearInterval(heartbeat);
-          wsManager.off("event", eventHandler);
-          controller.close();
+          cleanup();
+          try {
+            controller.close();
+          } catch (_e) {
+            // Already closed
+          }
         });
+      },
+      cancel() {
+        // Called when stream is cancelled (e.g., client disconnects)
+        cleanup();
       },
     });
 

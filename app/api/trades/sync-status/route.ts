@@ -112,59 +112,64 @@ export async function POST() {
           continue;
         }
 
-        // Fetch current status of all sell orders from Binance
-        let allOrdersDone = true;
-        let anyFilled = false;
-        const updatedSellOrders = [];
-
-        for (const sellOrder of trade.sellOrders) {
+        // Fetch all sell order statuses IN PARALLEL
+        const orderStatusPromises = trade.sellOrders.map(async (sellOrder: typeof trade.sellOrders[number]) => {
           try {
-            // Query Binance for current order status
             const orderStatus = await client.getOrder(
               trade.symbol,
               sellOrder.orderId
             );
-
-            // Update order status
-            const updatedOrder = {
+            return {
               ...sellOrder,
               status: orderStatus.status,
               executedQty: parseFloat(orderStatus.executedQty || "0"),
               cummulativeQuoteQty: parseFloat(orderStatus.cummulativeQuoteQty || "0"),
+              _success: true,
             };
-
-            updatedSellOrders.push(updatedOrder);
-
-            // Check if this order is done
-            if (orderStatus.status === "FILLED") {
-              anyFilled = true;
-            } else if (
-              orderStatus.status !== "CANCELED" &&
-              orderStatus.status !== "EXPIRED" &&
-              orderStatus.status !== "REJECTED"
-            ) {
-              // Order is still active (NEW, PARTIALLY_FILLED, etc.)
-              allOrdersDone = false;
-            }
           } catch (orderError) {
             // If order not found on Binance, treat as CANCELED
             if (
               orderError instanceof Error &&
               orderError.message.includes("Order does not exist")
             ) {
-              updatedSellOrders.push({
+              return {
                 ...sellOrder,
-                status: "CANCELED",
-              });
-            } else {
-              // For other errors, keep original status and mark as not done
-              updatedSellOrders.push(sellOrder);
-              allOrdersDone = false;
-              console.error(
-                `Error fetching order ${sellOrder.orderId} for trade ${trade._id}:`,
-                orderError
-              );
+                status: "CANCELED" as const,
+                _success: true,
+              };
             }
+            // For other errors, keep original status
+            console.error(
+              `Error fetching order ${sellOrder.orderId} for trade ${trade._id}:`,
+              orderError
+            );
+            return {
+              ...sellOrder,
+              _success: false,
+            };
+          }
+        });
+
+        const fetchedOrders = await Promise.all(orderStatusPromises);
+
+        // Check completion status
+        let allOrdersDone = true;
+        let anyFilled = false;
+        const updatedSellOrders = [];
+
+        for (const order of fetchedOrders) {
+          const { _success, ...orderData } = order;
+          updatedSellOrders.push(orderData);
+
+          if (order.status === "FILLED") {
+            anyFilled = true;
+          } else if (
+            !_success ||
+            (order.status !== "CANCELED" &&
+              order.status !== "EXPIRED" &&
+              order.status !== "REJECTED")
+          ) {
+            allOrdersDone = false;
           }
         }
 

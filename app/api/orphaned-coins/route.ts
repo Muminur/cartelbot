@@ -88,50 +88,57 @@ export async function GET(
       testnet,
     });
 
-    // 6. Fetch current prices for all symbols
+    // 6. Fetch current prices for all symbols in ONE batch call
+    const symbols = orphanedCoins.map((coin) => coin.symbol);
+
+    const priceMap = new Map<string, number>();
+    try {
+      const tickers = await binanceClient.getBatch24hrTicker(symbols);
+      for (const ticker of tickers) {
+        priceMap.set(ticker.symbol, parseFloat(ticker.lastPrice));
+      }
+    } catch (error) {
+      console.error("[Orphaned Coins] Batch ticker failed:", error);
+      // Continue with empty prices rather than failing completely
+    }
+
+    // 7. Build response with prices and prepare bulk update
     const coinsWithPrices: OrphanedCoinWithPrice[] = [];
+    const bulkOps: { updateOne: { filter: { _id: unknown }; update: { $set: { currentMarketPrice: number } } } }[] = [];
 
     for (const coin of orphanedCoins) {
-      try {
-        const ticker = await binanceClient.get24hrTicker(coin.symbol);
-        const currentPrice = parseFloat(ticker.lastPrice);
-        const pnlPercentage = ((currentPrice - coin.buyPrice) / coin.buyPrice) * 100;
+      const currentPrice = priceMap.get(coin.symbol) || coin.currentMarketPrice || 0;
+      const pnlPercentage = currentPrice > 0
+        ? ((currentPrice - coin.buyPrice) / coin.buyPrice) * 100
+        : 0;
 
-        // Update current market price in database
-        coin.currentMarketPrice = currentPrice;
-        await coin.save();
+      coinsWithPrices.push({
+        _id: String(coin._id),
+        symbol: coin.symbol,
+        quantity: coin.quantity,
+        buyPrice: coin.buyPrice,
+        buyOrderId: coin.buyOrderId,
+        buyTimestamp: coin.buyTimestamp,
+        currentMarketPrice: currentPrice,
+        pnlPercentage,
+        status: coin.status,
+        createdAt: coin.createdAt,
+      });
 
-        coinsWithPrices.push({
-          _id: String(coin._id),
-          symbol: coin.symbol,
-          quantity: coin.quantity,
-          buyPrice: coin.buyPrice,
-          buyOrderId: coin.buyOrderId,
-          buyTimestamp: coin.buyTimestamp,
-          currentMarketPrice: currentPrice,
-          pnlPercentage,
-          status: coin.status,
-          createdAt: coin.createdAt,
-        });
-      } catch (error) {
-        console.error(`[Orphaned Coins] Error fetching price for ${coin.symbol}:`, {
-          error: error instanceof Error ? error.message : String(error),
-        });
-
-        // Include coin without current price
-        coinsWithPrices.push({
-          _id: String(coin._id),
-          symbol: coin.symbol,
-          quantity: coin.quantity,
-          buyPrice: coin.buyPrice,
-          buyOrderId: coin.buyOrderId,
-          buyTimestamp: coin.buyTimestamp,
-          currentMarketPrice: coin.currentMarketPrice || 0,
-          pnlPercentage: 0,
-          status: coin.status,
-          createdAt: coin.createdAt,
+      // Queue bulk update if price changed
+      if (currentPrice > 0 && currentPrice !== coin.currentMarketPrice) {
+        bulkOps.push({
+          updateOne: {
+            filter: { _id: coin._id },
+            update: { $set: { currentMarketPrice: currentPrice } },
+          },
         });
       }
+    }
+
+    // 8. Execute bulk database update (single roundtrip)
+    if (bulkOps.length > 0) {
+      await OrphanedCoin.bulkWrite(bulkOps);
     }
 
     if (process.env.NODE_ENV !== 'production') console.log(`[Orphaned Coins] Found ${coinsWithPrices.length} orphaned coins`);

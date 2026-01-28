@@ -54,58 +54,132 @@ export async function POST(request: NextRequest) {
       skipped: 0,
     };
 
-    // Process each user
+    // Batch fetch all trade data for all users in ONE query
+    const userIds = users.map((u) => u._id.toString());
+
+    const tradeStats = await Trade.aggregate([
+      {
+        $match: {
+          userId: { $in: userIds },
+          $or: [
+            { createdAt: { $gte: today, $lt: tomorrow } },
+            { status: "closed", updatedAt: { $gte: today, $lt: tomorrow } },
+          ],
+        },
+      },
+      {
+        $group: {
+          _id: "$userId",
+          tradesOpened: {
+            $sum: {
+              $cond: [
+                { $and: [
+                  { $gte: ["$createdAt", today] },
+                  { $lt: ["$createdAt", tomorrow] }
+                ]},
+                1,
+                0
+              ],
+            },
+          },
+          tradesClosed: {
+            $sum: {
+              $cond: [
+                { $and: [
+                  { $eq: ["$status", "closed"] },
+                  { $gte: ["$updatedAt", today] },
+                  { $lt: ["$updatedAt", tomorrow] }
+                ]},
+                1,
+                0
+              ],
+            },
+          },
+          targetsHit: {
+            $sum: {
+              $cond: [
+                { $and: [
+                  { $eq: ["$status", "closed"] },
+                  { $eq: ["$closeReason", "target"] },
+                  { $gte: ["$updatedAt", today] }
+                ]},
+                1,
+                0
+              ],
+            },
+          },
+          stopLossesHit: {
+            $sum: {
+              $cond: [
+                { $and: [
+                  { $eq: ["$status", "closed"] },
+                  { $eq: ["$closeReason", "stop_loss"] },
+                  { $gte: ["$updatedAt", today] }
+                ]},
+                1,
+                0
+              ],
+            },
+          },
+          totalPnL: {
+            $sum: {
+              $cond: [
+                { $and: [
+                  { $eq: ["$status", "closed"] },
+                  { $gte: ["$updatedAt", today] }
+                ]},
+                { $ifNull: ["$realizedPnL", 0] },
+                0
+              ],
+            },
+          },
+          closedTrades: {
+            $push: {
+              $cond: [
+                { $and: [
+                  { $eq: ["$status", "closed"] },
+                  { $gte: ["$updatedAt", today] }
+                ]},
+                { symbol: "$symbol", pnl: "$realizedPnL", closeReason: "$closeReason" },
+                "$$REMOVE"
+              ],
+            },
+          },
+        },
+      },
+    ]);
+
+    // Create lookup map for O(1) access
+    const statsMap = new Map(tradeStats.map((s) => [s._id, s]));
+
+    // Process each user with pre-fetched data
     for (const user of users) {
       try {
-        // Get today's trades
-        const tradesOpened = await Trade.countDocuments({
-          userId: user._id.toString(),
-          createdAt: { $gte: today, $lt: tomorrow },
-        });
-
-        const tradesClosed = await Trade.countDocuments({
-          userId: user._id.toString(),
-          status: "closed",
-          updatedAt: { $gte: today, $lt: tomorrow },
-        });
+        const stats = statsMap.get(user._id.toString());
 
         // Skip if no activity today
-        if (tradesOpened === 0 && tradesClosed === 0) {
+        if (!stats || (stats.tradesOpened === 0 && stats.tradesClosed === 0)) {
           if (process.env.NODE_ENV !== 'production') console.log(`[Daily Summary] Skipping user ${user.email} - no activity`);
           results.skipped++;
           continue;
         }
 
-        // Get detailed trade information
-        const closedTrades = await Trade.find({
-          userId: user._id.toString(),
-          status: "closed",
-          updatedAt: { $gte: today, $lt: tomorrow },
-        }).select("symbol realizedPnL closeReason");
+        const winRate = stats.tradesClosed > 0
+          ? (stats.targetsHit / stats.tradesClosed) * 100
+          : 0;
 
-        const targetsHit = closedTrades.filter((t) => t.closeReason === "target").length;
-        const stopLossesHit = closedTrades.filter((t) => t.closeReason === "stop_loss").length;
-
-        const totalPnL = closedTrades.reduce((sum, t) => sum + (t.realizedPnL || 0), 0);
-
-        const winRate =
-          tradesClosed > 0 ? (targetsHit / tradesClosed) * 100 : 0;
-
-        const tradesList = closedTrades.map((t) => ({
-          symbol: t.symbol,
-          pnl: t.realizedPnL || 0,
-          closeReason: t.closeReason,
-        }));
+        // Filter out null entries from closedTrades
+        const tradesList = stats.closedTrades.filter((t: { symbol: string; pnl: number; closeReason: string } | null) => t !== null);
 
         // Send daily summary email
         await sendDailySummaryNotification({
           userId: user._id,
           date: today,
-          tradesOpened,
-          tradesClosed,
-          targetsHit,
-          stopLossesHit,
-          totalPnL,
+          tradesOpened: stats.tradesOpened,
+          tradesClosed: stats.tradesClosed,
+          targetsHit: stats.targetsHit,
+          stopLossesHit: stats.stopLossesHit,
+          totalPnL: stats.totalPnL,
           winRate,
           trades: tradesList,
         });
@@ -147,7 +221,7 @@ export async function POST(request: NextRequest) {
  *
  * Test endpoint to check cron job status
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     await connectDB();
 
