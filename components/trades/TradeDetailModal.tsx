@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -179,6 +179,216 @@ export function TradeDetailModal({
 
     return () => clearInterval(intervalId);
   }, [trade?.status, open, fetchOrderStatuses]);
+
+  // Memoize OCO groups processing to avoid expensive computation on every render
+  const ocoGroupedOrders = useMemo(() => {
+    if (!trade?.sellOrders || trade.sellOrders.length === 0) {
+      return [];
+    }
+
+    // Group orders by OCO pairs (orderListId)
+    const ocoGroups = new Map<number, IOrder[]>();
+    trade.sellOrders.forEach((order: IOrder) => {
+      if (order.orderListId) {
+        const existing = ocoGroups.get(order.orderListId) || [];
+        existing.push(order);
+        ocoGroups.set(order.orderListId, existing);
+      }
+    });
+
+    // Process each OCO pair
+    let tpIndex = 1;
+    return Array.from(ocoGroups.values()).map((orders) => {
+      // Identify Take Profit and Stop Loss from the pair
+      const takeProfit = orders.find(o => o.type === 'LIMIT_MAKER');
+      const stopLoss = orders.find(o => o.type === 'STOP_LOSS_LIMIT');
+
+      if (!takeProfit || !stopLoss) {
+        // Fallback: Display orders individually if pairing failed
+        return orders.map((order: IOrder) => (
+          <div key={order.orderId} className="bg-muted/50 p-4 rounded-lg border border-border">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-foreground">
+                Order #{order.orderId}
+              </span>
+              <Badge className={getOrderStatusColor(order.status)}>
+                {order.status}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <span className="text-muted-foreground">Price:</span>
+                <span className="ml-2">${formatPrice(order.price || 0, 6)}</span>
+              </div>
+              {order.stopPrice && (
+                <div>
+                  <span className="text-muted-foreground">Stop:</span>
+                  <span className="ml-2">${formatPrice(order.stopPrice, 6)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ));
+      }
+
+      // Get order statuses
+      const tpStatus = takeProfit.status;
+      const slStatus = stopLoss.status;
+      const tpExecutedQty = takeProfit.executedQty || 0;
+      const slExecutedQty = stopLoss.executedQty || 0;
+      const tpFilledValue = takeProfit.cummulativeQuoteQty || 0;
+      const slFilledValue = stopLoss.cummulativeQuoteQty || 0;
+
+      // Determine what happened in this OCO pair
+      const tpTriggered = tpStatus === 'FILLED';
+      const slTriggered = slStatus === 'FILLED';
+
+      const currentTpIndex = tpIndex++;
+
+      return (
+        <div key={takeProfit.orderListId} className="bg-muted/50 p-4 rounded-lg border-2 border-border space-y-3">
+          {/* OCO Pair Header */}
+          <div className="text-xs font-semibold text-muted-foreground/80 mb-2">
+            OCO Pair #{currentTpIndex} (Order List ID: {takeProfit.orderListId})
+          </div>
+
+          {/* Take Profit Section */}
+          <div className={`p-3 rounded-lg border-2 ${
+            tpTriggered
+              ? 'bg-green-50 border-green-300 dark:bg-green-950/20 dark:border-green-800'
+              : tpStatus === 'CANCELED' || tpStatus === 'CANCELLED'
+              ? 'bg-muted/70 border-border'
+              : 'bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800'
+          }`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-foreground">
+                  Take Profit #{currentTpIndex}
+                </span>
+                {tpTriggered && (
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                )}
+              </div>
+              <Badge
+                className={
+                  tpTriggered ? "bg-green-500 text-white dark:bg-green-600" :
+                  tpStatus === "CANCELED" || tpStatus === "CANCELLED" ? "bg-muted-foreground/60 text-white" :
+                  tpStatus === "PARTIALLY_FILLED" ? "bg-blue-500 text-white dark:bg-blue-600" :
+                  "bg-yellow-500 text-white dark:bg-yellow-600"
+                }
+              >
+                {tpStatus}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="text-muted-foreground">Target Price:</span>
+                <span className="ml-2 font-medium text-green-700">
+                  ${formatPrice(takeProfit.price || 0, 6)}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Quantity:</span>
+                <span className="ml-2">{formatNumber(takeProfit.quantity, 6)}</span>
+              </div>
+              {tpExecutedQty > 0 && (
+                <>
+                  <div>
+                    <span className="text-muted-foreground">Executed:</span>
+                    <span className="ml-2 font-semibold text-green-600">
+                      {formatNumber(tpExecutedQty, 6)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Filled Value:</span>
+                    <span className="ml-2 font-medium">${tpFilledValue.toFixed(2)}</span>
+                  </div>
+                </>
+              )}
+              <div className="col-span-2">
+                <span className="text-muted-foreground">Order ID:</span>
+                <span className="ml-2 font-mono text-xs">{takeProfit.orderId}</span>
+              </div>
+            </div>
+            {tpTriggered && (slStatus === 'CANCELED' || slStatus === 'CANCELLED') && (
+              <div className="mt-2 pt-2 border-t border-green-200">
+                <span className="text-xs text-green-700 font-medium">
+                  ✓ Take profit executed successfully
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Stop Loss Section */}
+          <div className={`p-3 rounded-lg border-2 ${
+            slTriggered
+              ? 'bg-red-50 border-red-300 dark:bg-red-950/20 dark:border-red-800'
+              : slStatus === 'CANCELED' || slStatus === 'CANCELLED'
+              ? 'bg-muted/70 border-border'
+              : 'bg-orange-50 border-orange-200 dark:bg-orange-950/20 dark:border-orange-800'
+          }`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-foreground">
+                  Stop Loss for TP #{currentTpIndex}
+                </span>
+                {slTriggered && (
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                )}
+              </div>
+              <Badge
+                className={
+                  slTriggered ? "bg-red-500 text-white dark:bg-red-600" :
+                  slStatus === "CANCELED" || slStatus === "CANCELLED" ? "bg-muted-foreground/60 text-white" :
+                  slStatus === "PARTIALLY_FILLED" ? "bg-blue-500 text-white dark:bg-blue-600" :
+                  "bg-yellow-500 text-white dark:bg-yellow-600"
+                }
+              >
+                {slStatus}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="text-muted-foreground">Stop Price:</span>
+                <span className="ml-2 font-medium text-red-700">
+                  ${formatPrice(stopLoss.stopPrice || 0, 6)}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Quantity:</span>
+                <span className="ml-2">{formatNumber(stopLoss.quantity, 6)}</span>
+              </div>
+              {slExecutedQty > 0 && (
+                <>
+                  <div>
+                    <span className="text-muted-foreground">Executed:</span>
+                    <span className="ml-2 font-semibold text-red-600">
+                      {formatNumber(slExecutedQty, 6)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Filled Value:</span>
+                    <span className="ml-2 font-medium">${slFilledValue.toFixed(2)}</span>
+                  </div>
+                </>
+              )}
+              <div className="col-span-2">
+                <span className="text-muted-foreground">Order ID:</span>
+                <span className="ml-2 font-mono text-xs">{stopLoss.orderId}</span>
+              </div>
+            </div>
+            {slTriggered && (tpStatus === 'CANCELED' || tpStatus === 'CANCELLED') && (
+              <div className="mt-2 pt-2 border-t border-red-200">
+                <span className="text-xs text-red-700 font-medium">
+                  ⚠ Stop loss triggered - position closed at loss
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    });
+  }, [trade?.sellOrders]);
 
   const handleViewSignal = () => {
     if (trade?.signalId) {
@@ -509,210 +719,7 @@ export function TradeDetailModal({
                   </Button>
                 </div>
                 <div className="space-y-4">
-                  {(() => {
-                    // Group orders by OCO pairs (orderListId)
-                    const ocoGroups = new Map<number, IOrder[]>();
-                    trade.sellOrders.forEach((order: IOrder) => {
-                      if (order.orderListId) {
-                        const existing = ocoGroups.get(order.orderListId) || [];
-                        existing.push(order);
-                        ocoGroups.set(order.orderListId, existing);
-                      }
-                    });
-
-                    // Process each OCO pair
-                    let tpIndex = 1;
-                    return Array.from(ocoGroups.values()).map((orders) => {
-                      // Identify Take Profit and Stop Loss from the pair
-                      const takeProfit = orders.find(o => o.type === 'LIMIT_MAKER');
-                      const stopLoss = orders.find(o => o.type === 'STOP_LOSS_LIMIT');
-
-                      if (!takeProfit || !stopLoss) {
-                        // Fallback: Display orders individually if pairing failed
-                        return orders.map((order: IOrder) => (
-                          <div key={order.orderId} className="bg-muted/50 p-4 rounded-lg border border-border">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-semibold text-foreground">
-                                Order #{order.orderId}
-                              </span>
-                              <Badge className={getOrderStatusColor(order.status)}>
-                                {order.status}
-                              </Badge>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              <div>
-                                <span className="text-muted-foreground">Price:</span>
-                                <span className="ml-2">${formatPrice(order.price || 0, 6)}</span>
-                              </div>
-                              {order.stopPrice && (
-                                <div>
-                                  <span className="text-muted-foreground">Stop:</span>
-                                  <span className="ml-2">${formatPrice(order.stopPrice, 6)}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ));
-                      }
-
-                      // Get order statuses
-                      const tpStatus = takeProfit.status;
-                      const slStatus = stopLoss.status;
-                      const tpExecutedQty = takeProfit.executedQty || 0;
-                      const slExecutedQty = stopLoss.executedQty || 0;
-                      const tpFilledValue = takeProfit.cummulativeQuoteQty || 0;
-                      const slFilledValue = stopLoss.cummulativeQuoteQty || 0;
-
-                      // Determine what happened in this OCO pair
-                      const tpTriggered = tpStatus === 'FILLED';
-                      const slTriggered = slStatus === 'FILLED';
-
-                      const currentTpIndex = tpIndex++;
-
-                      return (
-                        <div key={takeProfit.orderListId} className="bg-muted/50 p-4 rounded-lg border-2 border-border space-y-3">
-                          {/* OCO Pair Header */}
-                          <div className="text-xs font-semibold text-muted-foreground/80 mb-2">
-                            OCO Pair #{currentTpIndex} (Order List ID: {takeProfit.orderListId})
-                          </div>
-
-                          {/* Take Profit Section */}
-                          <div className={`p-3 rounded-lg border-2 ${
-                            tpTriggered
-                              ? 'bg-green-50 border-green-300 dark:bg-green-950/20 dark:border-green-800'
-                              : tpStatus === 'CANCELED' || tpStatus === 'CANCELLED'
-                              ? 'bg-muted/70 border-border'
-                              : 'bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800'
-                          }`}>
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-foreground">
-                                  Take Profit #{currentTpIndex}
-                                </span>
-                                {tpTriggered && (
-                                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                                )}
-                              </div>
-                              <Badge
-                                className={
-                                  tpTriggered ? "bg-green-500 text-white dark:bg-green-600" :
-                                  tpStatus === "CANCELED" || tpStatus === "CANCELLED" ? "bg-muted-foreground/60 text-white" :
-                                  tpStatus === "PARTIALLY_FILLED" ? "bg-blue-500 text-white dark:bg-blue-600" :
-                                  "bg-yellow-500 text-white dark:bg-yellow-600"
-                                }
-                              >
-                                {tpStatus}
-                              </Badge>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              <div>
-                                <span className="text-muted-foreground">Target Price:</span>
-                                <span className="ml-2 font-medium text-green-700">
-                                  ${formatPrice(takeProfit.price || 0, 6)}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Quantity:</span>
-                                <span className="ml-2">{formatNumber(takeProfit.quantity, 6)}</span>
-                              </div>
-                              {tpExecutedQty > 0 && (
-                                <>
-                                  <div>
-                                    <span className="text-muted-foreground">Executed:</span>
-                                    <span className="ml-2 font-semibold text-green-600">
-                                      {formatNumber(tpExecutedQty, 6)}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="text-muted-foreground">Filled Value:</span>
-                                    <span className="ml-2 font-medium">${tpFilledValue.toFixed(2)}</span>
-                                  </div>
-                                </>
-                              )}
-                              <div className="col-span-2">
-                                <span className="text-muted-foreground">Order ID:</span>
-                                <span className="ml-2 font-mono text-xs">{takeProfit.orderId}</span>
-                              </div>
-                            </div>
-                            {tpTriggered && (slStatus === 'CANCELED' || slStatus === 'CANCELLED') && (
-                              <div className="mt-2 pt-2 border-t border-green-200">
-                                <span className="text-xs text-green-700 font-medium">
-                                  ✓ Take profit executed successfully
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Stop Loss Section */}
-                          <div className={`p-3 rounded-lg border-2 ${
-                            slTriggered
-                              ? 'bg-red-50 border-red-300 dark:bg-red-950/20 dark:border-red-800'
-                              : slStatus === 'CANCELED' || slStatus === 'CANCELLED'
-                              ? 'bg-muted/70 border-border'
-                              : 'bg-orange-50 border-orange-200 dark:bg-orange-950/20 dark:border-orange-800'
-                          }`}>
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-foreground">
-                                  Stop Loss for TP #{currentTpIndex}
-                                </span>
-                                {slTriggered && (
-                                  <AlertTriangle className="h-4 w-4 text-red-600" />
-                                )}
-                              </div>
-                              <Badge
-                                className={
-                                  slTriggered ? "bg-red-500 text-white dark:bg-red-600" :
-                                  slStatus === "CANCELED" || slStatus === "CANCELLED" ? "bg-muted-foreground/60 text-white" :
-                                  slStatus === "PARTIALLY_FILLED" ? "bg-blue-500 text-white dark:bg-blue-600" :
-                                  "bg-yellow-500 text-white dark:bg-yellow-600"
-                                }
-                              >
-                                {slStatus}
-                              </Badge>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              <div>
-                                <span className="text-muted-foreground">Stop Price:</span>
-                                <span className="ml-2 font-medium text-red-700">
-                                  ${formatPrice(stopLoss.stopPrice || 0, 6)}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Quantity:</span>
-                                <span className="ml-2">{formatNumber(stopLoss.quantity, 6)}</span>
-                              </div>
-                              {slExecutedQty > 0 && (
-                                <>
-                                  <div>
-                                    <span className="text-muted-foreground">Executed:</span>
-                                    <span className="ml-2 font-semibold text-red-600">
-                                      {formatNumber(slExecutedQty, 6)}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="text-muted-foreground">Filled Value:</span>
-                                    <span className="ml-2 font-medium">${slFilledValue.toFixed(2)}</span>
-                                  </div>
-                                </>
-                              )}
-                              <div className="col-span-2">
-                                <span className="text-muted-foreground">Order ID:</span>
-                                <span className="ml-2 font-mono text-xs">{stopLoss.orderId}</span>
-                              </div>
-                            </div>
-                            {slTriggered && (tpStatus === 'CANCELED' || tpStatus === 'CANCELLED') && (
-                              <div className="mt-2 pt-2 border-t border-red-200">
-                                <span className="text-xs text-red-700 font-medium">
-                                  ⚠ Stop loss triggered - position closed at loss
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()}
+                  {ocoGroupedOrders}
                 </div>
               </div>
             )}

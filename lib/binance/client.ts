@@ -40,6 +40,10 @@ export class BinanceClient {
   private readonly MAX_ORDERS_PER_10_SECONDS = 50;
   private readonly RECV_WINDOW = 5000;
 
+  // TTL cache for exchange info (reduces redundant API calls during trade execution)
+  private static exchangeInfoCache = new Map<string, { data: BinanceExchangeInfo; expiry: number }>();
+  private static readonly EXCHANGE_INFO_TTL = 5 * 60 * 1000; // 5 minutes
+
   constructor(config: BinanceClientConfig) {
     this.apiKey = config.apiKey;
     this.apiSecret = config.apiSecret;
@@ -319,11 +323,26 @@ export class BinanceClient {
   }
 
   async getExchangeInfo(symbol?: string): Promise<BinanceExchangeInfo> {
+    // Check cache first (keyed by symbol or '__all__' for full exchange info)
+    const cacheKey = symbol || '__all__';
+    const cached = BinanceClient.exchangeInfoCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiry) {
+      return cached.data;
+    }
+
+    // Cache miss or expired - fetch from API
     const params = symbol ? { symbol } : {};
     const response = await this.axios.get<BinanceExchangeInfo>(
       "/api/v3/exchangeInfo",
       { params }
     );
+
+    // Store in cache with 5-minute TTL
+    BinanceClient.exchangeInfoCache.set(cacheKey, {
+      data: response.data,
+      expiry: Date.now() + BinanceClient.EXCHANGE_INFO_TTL,
+    });
+
     return response.data;
   }
 

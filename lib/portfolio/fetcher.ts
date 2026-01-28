@@ -6,6 +6,7 @@
  */
 
 import { isStablecoin } from '@/lib/utils/stablecoins';
+import { safeJsonParse } from '@/lib/utils/api';
 import type { PortfolioData, PortfolioAsset } from '@/hooks/usePortfolioData';
 
 // Constants
@@ -45,7 +46,6 @@ interface TickerData {
 export async function fetchPortfolioData(signal?: AbortSignal): Promise<PortfolioData> {
   // Step 1: Fetch account balances
   const accountResponse = await fetch('/api/binance/account', { signal });
-  const { safeJsonParse } = await import('@/lib/utils/api');
   const accountData = await safeJsonParse<{ success: boolean; data?: any; error?: any }>(accountResponse, 'Portfolio Account Fetch');
 
   if (!accountData.success) {
@@ -222,7 +222,6 @@ async function fetchBatchTickers(
 
   try {
     // Fetch all batches in parallel
-    const { safeJsonParse } = await import('@/lib/utils/api');
     const batchResults = await Promise.allSettled(
       batches.map(async (batch, batchIndex) => {
         const encodedSymbols = encodeURIComponent(JSON.stringify(batch));
@@ -455,8 +454,6 @@ async function getAssetValueFallback(
   balance: number,
   signal?: AbortSignal
 ): Promise<{ valueUSDT: number; priceChangePercent: string }> {
-  const { safeJsonParse } = await import('@/lib/utils/api');
-
   // Try USDT pair
   try {
     const response = await fetch(`/api/binance/ticker?symbol=${asset}USDT`, { signal });

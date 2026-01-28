@@ -16,6 +16,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { fetchPortfolioData } from '@/lib/portfolio/fetcher';
 
 export interface PortfolioAsset {
   asset: string;
@@ -103,9 +104,6 @@ export function usePortfolioData(options: UsePortfolioDataOptions = {}) {
         setRefreshing(true);
         setError(null);
       }
-
-      // Import dynamically to avoid circular dependencies
-      const { fetchPortfolioData } = await import('@/lib/portfolio/fetcher');
 
       console.log(`[usePortfolioData:${fetchId}] Calling fetchPortfolioData`);
       const result = await fetchPortfolioData(controller.signal);
