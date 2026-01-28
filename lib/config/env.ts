@@ -66,7 +66,10 @@ const envSchema = z.object({
 
   ADMIN_EMAILS: z
     .string()
-    .email("ADMIN_EMAILS must be a valid email")
+    .refine(
+      (val) => val.split(",").every((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())),
+      "ADMIN_EMAILS must be a comma-separated list of valid emails"
+    )
     .default("admin@cartelbot.coinspree.cc"),
 
   PAYMENT_WALLET_ADDRESS: z
