@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -77,6 +77,15 @@ export default function SettingsPage() {
     ? TIER_CONFIGS[user.subscriptionTier as SubscriptionTier] || TIER_CONFIGS.free
     : TIER_CONFIGS.free;
   const maxOpenPositionsLimit = tierConfig.features.maxOpenPositions;
+
+  // Memoize expensive target distribution calculations
+  const distributionSum = useMemo(() => {
+    return targetDistribution.reduce((a, b) => a + b, 0);
+  }, [targetDistribution]);
+
+  const isDistributionValid = useMemo(() => {
+    return Math.abs(distributionSum - 100) <= DISTRIBUTION_SUM_TOLERANCE;
+  }, [distributionSum]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -267,12 +276,12 @@ export default function SettingsPage() {
     } else if (newMaxTargets < targetDistribution.length) {
       // Remove targets - keep first N, normalize to 100%
       const sliced = targetDistribution.slice(0, newMaxTargets);
-      const sum = sliced.reduce((a, b) => a + b, 0);
-      const wasNormalized = Math.abs(sum - 100) > DISTRIBUTION_SUM_TOLERANCE;
+      const slicedSum = sliced.reduce((a, b) => a + b, 0);
+      const wasNormalized = Math.abs(slicedSum - 100) > DISTRIBUTION_SUM_TOLERANCE;
 
       if (wasNormalized) {
         // Normalize to 100%
-        const normalized = sliced.map(v => (v / sum) * 100);
+        const normalized = sliced.map(v => (v / slicedSum) * 100);
         setTargetDistribution(normalized);
 
         // Only notify user if distribution was actually modified
@@ -309,8 +318,7 @@ export default function SettingsPage() {
     }
 
     // Validate target distribution sums to 100%
-    const distributionSum = targetDistribution.reduce((a, b) => a + b, 0);
-    if (Math.abs(distributionSum - 100) > DISTRIBUTION_SUM_TOLERANCE) {
+    if (!isDistributionValid) {
       toast.error(`Target distribution must sum to 100% (currently ${distributionSum.toFixed(2)}%)`);
       return;
     }
@@ -670,19 +678,13 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label className="text-base md:text-sm">
                   Target Distribution (%)
-                  {(() => {
-                    const sum = targetDistribution.reduce((a, b) => a + b, 0);
-                    const isValid = Math.abs(sum - 100) <= DISTRIBUTION_SUM_TOLERANCE;
-                    return (
-                      <span className={`ml-2 text-xs font-semibold ${
-                        isValid
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
-                      }`}>
-                        Current sum: {sum.toFixed(2)}% {isValid ? '✓' : '✗ Must equal 100%'}
-                      </span>
-                    );
-                  })()}
+                  <span className={`ml-2 text-xs font-semibold ${
+                    isDistributionValid
+                      ? 'text-green-600 dark:text-green-400'
+                      : 'text-red-600 dark:text-red-400'
+                  }`}>
+                    Current sum: {distributionSum.toFixed(2)}% {isDistributionValid ? '✓' : '✗ Must equal 100%'}
+                  </span>
                 </Label>
                 <div className={`grid gap-2 ${
                   maxTargets === 1 ? 'grid-cols-1' :
@@ -791,7 +793,7 @@ export default function SettingsPage() {
                 onClick={handleSaveTradeSettings}
                 disabled={
                   savingTradeSettings ||
-                  Math.abs(targetDistribution.reduce((a, b) => a + b, 0) - 100) > DISTRIBUTION_SUM_TOLERANCE ||
+                  !isDistributionValid ||
                   targetDistribution.length !== maxTargets
                 }
                 className="w-full h-12 md:h-10 text-base md:text-sm"
