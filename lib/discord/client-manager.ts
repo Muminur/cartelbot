@@ -283,6 +283,85 @@ export class DiscordClientManager {
   }
 
   /**
+   * Fetch and process messages that were sent while the server was down.
+   * Uses the lastProcessedMessageId stored in the DiscordConnection to know where to start.
+   */
+  private async fetchMissedMessages(userId: string, managed: ManagedClientWrapper): Promise<void> {
+    const { connectDB } = await import('@/lib/db/connection');
+    const { DiscordConnection } = await import('@/lib/db/models/DiscordConnection');
+
+    await connectDB();
+
+    // Get the connection's last processed message ID
+    const connection = await DiscordConnection.findById(managed.connectionId)
+      .select('lastProcessedMessageId channelId')
+      .lean() as { lastProcessedMessageId?: string | null; channelId?: string } | null;
+
+    if (!connection?.lastProcessedMessageId) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DiscordClientManager] No lastProcessedMessageId for user ${userId}, skipping catch-up`);
+      }
+      return;
+    }
+
+    // Fetch the channel
+    const channel = managed.client.channels.cache.get(managed.channelId);
+    if (!channel || !('messages' in channel)) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DiscordClientManager] Channel ${managed.channelId} not found in cache for user ${userId}`);
+      }
+      return;
+    }
+
+    // Fetch messages after the last processed one (max 50 to avoid rate limits)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(
+        `[DiscordClientManager] Fetching missed messages for user ${userId} after message ${connection.lastProcessedMessageId}`
+      );
+    }
+
+    try {
+      const textChannel = channel as import('discord.js-selfbot-v13').TextChannel;
+      const messages = await textChannel.messages.fetch({
+        after: connection.lastProcessedMessageId,
+        limit: 50,
+      });
+
+      if (messages.size === 0) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[DiscordClientManager] No missed messages for user ${userId}`);
+        }
+        return;
+      }
+
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DiscordClientManager] Found ${messages.size} missed message(s) for user ${userId}`);
+      }
+
+      // Process messages in chronological order (oldest first)
+      const sortedMessages = [...messages.values()].sort(
+        (a, b) => a.createdTimestamp - b.createdTimestamp
+      );
+
+      for (const msg of sortedMessages) {
+        // Use the existing message handler — it has dedup built in
+        await managed.handler.onMessage(msg);
+        // Small delay between processing to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[DiscordClientManager] Finished processing ${sortedMessages.length} missed message(s) for user ${userId}`);
+      }
+    } catch (fetchError) {
+      console.warn(
+        `[DiscordClientManager] Error fetching channel messages for user ${userId}:`,
+        fetchError instanceof Error ? fetchError.message : String(fetchError)
+      );
+    }
+  }
+
+  /**
    * Run Discord client with auto-reconnect logic
    * Token is retrieved from encrypted storage when needed
    *
@@ -311,6 +390,17 @@ export class DiscordClientManager {
           console.log(
             `[DiscordClientManager] Client logged in successfully for user ${userId}, waiting for disconnect...`
           );
+        }
+
+        // After successful login, fetch missed messages from the channel
+        try {
+          await this.fetchMissedMessages(userId, managed);
+        } catch (fetchError) {
+          console.warn(
+            `[DiscordClientManager] Failed to fetch missed messages for user ${userId}:`,
+            fetchError instanceof Error ? fetchError.message : String(fetchError)
+          );
+          // Don't fail the connection over missed message fetch failure
         }
 
         // Wait for the client to disconnect before attempting reconnect.

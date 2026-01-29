@@ -469,6 +469,7 @@ export interface IDiscordConnection extends Document {
   isActive: boolean;
   lastMessageId: string;
   lastProcessedAt?: Date;
+  lastProcessedMessageId?: string | null;
   autoExecute: boolean;
   requireConfirmation: boolean;
   errorCount: number;

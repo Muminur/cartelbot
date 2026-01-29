@@ -670,6 +670,19 @@ export class BinanceClient {
   }
 
   /**
+   * Cancel all open orders for a symbol.
+   * Uses DELETE /api/v3/openOrders which cancels ALL open orders including
+   * OCO components, algo orders, and regular limit orders.
+   * This is much more efficient than cancelling individually.
+   */
+  async cancelAllOpenOrders(symbol: string): Promise<unknown[]> {
+    await this.checkOrderRateLimit();
+    const result = await this.signedRequest<unknown[]>("DELETE", "/api/v3/openOrders", { symbol });
+    this.updateOrderRateLimit();
+    return result;
+  }
+
+  /**
    * Query a specific OCO order by orderListId
    * Weight: 4
    * @param orderListId - The order list ID

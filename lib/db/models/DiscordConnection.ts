@@ -62,6 +62,10 @@ const discordConnectionSchema = new Schema<IDiscordConnection>(
       type: Date,
       index: true,
     },
+    lastProcessedMessageId: {
+      type: String,
+      default: null,
+    },
     autoExecute: {
       type: Boolean,
       default: true,

@@ -20,9 +20,10 @@ export async function restoreActiveConnections(manager: DiscordClientManager): P
     await connectDB();
 
     // Query active connections (must explicitly select discordUserToken since it's excluded by default)
+    // Include 'error' status to retry connections that failed on previous server startup
     const activeConnections = await DiscordConnection.find({
       isActive: true,
-      status: 'active',
+      status: { $in: ['active', 'error'] },
     }).select('+discordUserToken');
 
     if (!activeConnections || activeConnections.length === 0) {
@@ -58,6 +59,12 @@ export async function restoreActiveConnections(manager: DiscordClientManager): P
 
         if (result.success) {
           successCount++;
+          // Reset error state on successful restore
+          connection.status = 'active';
+          connection.lastError = null;
+          connection.errorCount = 0;
+          await connection.save();
+
           if (process.env.NODE_ENV !== 'production') {
             console.log(
               `[Instrumentation] ✅ Restored Discord connection for user ${connection.userId} ` +

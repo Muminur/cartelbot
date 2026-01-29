@@ -943,19 +943,32 @@ export async function createOCOOrders(
           `[${Array.from(legitimateIndividualOrderIds).join(", ")}]`
         );
 
-        // CRITICAL SAFETY CHECK: If database returns empty but Binance has orders,
-        // this could indicate database inconsistency. Skip cleanup to avoid deleting
-        // legitimate orders. This prevents data loss if database is temporarily out of sync.
+        // ORPHAN CLEANUP: If no legitimate orders found in database, ALL orders on Binance
+        // are orphans from previous failed trades. Cancel them all to free algo slots and balance.
+        // This is the EXPECTED state for a fresh trade that has no sell orders yet.
         if (legitimateOrderListIds.size === 0 &&
             legitimateIndividualOrderIds.size === 0 &&
             balanceLockingOrders.length > 0) {
           console.warn(
-            `[OCO] ${trade.symbol} - SAFETY: Skipping phantom cleanup. ` +
-            `Database shows no legitimate orders but Binance has ${balanceLockingOrders.length} balance-locking SELL orders. ` +
-            `This indicates potential database inconsistency. Manual cleanup recommended.`
+            `[OCO] ${trade.symbol} - No legitimate orders in database. ` +
+            `All ${balanceLockingOrders.length} balance-locking SELL orders on Binance are orphans ` +
+            `from previous trades. Cancelling ALL open orders for symbol...`
           );
-          // Continue with OCO creation despite potential phantom orders
-          // This is safer than accidentally canceling legitimate orders
+
+          try {
+            await client.cancelAllOpenOrders(trade.symbol);
+            console.log(
+              `[OCO] ${trade.symbol} - Successfully cancelled all open orders for symbol. ` +
+              `Freed algo slots and unlocked balance.`
+            );
+            // Wait for Binance to process cancellations
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (cancelAllError: unknown) {
+            console.warn(
+              `[OCO] ${trade.symbol} - Failed to cancel all open orders:`,
+              cancelAllError instanceof Error ? cancelAllError.message : String(cancelAllError)
+            );
+          }
         } else {
           // 6. Identify stale algo orders from OTHER trades
           // CRITICAL: Prioritize canceling algo orders to free slots for the current trade

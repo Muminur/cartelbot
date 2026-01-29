@@ -222,6 +222,21 @@ export class DiscordMessageHandler {
 
         // Store in database for deduplication across restarts
         await this.storeProcessedMessage(messageId);
+
+        // Update last processed message ID for catch-up on reconnect
+        try {
+          const { DiscordConnection } = await import('@/lib/db/models/DiscordConnection');
+          await DiscordConnection.findByIdAndUpdate(
+            this.connectionId,
+            { lastProcessedMessageId: messageId },
+            { new: false }  // Don't need the updated doc
+          );
+        } catch (updateError) {
+          // Non-critical — don't fail message processing over this
+          if (process.env.NODE_ENV !== "production") {
+            console.warn(`[MessageHandler] Failed to update lastProcessedMessageId:`, updateError);
+          }
+        }
       } else {
         if (process.env.NODE_ENV !== "production") {
           console.error(`[Error] Failed to forward message ${messageId}`);
