@@ -301,6 +301,8 @@ export interface BinanceSymbolFilter {
   askMultiplierUp?: string;
   askMultiplierDown?: string;
   avgPriceMins?: number;
+  // MAX_NUM_ALGO_ORDERS filter field
+  maxNumAlgoOrders?: number;
 }
 
 export interface BinanceSymbolInfo {

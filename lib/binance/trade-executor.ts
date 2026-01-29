@@ -833,12 +833,23 @@ export async function createOCOOrders(
       }
     }
 
-    // SAFE PHANTOM ORDER CLEANUP
-    // Cancels both OCO orders and individual orders that aren't tracked in our database
-    if (process.env.NODE_ENV !== 'production') console.log(`[OCO] ${trade.symbol} - Checking for phantom orders...`);
+    // CRITICAL FIX: Ensure algo order slots are available before creating OCO orders
+    // Binance has MAX_NUM_ALGO_ORDERS limit (typically 5 on testnet) which counts:
+    // STOP_LOSS, STOP_LOSS_LIMIT, TAKE_PROFIT, TAKE_PROFIT_LIMIT orders across ALL trades
+    // Each OCO has 1 algo order (STOP_LOSS_LIMIT), so 5 OCOs = 5 algo slots
+    // We must cancel stale algo orders from OTHER trades to free slots for the current trade
+    if (process.env.NODE_ENV !== 'production') console.log(`[OCO] ${trade.symbol} - Checking algo order slot availability...`);
 
     try {
-      // 1. Get ALL orders for this symbol from Binance (not just "open" ones)
+      // 1. Get MAX_NUM_ALGO_ORDERS limit from exchange info
+      const maxNumAlgoOrdersFilter = filters.find(f => f.filterType === 'MAX_NUM_ALGO_ORDERS');
+      const maxNumAlgoOrders = maxNumAlgoOrdersFilter?.maxNumAlgoOrders || 5; // Default to 5 if not found
+
+      if (process.env.NODE_ENV !== 'production') console.log(
+        `[OCO] ${trade.symbol} - MAX_NUM_ALGO_ORDERS limit: ${maxNumAlgoOrders}`
+      );
+
+      // 2. Get ALL orders for this symbol from Binance (not just "open" ones)
       // CRITICAL FIX: getOpenOrders() only returns NEW/PARTIALLY_FILLED status
       // but Binance can have PENDING_CANCEL and other transitional states that STILL lock balance
       // Using getAllOrders() ensures we detect ALL orders that might be locking balance
@@ -854,6 +865,15 @@ export async function createOCOOrders(
         BALANCE_LOCKING_STATUSES.includes(order.status)
       );
 
+      // 3. Count current algo orders (STOP_LOSS, STOP_LOSS_LIMIT, TAKE_PROFIT, TAKE_PROFIT_LIMIT)
+      const ALGO_ORDER_TYPES = ['STOP_LOSS', 'STOP_LOSS_LIMIT', 'TAKE_PROFIT', 'TAKE_PROFIT_LIMIT'];
+      const currentAlgoOrders = balanceLockingOrders.filter(order =>
+        ALGO_ORDER_TYPES.includes(order.type)
+      );
+
+      const currentAlgoOrderCount = currentAlgoOrders.length;
+      const availableAlgoSlots = maxNumAlgoOrders - currentAlgoOrderCount;
+
       // Log order status breakdown for diagnostics
       const statusCounts = allOrders
         .filter(o => o.side === "SELL")
@@ -864,11 +884,21 @@ export async function createOCOOrders(
 
       if (process.env.NODE_ENV !== 'production') console.log(
         `[OCO] ${trade.symbol} - Found ${allOrders.length} total orders (${balanceLockingOrders.length} balance-locking SELL orders). ` +
-        `Status breakdown: ${JSON.stringify(statusCounts)}`
+        `Status breakdown: ${JSON.stringify(statusCounts)}. ` +
+        `Algo orders: ${currentAlgoOrderCount}/${maxNumAlgoOrders} (${availableAlgoSlots} slots available)`
+      );
+
+      // 4. If algo slots are insufficient for the new trade, cancel stale algo orders from OTHER trades
+      const requiredAlgoSlots = targets.length; // Each OCO uses 1 algo slot (STOP_LOSS_LIMIT)
+
+      if (process.env.NODE_ENV !== 'production') console.log(
+        `[OCO] ${trade.symbol} - Need ${requiredAlgoSlots} algo slots for ${targets.length} OCO orders. ` +
+        `Available: ${availableAlgoSlots}/${maxNumAlgoOrders}. ` +
+        `${requiredAlgoSlots > availableAlgoSlots ? 'INSUFFICIENT - will cancel stale orders' : 'SUFFICIENT - no cleanup needed'}`
       );
 
       if (balanceLockingOrders.length > 0) {
-        // 2. Get all legitimate orders from our database for this user and symbol
+        // 5. Get all legitimate orders from our database for this user and symbol
         const userTrades = await Trade.find({
           userId: trade.userId,
           symbol: trade.symbol,
@@ -877,6 +907,8 @@ export async function createOCOOrders(
         }).select("sellOrders").lean();
 
         // Extract all legitimate orderListIds AND individual orderIds
+        // CRITICAL: Only track orders from the CURRENT trade as legitimate
+        // Orders from OTHER trades (even if active) should be considered for cancellation
         const legitimateOrderListIds = new Set<number>();
         const legitimateIndividualOrderIds = new Set<number>();
 
@@ -886,24 +918,28 @@ export async function createOCOOrders(
             orderListId?: number;
           }> | undefined;
 
+          // CRITICAL FIX: Only consider orders from the CURRENT trade as legitimate
+          // Orders from other trades (even active ones) can be canceled to free algo slots
+          const isCurrentTrade = String(t._id) === String(trade._id);
+
           sellOrders?.forEach(order => {
-            // Track OCO orders
-            if (order.orderListId && order.orderListId !== -1) {
+            // Track OCO orders from current trade only
+            if (isCurrentTrade && order.orderListId && order.orderListId !== -1) {
               legitimateOrderListIds.add(order.orderListId);
             }
-            // Track individual orders (orderListId is -1, undefined, or missing)
-            if (!order.orderListId || order.orderListId === -1) {
+            // Track individual orders from current trade only
+            if (isCurrentTrade && (!order.orderListId || order.orderListId === -1)) {
               legitimateIndividualOrderIds.add(order.orderId);
             }
           });
         });
 
         if (process.env.NODE_ENV !== 'production') console.log(
-          `[OCO] ${trade.symbol} - Legitimate orderListIds in database: ` +
+          `[OCO] ${trade.symbol} - Legitimate orderListIds for CURRENT trade ${trade._id}: ` +
           `[${Array.from(legitimateOrderListIds).join(", ")}]`
         );
         if (process.env.NODE_ENV !== 'production') console.log(
-          `[OCO] ${trade.symbol} - Legitimate individual orderIds in database: ` +
+          `[OCO] ${trade.symbol} - Legitimate individual orderIds for CURRENT trade ${trade._id}: ` +
           `[${Array.from(legitimateIndividualOrderIds).join(", ")}]`
         );
 
@@ -921,9 +957,93 @@ export async function createOCOOrders(
           // Continue with OCO creation despite potential phantom orders
           // This is safer than accidentally canceling legitimate orders
         } else {
-          // 3. Identify phantom OCO orders (with 30s age threshold)
+          // 6. Identify stale algo orders from OTHER trades
+          // CRITICAL: Prioritize canceling algo orders to free slots for the current trade
+          // Each signal gets its own fresh set of up to 5 algo orders
           const AGE_THRESHOLD_MS = 30000; // 30 seconds
           const now = Date.now();
+
+          // Separate algo orders from non-algo orders for prioritized cleanup
+          const staleAlgoOrders = currentAlgoOrders.filter(order => {
+            // Safety checks (time validation, age threshold)
+            if (!order.time) return false;
+            const orderAge = now - order.time;
+            if (orderAge < 0 || orderAge < AGE_THRESHOLD_MS) return false;
+
+            // Check if this order belongs to the current trade
+            if (order.orderListId && order.orderListId !== -1) {
+              return !legitimateOrderListIds.has(order.orderListId);
+            } else {
+              return !legitimateIndividualOrderIds.has(order.orderId);
+            }
+          });
+
+          const slotsToFree = Math.max(0, requiredAlgoSlots - availableAlgoSlots);
+
+          if (process.env.NODE_ENV !== 'production') console.log(
+            `[OCO] ${trade.symbol} - Found ${staleAlgoOrders.length} stale algo orders from other trades. ` +
+            `Need to free ${slotsToFree} algo slots for current trade.`
+          );
+
+          // 7. Cancel stale algo orders (prioritize by age, oldest first)
+          const sortedStaleAlgoOrders = staleAlgoOrders.sort((a, b) => (a.time || 0) - (b.time || 0));
+          let freedAlgoSlots = 0;
+
+          for (const order of sortedStaleAlgoOrders) {
+            if (freedAlgoSlots >= slotsToFree) {
+              if (process.env.NODE_ENV !== 'production') console.log(
+                `[OCO] ${trade.symbol} - Freed ${freedAlgoSlots} algo slots. Stopping cleanup.`
+              );
+              break;
+            }
+
+            try {
+              if (order.orderListId && order.orderListId !== -1) {
+                // Cancel entire OCO by orderListId
+                if (process.env.NODE_ENV !== 'production') console.log(
+                  `[OCO] ${trade.symbol} - Canceling stale OCO orderListId ${order.orderListId} ` +
+                  `(orderId: ${order.orderId}, age: ${((now - (order.time || 0)) / 1000).toFixed(1)}s) ` +
+                  `to free algo slot for current trade`
+                );
+                await client.cancelOCOOrder(trade.symbol, order.orderListId);
+                freedAlgoSlots++;
+                if (process.env.NODE_ENV !== 'production') console.log(
+                  `[OCO] ${trade.symbol} - Successfully canceled stale OCO orderListId ${order.orderListId}. ` +
+                  `Freed ${freedAlgoSlots}/${slotsToFree} algo slots.`
+                );
+              } else {
+                // Cancel individual algo order by orderId
+                if (process.env.NODE_ENV !== 'production') console.log(
+                  `[OCO] ${trade.symbol} - Canceling stale individual algo order ${order.orderId} ` +
+                  `(type: ${order.type}, age: ${((now - (order.time || 0)) / 1000).toFixed(1)}s) ` +
+                  `to free algo slot for current trade`
+                );
+                await client.cancelOrder(trade.symbol, order.orderId);
+                freedAlgoSlots++;
+                if (process.env.NODE_ENV !== 'production') console.log(
+                  `[OCO] ${trade.symbol} - Successfully canceled stale algo order ${order.orderId}. ` +
+                  `Freed ${freedAlgoSlots}/${slotsToFree} algo slots.`
+                );
+              }
+
+              // Rate limiting: wait 100ms between cancellations
+              await new Promise(resolve => setTimeout(resolve, 100));
+            } catch (cancelError: unknown) {
+              console.warn(
+                `[OCO] ${trade.symbol} - Failed to cancel stale algo order ${order.orderId}:`,
+                cancelError instanceof Error ? cancelError.message : String(cancelError)
+              );
+            }
+          }
+
+          if (process.env.NODE_ENV !== 'production') console.log(
+            `[OCO] ${trade.symbol} - Algo slot cleanup complete. Freed ${freedAlgoSlots} slots. ` +
+            `New available slots: ${availableAlgoSlots + freedAlgoSlots}/${maxNumAlgoOrders}`
+          );
+
+          // 8. Continue with standard phantom order cleanup (balance-locking orders)
+          const AGE_THRESHOLD_MS_PHANTOM = 30000; // 30 seconds for phantom cleanup
+          const nowPhantom = Date.now();
 
           // Track skipped orders for aggregated logging
           const skippedOCOOrders: { orderId: number; orderListId: number; reason: string }[] = [];
@@ -947,7 +1067,7 @@ export async function createOCOOrders(
             }
 
             // Safety: Skip recent orders (prevents race condition)
-            const orderAge = now - order.time;
+            const orderAge = nowPhantom - order.time;
 
             // Detect clock skew (future timestamps)
             if (orderAge < 0) {
@@ -960,7 +1080,7 @@ export async function createOCOOrders(
               return false;
             }
 
-            if (orderAge < AGE_THRESHOLD_MS) {
+            if (orderAge < AGE_THRESHOLD_MS_PHANTOM) {
               skippedOCOOrders.push({
                 orderId: order.orderId,
                 orderListId: order.orderListId,
@@ -973,7 +1093,7 @@ export async function createOCOOrders(
             return !legitimateOrderListIds.has(order.orderListId);
           });
 
-          // 4. Identify phantom individual orders (with 30s age threshold)
+          // 9. Identify phantom individual orders (with 30s age threshold)
           const phantomIndividualOrders = balanceLockingOrders.filter(order => {
             // Only check individual orders (not part of OCO)
             if (order.orderListId && order.orderListId !== -1) {
@@ -991,7 +1111,7 @@ export async function createOCOOrders(
             }
 
             // Safety: Skip recent orders (prevents race condition)
-            const orderAge = now - order.time;
+            const orderAge = nowPhantom - order.time;
 
             // Detect clock skew (future timestamps)
             if (orderAge < 0) {
@@ -1003,7 +1123,7 @@ export async function createOCOOrders(
               return false;
             }
 
-            if (orderAge < AGE_THRESHOLD_MS) {
+            if (orderAge < AGE_THRESHOLD_MS_PHANTOM) {
               skippedIndividualOrders.push({
                 orderId: order.orderId,
                 reason: `age_${(orderAge/1000).toFixed(1)}s`
@@ -1074,7 +1194,7 @@ export async function createOCOOrders(
             );
           }
 
-          // 5. Cancel phantom OCO orders by orderListId (cancels entire OCO group)
+          // 10. Cancel phantom OCO orders by orderListId (cancels entire OCO group)
           const canceledOrderListIds = new Set<number>();
           for (const order of phantomOCOOrders) {
             // Skip if we already canceled this orderListId
@@ -1104,7 +1224,7 @@ export async function createOCOOrders(
             }
           }
 
-          // 6. Cancel phantom individual orders by orderId
+          // 11. Cancel phantom individual orders by orderId
           const canceledIndividualOrderIds: number[] = [];
           for (const order of phantomIndividualOrders) {
             try {
@@ -1128,7 +1248,7 @@ export async function createOCOOrders(
             }
           }
 
-          // 7. Summary logging
+          // 12. Summary logging
           if (canceledOrderListIds.size > 0 || canceledIndividualOrderIds.length > 0) {
             if (process.env.NODE_ENV !== 'production') console.log(
               `[OCO] ${trade.symbol} - Phantom order cleanup complete. ` +
