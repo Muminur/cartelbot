@@ -551,27 +551,12 @@ export class BinanceClient {
 
       console.warn(`[OCO] ${symbol} - New API failed with -2010, falling back to legacy API (/api/v3/order/oco)`);
 
-      try {
-        // Attempt 2: Legacy OCO endpoint (deprecated but still functional)
-        const legacyResult = await this.createLegacyOCOOrder(
-          symbol, quantity, price, stopPrice, stopLimitPrice
-        );
-        console.log(`[OCO] ${symbol} - Legacy API succeeded`);
-        return legacyResult;
-      } catch (legacyError) {
-        if (!(legacyError instanceof BinanceAPIError && legacyError.binanceCode === -2010)) {
-          throw legacyError;
-        }
-
-        console.warn(`[OCO] ${symbol} - Legacy API also failed with -2010, falling back to individual orders`);
-
-        // Attempt 3: Individual orders (LIMIT_MAKER + STOP_LOSS_LIMIT separately)
-        const individualResult = await this.createIndividualSellOrders(
-          symbol, quantity, price, stopPrice, stopLimitPrice
-        );
-        console.log(`[OCO] ${symbol} - Individual orders succeeded`);
-        return individualResult;
-      }
+      // Attempt 2: Legacy OCO endpoint (deprecated but still functional)
+      const legacyResult = await this.createLegacyOCOOrder(
+        symbol, quantity, price, stopPrice, stopLimitPrice
+      );
+      console.log(`[OCO] ${symbol} - Legacy API succeeded`);
+      return legacyResult;
     }
   }
 
@@ -639,149 +624,6 @@ export class BinanceClient {
     });
     this.updateOrderRateLimit();
     return result;
-  }
-
-  /**
-   * Create two individual sell orders as a fallback when both OCO endpoints fail.
-   * Places a LIMIT_MAKER order at the target price and a STOP_LOSS_LIMIT order at the stop loss.
-   * Returns a BinanceOCOResponse-compatible structure.
-   *
-   * NOTE: Unlike true OCO orders, these are independent. The WebSocket handler MUST
-   * cancel the other order when one fills to prevent double-selling.
-   * The orderListId is set to -1 to indicate these are not real OCO orders.
-   */
-  async createIndividualSellOrders(
-    symbol: string,
-    quantity: number,
-    price: number,
-    stopPrice: number,
-    stopLimitPrice: number
-  ): Promise<BinanceOCOResponse> {
-    const exchangeInfo = await this.getExchangeInfo(symbol);
-    const symbolInfo = exchangeInfo.symbols.find((s) => s.symbol === symbol);
-
-    if (!symbolInfo) {
-      throw new BinanceAPIError(`Symbol ${symbol} not found`, -1121);
-    }
-
-    const priceFilter = symbolInfo.filters.find((f) => f.filterType === "PRICE_FILTER");
-    const tickSize = priceFilter?.tickSize || "0.00000001";
-    const lotSizeFilter = symbolInfo.filters.find((f) => f.filterType === "LOT_SIZE");
-    const stepSize = lotSizeFilter?.stepSize || "0.00000001";
-
-    const getPrecision = (sizeStr: string): number => {
-      const decimalIndex = sizeStr.indexOf(".");
-      const oneIndex = sizeStr.indexOf("1");
-      if (decimalIndex === -1 || oneIndex < decimalIndex) return 0;
-      return oneIndex - decimalIndex;
-    };
-
-    const pricePrecision = getPrecision(tickSize);
-    const quantityPrecision = getPrecision(stepSize);
-
-    const formattedQuantity = quantity.toFixed(quantityPrecision);
-    const formattedPrice = price.toFixed(pricePrecision);
-    const formattedStopPrice = stopPrice.toFixed(pricePrecision);
-    const formattedStopLimitPrice = stopLimitPrice.toFixed(pricePrecision);
-
-    // eslint-disable-next-line no-console
-    console.log("Individual Sell Order Parameters:", {
-      symbol,
-      quantity: formattedQuantity,
-      limitMakerPrice: formattedPrice,
-      stopPrice: formattedStopPrice,
-      stopLimitPrice: formattedStopLimitPrice,
-    });
-
-    // Place LIMIT_MAKER (take profit) order
-    await this.checkOrderRateLimit();
-    const limitMakerOrder = await this.signedRequest<BinanceOrderResponse>("POST", "/api/v3/order", {
-      symbol,
-      side: "SELL",
-      type: "LIMIT_MAKER",
-      quantity: formattedQuantity,
-      price: formattedPrice,
-      newOrderRespType: "RESULT",
-    });
-    this.updateOrderRateLimit();
-
-    // Place STOP_LOSS_LIMIT order
-    await this.checkOrderRateLimit();
-    const stopLossOrder = await this.signedRequest<BinanceOrderResponse>("POST", "/api/v3/order", {
-      symbol,
-      side: "SELL",
-      type: "STOP_LOSS_LIMIT",
-      quantity: formattedQuantity,
-      price: formattedStopLimitPrice,
-      stopPrice: formattedStopPrice,
-      timeInForce: "GTC",
-      newOrderRespType: "RESULT",
-    });
-    this.updateOrderRateLimit();
-
-    const now = Date.now();
-
-    // Build BinanceOCOResponse-compatible structure
-    // orderListId = -1 indicates these are individual orders, NOT a real OCO
-    // linkedOrderId fields allow the WebSocket handler to cancel the counterpart
-    return {
-      orderListId: -1, // Signals this is NOT a real OCO - individual orders
-      contingencyType: "INDIVIDUAL_FALLBACK",
-      listStatusType: "EXEC_STARTED",
-      listOrderStatus: "EXECUTING",
-      listClientOrderId: `individual_${limitMakerOrder.orderId}_${stopLossOrder.orderId}`,
-      transactionTime: now,
-      symbol,
-      orders: [
-        {
-          symbol,
-          orderId: limitMakerOrder.orderId,
-          clientOrderId: limitMakerOrder.clientOrderId || `limit_${limitMakerOrder.orderId}`,
-        },
-        {
-          symbol,
-          orderId: stopLossOrder.orderId,
-          clientOrderId: stopLossOrder.clientOrderId || `stop_${stopLossOrder.orderId}`,
-        },
-      ],
-      orderReports: [
-        {
-          symbol,
-          orderId: limitMakerOrder.orderId,
-          orderListId: -1,
-          clientOrderId: limitMakerOrder.clientOrderId || `limit_${limitMakerOrder.orderId}`,
-          transactTime: limitMakerOrder.transactTime || now,
-          price: formattedPrice,
-          origQty: formattedQuantity,
-          executedQty: limitMakerOrder.executedQty || "0",
-          cummulativeQuoteQty: limitMakerOrder.cummulativeQuoteQty || "0",
-          status: limitMakerOrder.status,
-          timeInForce: "GTC",
-          type: "LIMIT_MAKER",
-          side: "SELL",
-          workingTime: now,
-          selfTradePreventionMode: "NONE",
-        },
-        {
-          symbol,
-          orderId: stopLossOrder.orderId,
-          orderListId: -1,
-          clientOrderId: stopLossOrder.clientOrderId || `stop_${stopLossOrder.orderId}`,
-          transactTime: stopLossOrder.transactTime || now,
-          price: formattedStopLimitPrice,
-          origQty: formattedQuantity,
-          executedQty: stopLossOrder.executedQty || "0",
-          cummulativeQuoteQty: stopLossOrder.cummulativeQuoteQty || "0",
-          status: stopLossOrder.status,
-          timeInForce: "GTC",
-          type: "STOP_LOSS_LIMIT",
-          side: "SELL",
-          stopPrice: formattedStopPrice,
-          workingTime: now,
-          selfTradePreventionMode: "NONE",
-        },
-      ],
-    };
   }
 
   async getOpenOrders(symbol?: string): Promise<BinanceOrderResponse[]> {
