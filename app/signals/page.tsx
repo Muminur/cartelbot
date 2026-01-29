@@ -4,5 +4,6 @@ import SignalsPageClient from "./SignalsPageClient";
 export const dynamic = "force-dynamic";
 
 export default function Page() {
+  // SignalsPageClient now handles its own Suspense wrapper for useSearchParams
   return <SignalsPageClient />;
 }

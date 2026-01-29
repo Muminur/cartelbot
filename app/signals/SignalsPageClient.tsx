@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,15 +15,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import ConfirmationDialog from "@/components/signals/ConfirmationDialog";
+import SignalDetailModal from "@/components/signals/SignalDetailModal";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { ErrorDetailCard } from "@/components/signals/ErrorDetailCard";
 import { API_ROUTES } from "@/lib/constants";
-import { UserProfile, ParsedSignal } from "@/types";
+import { UserProfile, ParsedSignal, ISignal } from "@/types";
 import { toast } from "sonner";
 import { History } from "lucide-react";
 
-export default function SignalsPage() {
+function SignalsPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -34,6 +36,8 @@ export default function SignalsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [selectedSignal, setSelectedSignal] = useState<ISignal | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [executionError, setExecutionError] = useState<{
     message: string;
     code?: string;
@@ -65,6 +69,29 @@ export default function SignalsPage() {
 
     fetchSession();
   }, [router]);
+
+  // Handle signalId query parameter for deep linking
+  useEffect(() => {
+    const signalId = searchParams.get("signalId");
+    if (!signalId) return;
+
+    const fetchSignal = async () => {
+      try {
+        const response = await fetch(`/api/signals/${signalId}`);
+        const data = await response.json();
+        if (data.success && data.data) {
+          setSelectedSignal(data.data);
+          setDetailModalOpen(true);
+          window.history.replaceState({}, "", "/signals");
+        } else {
+          toast.error("Signal not found");
+        }
+      } catch {
+        toast.error("Failed to load signal details");
+      }
+    };
+    fetchSignal();
+  }, [searchParams]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -522,7 +549,33 @@ export default function SignalsPage() {
             </DialogContent>
           </Dialog>
         )}
+
+        {/* Signal Detail Modal for Deep Linking */}
+        <SignalDetailModal
+          signal={selectedSignal}
+          isOpen={detailModalOpen}
+          onClose={() => {
+            setDetailModalOpen(false);
+            setSelectedSignal(null);
+          }}
+          onExecute={(signal) => {
+            setDetailModalOpen(false);
+            router.push(`/trades/execute?signalId=${signal._id}`);
+          }}
+        />
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function SignalsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+      </div>
+    }>
+      <SignalsPageContent />
+    </Suspense>
   );
 }

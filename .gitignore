@@ -76,9 +76,21 @@ validate-*.js
 # Local documentation (tracked but not pushed)
 CLAUDE_Details.md
 
-# All markdown files except README.md
+# All markdown files except README.md and e2e/scripts READMEs
 *.md
 !README.md
+!e2e/README.md
+!scripts/README.md
+
+# Images and media
+*.jpg
+*.png
+*.jpeg
+*.gif
+*.bmp
+
+# Environment example
+.env.example
 
 # Null files (Windows artifact)
 nul
