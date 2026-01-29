@@ -51,7 +51,7 @@ function VerifyContent() {
 
   if (status === "verifying") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 p-4 transition-colors">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4 transition-colors">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle className="text-center">Verifying...</CardTitle>
@@ -60,7 +60,7 @@ function VerifyContent() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex justify-center py-8">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 dark:border-purple-400"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           </CardContent>
         </Card>
       </div>
@@ -69,7 +69,7 @@ function VerifyContent() {
 
   if (status === "success") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 p-4 transition-colors">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4 transition-colors">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle className="text-center text-green-600 dark:text-green-400">Success!</CardTitle>
@@ -105,7 +105,7 @@ function VerifyContent() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 p-4 transition-colors">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4 transition-colors">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-center text-red-600 dark:text-red-400">Verification Failed</CardTitle>
@@ -146,8 +146,8 @@ function VerifyContent() {
 export default function VerifyPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 transition-colors">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 dark:border-purple-400"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted transition-colors">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     }>
       <VerifyContent />

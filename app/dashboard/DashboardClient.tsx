@@ -95,7 +95,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
       </div>
     );
   }
@@ -114,7 +114,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-2">
             {isConnected && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-sm">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 text-sm">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 Live
               </div>
@@ -130,50 +130,50 @@ export default function DashboardPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Active Signals</CardTitle>
-                <Signal className="w-4 h-4 text-gray-500" />
+                <Signal className="w-4 h-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats.activeSignals}</div>
-                <p className="text-xs text-gray-500 mt-1">Pending execution</p>
+                <p className="text-xs text-muted-foreground mt-1">Pending execution</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Open Positions</CardTitle>
-                <TrendingUp className="w-4 h-4 text-gray-500" />
+                <TrendingUp className="w-4 h-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats.activeTrades}</div>
-                <p className="text-xs text-gray-500 mt-1">Currently trading</p>
+                <p className="text-xs text-muted-foreground mt-1">Currently trading</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Total P&L</CardTitle>
-                <Wallet className="w-4 h-4 text-gray-500" />
+                <Wallet className="w-4 h-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div
                   className={`text-2xl font-bold ${
-                    stats.totalPnL >= 0 ? "text-green-600" : "text-red-600"
+                    stats.totalPnL >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
                   }`}
                 >
                   {formatCurrency(stats.totalPnL)}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">All-time performance</p>
+                <p className="text-xs text-muted-foreground mt-1">All-time performance</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
-                <Award className="w-4 h-4 text-gray-500" />
+                <Award className="w-4 h-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats.winRate}%</div>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   {stats.winningTrades}W / {stats.losingTrades}L
                 </p>
               </CardContent>

@@ -131,7 +131,7 @@ export default function OrphanedCoinsPage() {
   if (loading && !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 dark:border-purple-400"></div>
       </div>
     );
   }
@@ -154,14 +154,14 @@ export default function OrphanedCoinsPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 dark:border-purple-400"></div>
           </div>
         ) : coins.length === 0 ? (
           <Card>
             <CardContent className="py-12">
               <div className="text-center">
-                <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-foreground mb-2">No orphaned coins</h3>
+                <Package className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No orphaned coins</h3>
                 <p className="text-muted-foreground mb-4">
                   You don&apos;t have any orphaned coins from deleted signals.
                 </p>
@@ -241,7 +241,7 @@ export default function OrphanedCoinsPage() {
                               size="sm"
                               onClick={() => handleSellCoin(coin._id, coin.symbol)}
                               disabled={sellingCoinId === coin._id}
-                              className="bg-purple-600 hover:bg-purple-700"
+                              className="bg-purple-600 dark:bg-purple-700 hover:bg-purple-700 dark:hover:bg-purple-800"
                             >
                               {sellingCoinId === coin._id ? (
                                 <>
@@ -264,12 +264,12 @@ export default function OrphanedCoinsPage() {
               </div>
 
               {coins.length > 0 && (
-                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
                   <div className="flex items-start gap-3">
-                    <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                    <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
                     <div className="flex-1">
-                      <h4 className="font-semibold text-amber-900 mb-1">Important Notice</h4>
-                      <p className="text-sm text-amber-800">
+                      <h4 className="font-semibold text-amber-900 dark:text-amber-200 mb-1">Important Notice</h4>
+                      <p className="text-sm text-amber-800 dark:text-amber-300">
                         These coins are from deleted signals with cancelled OCO orders. Clicking
                         &quot;Sell at Market&quot; will execute an immediate market sell order. Make sure
                         you review the current market price before selling.

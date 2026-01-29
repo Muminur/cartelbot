@@ -470,19 +470,19 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                <p className="text-sm text-yellow-900">
+              <div className="p-4 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
+                <p className="text-sm text-yellow-900 dark:text-yellow-200">
                   <strong>Security Notice:</strong> Your API keys are encrypted with AES-256-GCM
                   before storage. Never share your API keys with anyone.
                 </p>
               </div>
 
               {hasApiKeys && apiKeyPreview && (
-                <div className="p-4 bg-green-50 border border-green-200 rounded-md flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                <div className="p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
                   <div>
-                    <p className="text-sm font-medium text-green-900">API Keys Configured</p>
-                    <p className="text-xs text-green-700">Current key: {apiKeyPreview}</p>
+                    <p className="text-sm font-medium text-green-900 dark:text-green-200">API Keys Configured</p>
+                    <p className="text-xs text-green-700 dark:text-green-300">Current key: {apiKeyPreview}</p>
                   </div>
                 </div>
               )}
@@ -541,36 +541,36 @@ export default function SettingsPage() {
               </div>
 
               {connectionResult && connectionResult.connected && (
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-md space-y-3">
+                <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md space-y-3">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-blue-600" />
-                    <p className="text-sm font-medium text-blue-900">Connection Successful</p>
+                    <CheckCircle2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <p className="text-sm font-medium text-blue-900 dark:text-blue-200">Connection Successful</p>
                   </div>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <span className="text-blue-700">Environment:</span>{" "}
+                      <span className="text-blue-700 dark:text-blue-300">Environment:</span>{" "}
                       <span className={`font-medium px-2 py-1 rounded text-xs ${
                         useTestnet
-                          ? "bg-yellow-100 text-yellow-800"
-                          : "bg-green-100 text-green-800"
+                          ? "bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-200"
+                          : "bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-200"
                       }`}>
                         {useTestnet ? "TESTNET" : "MAINNET"}
                       </span>
                     </div>
                     <div>
-                      <span className="text-blue-700">Can Trade:</span>{" "}
+                      <span className="text-blue-700 dark:text-blue-300">Can Trade:</span>{" "}
                       <span className="font-medium">{connectionResult.canTrade ? "Yes" : "No"}</span>
                     </div>
                     <div>
-                      <span className="text-blue-700">Account Type:</span>{" "}
+                      <span className="text-blue-700 dark:text-blue-300">Account Type:</span>{" "}
                       <span className="font-medium">{connectionResult.accountType}</span>
                     </div>
                     <div>
-                      <span className="text-blue-700">USDT Balance:</span>{" "}
+                      <span className="text-blue-700 dark:text-blue-300">USDT Balance:</span>{" "}
                       <span className="font-medium">{connectionResult.usdtBalance?.toFixed(2) || "0.00"} USDT</span>
                     </div>
                     <div className="col-span-2">
-                      <span className="text-blue-700">Assets:</span>{" "}
+                      <span className="text-blue-700 dark:text-blue-300">Assets:</span>{" "}
                       <span className="font-medium">{connectionResult.topBalances?.length || 0}</span>
                     </div>
                   </div>
@@ -578,15 +578,15 @@ export default function SettingsPage() {
               )}
 
               {connectionResult && !connectionResult.connected && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-md space-y-3">
+                <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-md space-y-3">
                   <div className="flex items-center gap-2">
-                    <XCircle className="w-5 h-5 text-red-600" />
-                    <p className="text-sm font-medium text-red-900">Connection Failed</p>
+                    <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                    <p className="text-sm font-medium text-red-900 dark:text-red-200">Connection Failed</p>
                   </div>
-                  <div className="text-sm text-red-700">
+                  <div className="text-sm text-red-700 dark:text-red-300">
                     <p className="font-medium mb-2">{connectionResult.error}</p>
                     <div className="space-y-1 text-xs">
-                      <p className="font-medium text-red-800">Common causes:</p>
+                      <p className="font-medium text-red-800 dark:text-red-200">Common causes:</p>
                       <ul className="list-disc list-inside space-y-1 ml-2">
                         <li>API key or secret is incorrect</li>
                         <li>API key does not match the selected environment (testnet/mainnet)</li>
@@ -607,19 +607,19 @@ export default function SettingsPage() {
               )}
 
               {/* Testnet/Mainnet Toggle */}
-              <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-md">
+              <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-md">
                 <div >
-                  <Label htmlFor="useTestnet" className="text-base md:text-sm font-medium text-blue-900">
+                  <Label htmlFor="useTestnet" className="text-base md:text-sm font-medium text-blue-900 dark:text-blue-200">
                     Use Binance Testnet
                   </Label>
-                  <p className="text-sm text-blue-700 mt-1">
+                  <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
                     Enable this to use Binance Testnet for testing without real funds.
                     You will need testnet API keys from{" "}
                     <a
                       href="https://testnet.binance.vision"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="underline hover:text-blue-900"
+                      className="underline hover:text-blue-900 dark:hover:text-blue-100"
                     >
                       testnet.binance.vision
                     </a>
@@ -651,7 +651,7 @@ export default function SettingsPage() {
                   min="10"
                   max="100000"
                 />
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Amount to invest per signal when using fixed position sizing
                 </p>
               </div>
@@ -670,7 +670,7 @@ export default function SettingsPage() {
                   <option value={4}>4 Targets</option>
                   <option value={5}>5 Targets</option>
                 </select>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-muted-foreground">
                   Number of targets to execute from signals (1-5)
                 </p>
               </div>
@@ -703,11 +703,11 @@ export default function SettingsPage() {
                         max="100"
                         step="0.1"
                       />
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Target {index + 1}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Target {index + 1}</p>
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-muted-foreground">
                   Distribution of position across targets (must sum to 100%)
                 </p>
               </div>
@@ -740,7 +740,7 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label className="text-base md:text-sm" htmlFor="maxOpenPositions">
                   Max Open Positions
-                  <span className="text-xs text-gray-500 ml-2">
+                  <span className="text-xs text-muted-foreground ml-2">
                     (Limit: {maxOpenPositionsLimit} for {tierConfig.displayName} tier)
                   </span>
                 </Label>
@@ -752,7 +752,7 @@ export default function SettingsPage() {
                   min="1"
                   max={maxOpenPositionsLimit}
                 />
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   Your {tierConfig.displayName} tier allows up to {maxOpenPositionsLimit} open positions.
                   {maxOpenPositionsLimit < 200 && " Upgrade to Pro for up to 200 positions."}
                 </p>
@@ -762,7 +762,7 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label className="text-base md:text-sm">Require Manual Approval</Label>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       Review trades before execution
                     </p>
                   </div>
@@ -772,7 +772,7 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label className="text-base md:text-sm">Emergency Stop</Label>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       Disable all automated trading
                     </p>
                   </div>
@@ -781,9 +781,9 @@ export default function SettingsPage() {
               </div>
 
               {emergencyStop && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-md flex items-center gap-2">
-                  <AlertCircle className="w-5 h-5 text-red-600" />
-                  <p className="text-sm text-red-900">
+                <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-md flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                  <p className="text-sm text-red-900 dark:text-red-200">
                     Emergency stop is active. All automated trading is disabled.
                   </p>
                 </div>
@@ -824,7 +824,7 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label className="text-base md:text-sm">Trade Executed</Label>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       Notify when a new trade is executed
                     </p>
                   </div>
@@ -834,7 +834,7 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label className="text-base md:text-sm">Target Hit</Label>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       Notify when a take-profit target is reached
                     </p>
                   </div>
@@ -844,7 +844,7 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label className="text-base md:text-sm">Stop Loss Hit</Label>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       Notify when a stop loss is triggered
                     </p>
                   </div>
@@ -854,7 +854,7 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label className="text-base md:text-sm">Target Adjustment</Label>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       Notify when targets are adjusted due to market movement
                     </p>
                   </div>
@@ -864,7 +864,7 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label className="text-base md:text-sm">Daily Summary</Label>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted-foreground">
                       Receive a daily summary of all trades
                     </p>
                   </div>

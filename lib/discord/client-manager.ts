@@ -285,6 +285,10 @@ export class DiscordClientManager {
   /**
    * Run Discord client with auto-reconnect logic
    * Token is retrieved from encrypted storage when needed
+   *
+   * After successful login, waits for the client to disconnect before
+   * attempting reconnection. Without this wait, the loop would immediately
+   * re-login on an already-connected client, causing a 30s timeout.
    */
   private async runClientWithReconnect(userId: string): Promise<void> {
     const maxReconnectAttempts = 5;
@@ -298,6 +302,42 @@ export class DiscordClientManager {
         // Decrypt token only when needed for login
         const token = managed.getToken();
         await this.loginWithTimeout(managed.client, token);
+
+        // Login succeeded - reset reconnect count
+        managed.reconnectCount = 0;
+        managed.lastError = null;
+
+        if (process.env.NODE_ENV !== "production") {
+          console.log(
+            `[DiscordClientManager] Client logged in successfully for user ${userId}, waiting for disconnect...`
+          );
+        }
+
+        // Wait for the client to disconnect before attempting reconnect.
+        // This prevents the loop from immediately re-logging in on an
+        // already-connected client (which caused the "Login timeout" bug).
+        await new Promise<void>((resolve) => {
+          const onDisconnect = () => {
+            cleanup();
+            resolve();
+          };
+          const onClose = () => {
+            cleanup();
+            resolve();
+          };
+          const cleanup = () => {
+            managed.client.removeListener("disconnect", onDisconnect);
+            managed.client.removeListener("close", onClose);
+          };
+          managed.client.on("disconnect", onDisconnect);
+          managed.client.on("close", onClose);
+        });
+
+        if (process.env.NODE_ENV !== "production") {
+          console.log(
+            `[DiscordClientManager] Client disconnected for user ${userId}, will attempt reconnect...`
+          );
+        }
       } catch (error) {
         if (process.env.NODE_ENV !== "production") {
           console.error(

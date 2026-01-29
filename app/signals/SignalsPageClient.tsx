@@ -327,15 +327,15 @@ export default function SignalsPage() {
                   value={rawSignal}
                   onChange={handleTextChange}
                   placeholder="Paste your trading signal here..."
-                  className="w-full h-40 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                  className="w-full h-40 px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus-visible:ring-ring resize-none"
                   disabled={!!imageFile}
                 />
               </div>
 
               <div className="flex items-center space-x-4">
-                <div className="flex-1 h-px bg-gray-300"></div>
-                <span className="text-sm text-gray-500">OR</span>
-                <div className="flex-1 h-px bg-gray-300"></div>
+                <div className="flex-1 h-px bg-border"></div>
+                <span className="text-sm text-muted-foreground">OR</span>
+                <div className="flex-1 h-px bg-border"></div>
               </div>
 
               <div>
@@ -363,14 +363,14 @@ export default function SignalsPage() {
               </div>
 
               {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-                  <p className="text-sm text-red-600">{error}</p>
+                <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-md">
+                  <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
                 </div>
               )}
 
               {success && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-md">
-                  <p className="text-sm text-green-600">{success}</p>
+                <div className="p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md">
+                  <p className="text-sm text-green-600 dark:text-green-400">{success}</p>
                 </div>
               )}
 
@@ -405,7 +405,7 @@ export default function SignalsPage() {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-foreground">Stop Loss</label>
-                    <p className="text-lg font-semibold text-red-600">
+                    <p className="text-lg font-semibold text-red-600 dark:text-red-400">
                       {parsedSignal.stopLoss || "N/A"}
                     </p>
                   </div>
@@ -418,13 +418,13 @@ export default function SignalsPage() {
                       parsedSignal.entries.map((entry, i) => (
                         <span
                           key={i}
-                          className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium"
+                          className="px-3 py-1 bg-blue-100 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 rounded-full text-sm font-medium"
                         >
                           {entry}
                         </span>
                       ))
                     ) : (
-                      <span className="text-sm text-gray-500">None</span>
+                      <span className="text-sm text-muted-foreground">None</span>
                     )}
                   </div>
                 </div>
@@ -436,13 +436,13 @@ export default function SignalsPage() {
                       parsedSignal.targets.map((target, i) => (
                         <span
                           key={i}
-                          className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium"
+                          className="px-3 py-1 bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-400 rounded-full text-sm font-medium"
                         >
                           {target}
                         </span>
                       ))
                     ) : (
-                      <span className="text-sm text-gray-500">None</span>
+                      <span className="text-sm text-muted-foreground">None</span>
                     )}
                   </div>
                 </div>
@@ -459,7 +459,7 @@ export default function SignalsPage() {
                     <label className="text-sm font-medium text-foreground">Parsing Issues</label>
                     <ul className="mt-1 space-y-1">
                       {parsedSignal.errors.map((err, i) => (
-                        <li key={i} className="text-sm text-red-600">
+                        <li key={i} className="text-sm text-red-600 dark:text-red-400">
                           {err}
                         </li>
                       ))}

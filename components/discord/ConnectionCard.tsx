@@ -171,17 +171,17 @@ export function ConnectionCard({ connection, onUpdate }: ConnectionCardProps) {
           <div className="flex items-center gap-4 py-2 border-y border-border">
             <div className="flex items-center gap-2">
               {connection.autoExecute ? (
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <CheckCircle2 className="h-4 w-4 text-green-500 dark:text-green-400" />
               ) : (
-                <XCircle className="h-4 w-4 text-gray-500" />
+                <XCircle className="h-4 w-4 text-muted-foreground" />
               )}
               <span className="text-sm">Auto-execute</span>
             </div>
             <div className="flex items-center gap-2">
               {connection.requireConfirmation ? (
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <CheckCircle2 className="h-4 w-4 text-green-500 dark:text-green-400" />
               ) : (
-                <XCircle className="h-4 w-4 text-gray-500" />
+                <XCircle className="h-4 w-4 text-muted-foreground" />
               )}
               <span className="text-sm">Confirmation</span>
             </div>

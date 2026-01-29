@@ -92,7 +92,7 @@ export default function PortfolioPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 dark:border-purple-400" />
       </div>
     );
   }
@@ -108,16 +108,16 @@ export default function PortfolioPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+            <h1 className="text-3xl font-bold">
               Portfolio
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-2">
+            <p className="text-muted-foreground mt-2">
               View your complete Binance portfolio with real-time prices
             </p>
           </div>
           <div className="flex items-center gap-3">
             {isConnected && (
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-sm">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-100 dark:bg-green-950/30 text-green-700 dark:text-green-300 text-sm">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 Live
               </div>

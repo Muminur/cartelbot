@@ -81,15 +81,15 @@ const getStatusColor = (status: string) => {
     case "parsed":
       return "bg-blue-500";
     case "executing":
-      return "bg-purple-500";
+      return "bg-primary";
     case "completed":
       return "bg-green-500";
     case "failed":
       return "bg-red-500";
     case "cancelled":
-      return "bg-gray-500";
+      return "bg-muted-foreground";
     default:
-      return "bg-gray-500";
+      return "bg-muted-foreground";
   }
 };
 
@@ -1275,7 +1275,7 @@ export default function SignalDetailModal({
                 </Badge>
               )}
               {!trade && (
-                <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-300">
+                <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border">
                   Estimated
                 </Badge>
               )}
@@ -1361,7 +1361,7 @@ export default function SignalDetailModal({
                         className={`text-xs ${
                           getFilledTargets().size > 0
                             ? 'bg-green-100 text-green-800 border-green-300'
-                            : 'bg-gray-100 text-muted-foreground border-gray-300'
+                            : 'bg-muted text-muted-foreground border-border'
                         }`}
                       >
                         {getFilledTargets().size > 0 && <CheckCircle2 className="h-3 w-3 mr-1 inline" />}
@@ -1805,12 +1805,12 @@ export default function SignalDetailModal({
                                   tpTriggered
                                     ? 'bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700'
                                     : tpStatus === 'CANCELED'
-                                    ? 'bg-gray-100 dark:bg-gray-800/50 border-gray-300 dark:border-gray-600'
+                                    ? 'bg-muted border-border'
                                     : 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800'
                                 }`}>
                                   <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-xs font-bold text-gray-900 dark:text-gray-100">
+                                      <span className="text-xs font-bold">
                                         Take Profit #{currentTpIndex}
                                       </span>
                                       {tpTriggered && (
@@ -1826,7 +1826,7 @@ export default function SignalDetailModal({
                                       <Badge
                                         className={
                                           tpTriggered ? "bg-green-500 text-white" :
-                                          tpStatus === "CANCELED" ? "bg-gray-400 text-white" :
+                                          tpStatus === "CANCELED" ? "bg-muted-foreground/60 text-white" :
                                           tpStatus === "PARTIALLY_FILLED" ? "bg-blue-500 text-white" :
                                           "bg-yellow-500 text-white"
                                         }
@@ -1844,7 +1844,7 @@ export default function SignalDetailModal({
                                     </div>
                                     <div>
                                       <span className="text-muted-foreground">Quantity:</span>
-                                      <span className="ml-2 text-gray-900 dark:text-gray-100">{takeProfit.quantity.toFixed(6)}</span>
+                                      <span className="ml-2">{takeProfit.quantity.toFixed(6)}</span>
                                     </div>
                                     {tpExecutedQty > 0 && (
                                       <>
@@ -1856,13 +1856,13 @@ export default function SignalDetailModal({
                                         </div>
                                         <div>
                                           <span className="text-muted-foreground">Filled Value:</span>
-                                          <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">${tpFilledValue.toFixed(2)}</span>
+                                          <span className="ml-2 font-medium">${tpFilledValue.toFixed(2)}</span>
                                         </div>
                                       </>
                                     )}
                                     <div className="col-span-2">
                                       <span className="text-muted-foreground">Order ID:</span>
-                                      <span className="ml-2 font-mono text-xs text-gray-700 dark:text-gray-300">{takeProfit.orderId}</span>
+                                      <span className="ml-2 font-mono text-xs text-muted-foreground">{takeProfit.orderId}</span>
                                     </div>
                                   </div>
                                   {tpTriggered && slStatus === 'CANCELED' && (
@@ -1879,12 +1879,12 @@ export default function SignalDetailModal({
                                   slTriggered
                                     ? 'bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-700'
                                     : slStatus === 'CANCELED'
-                                    ? 'bg-gray-100 dark:bg-gray-800/50 border-gray-300 dark:border-gray-600'
+                                    ? 'bg-muted border-border'
                                     : 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800'
                                 }`}>
                                   <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-xs font-bold text-gray-900 dark:text-gray-100">
+                                      <span className="text-xs font-bold">
                                         Stop Loss for TP #{currentTpIndex}
                                       </span>
                                       {slTriggered && (
@@ -1894,7 +1894,7 @@ export default function SignalDetailModal({
                                     <Badge
                                       className={
                                         slTriggered ? "bg-red-500 text-white" :
-                                        slStatus === "CANCELED" ? "bg-gray-400 text-white" :
+                                        slStatus === "CANCELED" ? "bg-muted-foreground/60 text-white" :
                                         slStatus === "PARTIALLY_FILLED" ? "bg-blue-500 text-white" :
                                         "bg-yellow-500 text-white"
                                       }
@@ -1911,7 +1911,7 @@ export default function SignalDetailModal({
                                     </div>
                                     <div>
                                       <span className="text-muted-foreground">Quantity:</span>
-                                      <span className="ml-2 text-gray-900 dark:text-gray-100">{stopLoss.quantity.toFixed(6)}</span>
+                                      <span className="ml-2">{stopLoss.quantity.toFixed(6)}</span>
                                     </div>
                                     {slExecutedQty > 0 && (
                                       <>
@@ -1923,13 +1923,13 @@ export default function SignalDetailModal({
                                         </div>
                                         <div>
                                           <span className="text-muted-foreground">Filled Value:</span>
-                                          <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">${slFilledValue.toFixed(2)}</span>
+                                          <span className="ml-2 font-medium">${slFilledValue.toFixed(2)}</span>
                                         </div>
                                       </>
                                     )}
                                     <div className="col-span-2">
                                       <span className="text-muted-foreground">Order ID:</span>
-                                      <span className="ml-2 font-mono text-xs text-gray-700 dark:text-gray-300">{stopLoss.orderId}</span>
+                                      <span className="ml-2 font-mono text-xs text-muted-foreground">{stopLoss.orderId}</span>
                                     </div>
                                   </div>
                                   {slTriggered && tpStatus === 'CANCELED' && (
@@ -1940,8 +1940,8 @@ export default function SignalDetailModal({
                                     </div>
                                   )}
                                   {slStatus === 'CANCELED' && tpTriggered && (
-                                    <div className="mt-2 pt-2 border-t border-gray-300 dark:border-gray-600">
-                                      <span className="text-xs text-gray-700 dark:text-gray-400">
+                                    <div className="mt-2 pt-2 border-t border-border">
+                                      <span className="text-xs text-muted-foreground">
                                         Auto-cancelled when take profit filled
                                       </span>
                                     </div>
@@ -2000,7 +2000,7 @@ export default function SignalDetailModal({
 
                     {/* Trade Summary */}
                     <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
-                      <div className="text-xs font-semibold text-purple-900 dark:text-purple-300 mb-2">TRADE SUMMARY</div>
+                      <div className="text-xs font-semibold text-primary mb-2">TRADE SUMMARY</div>
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div>
                           <span className="text-muted-foreground">Trade Status:</span>

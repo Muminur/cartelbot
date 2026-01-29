@@ -16,7 +16,7 @@ export function DashboardLayout({
   showSidebar = true,
 }: DashboardLayoutProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-background dark:to-secondary transition-colors">
+    <div className="min-h-screen bg-gradient-to-br from-muted/50 to-muted dark:from-background dark:to-secondary transition-colors">
       <Navigation userEmail={userEmail} />
       <div className="flex">
         {showSidebar && <Sidebar className="hidden lg:block" />}

@@ -183,7 +183,7 @@ export default function TradesPage() {
               <Activity className="h-4 w-4" />
               Active Trades
               {activeTrades.length > 0 && (
-                <span className="ml-1 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded-full">
+                <span className="ml-1 px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-950/30 text-blue-800 dark:text-blue-300 rounded-full">
                   {activeTrades.length}
                 </span>
               )}
@@ -223,7 +223,7 @@ export default function TradesPage() {
               <CardContent>
                 {loading ? (
                   <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+                    <Loader2 className="h-8 w-8 animate-spin text-purple-600 dark:text-purple-400" />
                   </div>
                 ) : activeTrades.length === 0 ? (
                   <div className="text-center py-12">
@@ -265,7 +265,7 @@ export default function TradesPage() {
               <CardContent>
                 {loading ? (
                   <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+                    <Loader2 className="h-8 w-8 animate-spin text-purple-600 dark:text-purple-400" />
                   </div>
                 ) : historyTrades.length === 0 ? (
                   <div className="text-center py-12">

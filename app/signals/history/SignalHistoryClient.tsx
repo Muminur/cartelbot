@@ -29,19 +29,19 @@ import { toast } from "sonner";
 const getStatusBadgeVariant = (status: string) => {
   switch (status) {
     case "pending":
-      return "bg-yellow-500";
+      return "bg-yellow-500 dark:bg-yellow-600";
     case "parsed":
-      return "bg-blue-500";
+      return "bg-blue-500 dark:bg-blue-600";
     case "executing":
-      return "bg-purple-500";
+      return "bg-primary";
     case "completed":
-      return "bg-green-500";
+      return "bg-green-500 dark:bg-green-600";
     case "failed":
-      return "bg-red-500";
+      return "bg-red-500 dark:bg-red-600";
     case "cancelled":
-      return "bg-gray-500";
+      return "bg-muted-foreground";
     default:
-      return "bg-gray-500";
+      return "bg-muted-foreground";
   }
 };
 
@@ -406,7 +406,7 @@ function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<t
   if (loading && !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -427,7 +427,7 @@ function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<t
           </div>
           <div className="flex items-center gap-2">
             {isAutoRefreshing && (
-              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300">
+              <Badge variant="outline" className="bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-800">
                 <RefreshCw className="h-3 w-3 mr-1 animate-spin inline" />
                 Auto-refreshing
               </Badge>
@@ -452,11 +452,11 @@ function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<t
             <CardContent>
               {loading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                 </div>
               ) : signals.length === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-gray-500">No signals found</p>
+                  <p className="text-muted-foreground">No signals found</p>
                   <Button onClick={() => router.push("/signals")} className="mt-4">
                     Submit Your First Signal
                   </Button>
@@ -491,9 +491,9 @@ function SignalHistoryPageContent({ searchParams }: { searchParams: ReturnType<t
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 {signal.isImageSignal ? (
-                                  <ImageIcon className="h-4 w-4 text-purple-500" />
+                                  <ImageIcon className="h-4 w-4 text-primary" />
                                 ) : (
-                                  <FileText className="h-4 w-4 text-blue-500" />
+                                  <FileText className="h-4 w-4 text-blue-500 dark:text-blue-400" />
                                 )}
                                 <span className="text-sm">
                                   {signal.isImageSignal ? "Image" : "Text"}

@@ -120,7 +120,7 @@ export default function AdminDashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -130,7 +130,7 @@ export default function AdminDashboardPage() {
       <div className="flex items-center justify-center min-h-[400px]">
         <Card className="max-w-md">
           <CardContent className="pt-6">
-            <div className="flex items-center gap-3 text-red-600">
+            <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
               <AlertCircle className="h-5 w-5" />
               <p>{error}</p>
             </div>
@@ -145,22 +145,22 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-foreground dark:text-white">Admin Dashboard</h1>
-        <p className="text-muted-foreground dark:text-gray-400 mt-2">System overview and statistics</p>
+        <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
+        <p className="text-muted-foreground mt-2">System overview and statistics</p>
       </div>
 
       {/* User Stats */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               Total Users
             </CardTitle>
-            <Users className="h-4 w-4 text-gray-400" />
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground dark:text-white">{stats.users.total}</div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <div className="text-2xl font-bold text-foreground">{stats.users.total}</div>
+            <p className="text-xs text-muted-foreground mt-1">
               {stats.users.active} active
             </p>
           </CardContent>
@@ -168,16 +168,16 @@ export default function AdminDashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               With API Keys
             </CardTitle>
-            <Activity className="h-4 w-4 text-gray-400" />
+            <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground dark:text-white">
+            <div className="text-2xl font-bold text-foreground">
               {stats.users.withApiKeys}
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               {((stats.users.withApiKeys / stats.users.total) * 100).toFixed(1)}% configured
             </p>
           </CardContent>
@@ -185,14 +185,14 @@ export default function AdminDashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               Total Signals
             </CardTitle>
-            <Radio className="h-4 w-4 text-gray-400" />
+            <Radio className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground dark:text-white">{stats.signals.total}</div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <div className="text-2xl font-bold text-foreground">{stats.signals.total}</div>
+            <p className="text-xs text-muted-foreground mt-1">
               {stats.signals.today} today
             </p>
           </CardContent>
@@ -200,16 +200,16 @@ export default function AdminDashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground dark:text-gray-400">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
               Total P&L
             </CardTitle>
-            <TrendingUp className="h-4 w-4 text-gray-400" />
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${stats.trades.totalPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <div className={`text-2xl font-bold ${stats.trades.totalPnL >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
               ${stats.trades.totalPnL.toFixed(2)}
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               {stats.trades.closed} closed trades
             </p>
           </CardContent>
@@ -228,9 +228,9 @@ export default function AdminDashboardPage() {
                 <span className="text-sm font-medium">Free</span>
                 <Badge variant="outline">{stats.users.byTier.free}</Badge>
               </div>
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div className="w-full bg-secondary rounded-full h-2">
                 <div
-                  className="bg-gray-500 h-2 rounded-full"
+                  className="bg-muted-foreground h-2 rounded-full"
                   style={{
                     width: `${(stats.users.byTier.free / stats.users.total) * 100}%`,
                   }}
@@ -242,9 +242,9 @@ export default function AdminDashboardPage() {
                 <span className="text-sm font-medium">Premium</span>
                 <Badge variant="outline">{stats.users.byTier.premium}</Badge>
               </div>
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div className="w-full bg-secondary rounded-full h-2">
                 <div
-                  className="bg-blue-500 h-2 rounded-full"
+                  className="bg-blue-500 dark:bg-blue-400 h-2 rounded-full"
                   style={{
                     width: `${(stats.users.byTier.premium / stats.users.total) * 100}%`,
                   }}
@@ -256,9 +256,9 @@ export default function AdminDashboardPage() {
                 <span className="text-sm font-medium">Pro</span>
                 <Badge variant="outline">{stats.users.byTier.pro}</Badge>
               </div>
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div className="w-full bg-secondary rounded-full h-2">
                 <div
-                  className="bg-purple-500 h-2 rounded-full"
+                  className="bg-primary h-2 rounded-full"
                   style={{
                     width: `${(stats.users.byTier.pro / stats.users.total) * 100}%`,
                   }}
@@ -278,26 +278,26 @@ export default function AdminDashboardPage() {
           <CardContent>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground dark:text-gray-400">Pending</span>
-                <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                <span className="text-sm text-muted-foreground">Pending</span>
+                <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800">
                   {stats.signals.pending}
                 </Badge>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground dark:text-gray-400">Executing</span>
-                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                <span className="text-sm text-muted-foreground">Executing</span>
+                <Badge variant="outline" className="bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800">
                   {stats.signals.executing}
                 </Badge>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground dark:text-gray-400">Completed</span>
-                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                <span className="text-sm text-muted-foreground">Completed</span>
+                <Badge variant="outline" className="bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
                   {stats.signals.completed}
                 </Badge>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground dark:text-gray-400">Failed</span>
-                <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                <span className="text-sm text-muted-foreground">Failed</span>
+                <Badge variant="outline" className="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800">
                   {stats.signals.failed}
                 </Badge>
               </div>
@@ -312,21 +312,21 @@ export default function AdminDashboardPage() {
           <CardContent>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground dark:text-gray-400">Open Positions</span>
+                <span className="text-sm text-muted-foreground">Open Positions</span>
                 <Badge variant="outline">{stats.trades.open}</Badge>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground dark:text-gray-400">Total Trades</span>
+                <span className="text-sm text-muted-foreground">Total Trades</span>
                 <Badge variant="outline">{stats.trades.total}</Badge>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground dark:text-gray-400">Total Volume</span>
+                <span className="text-sm text-muted-foreground">Total Volume</span>
                 <span className="text-sm font-medium">
                   ${stats.trades.totalVolume.toFixed(2)}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground dark:text-gray-400">WebSocket Connections</span>
+                <span className="text-sm text-muted-foreground">WebSocket Connections</span>
                 <Badge variant="outline">{stats.system.websocketConnections}</Badge>
               </div>
             </div>
@@ -341,7 +341,7 @@ export default function AdminDashboardPage() {
             <Trash2 className="h-5 w-5" />
             Database Cleanup
           </CardTitle>
-          <p className="text-sm text-muted-foreground dark:text-gray-400 mt-2">
+          <p className="text-sm text-muted-foreground mt-2">
             Remove mock/test signals that were never executed on Binance
           </p>
         </CardHeader>
@@ -387,58 +387,58 @@ export default function AdminDashboardPage() {
 
           {/* Analysis Results */}
           {cleanupAnalysis && (
-            <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
-              <h4 className="font-semibold text-sm text-foreground dark:text-white">Analysis Results</h4>
+            <div className="space-y-3 p-4 bg-muted rounded-lg border border-border">
+              <h4 className="font-semibold text-sm text-foreground">Analysis Results</h4>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div>
-                  <p className="text-xs text-muted-foreground dark:text-gray-400">Total Signals</p>
-                  <p className="text-lg font-bold text-foreground dark:text-white">{cleanupAnalysis.totalSignals}</p>
+                  <p className="text-xs text-muted-foreground">Total Signals</p>
+                  <p className="text-lg font-bold text-foreground">{cleanupAnalysis.totalSignals}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground dark:text-gray-400">Real Binance Orders</p>
-                  <p className="text-lg font-bold text-green-600">{cleanupAnalysis.signalsWithRealBinanceOrders}</p>
+                  <p className="text-xs text-muted-foreground">Real Binance Orders</p>
+                  <p className="text-lg font-bold text-green-600 dark:text-green-400">{cleanupAnalysis.signalsWithRealBinanceOrders}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground dark:text-gray-400">Mock Signals</p>
-                  <p className="text-lg font-bold text-red-600">{cleanupAnalysis.mockSignals?.length || 0}</p>
+                  <p className="text-xs text-muted-foreground">Mock Signals</p>
+                  <p className="text-lg font-bold text-red-600 dark:text-red-400">{cleanupAnalysis.mockSignals?.length || 0}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground dark:text-gray-400">With Trades</p>
-                  <p className="text-lg font-bold text-foreground dark:text-white">{cleanupAnalysis.signalsWithTrades}</p>
+                  <p className="text-xs text-muted-foreground">With Trades</p>
+                  <p className="text-lg font-bold text-foreground">{cleanupAnalysis.signalsWithTrades}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground dark:text-gray-400">Without Trades</p>
-                  <p className="text-lg font-bold text-foreground dark:text-white">{cleanupAnalysis.signalsWithoutTrades}</p>
+                  <p className="text-xs text-muted-foreground">Without Trades</p>
+                  <p className="text-lg font-bold text-foreground">{cleanupAnalysis.signalsWithoutTrades}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground dark:text-gray-400">Mock Trades</p>
-                  <p className="text-lg font-bold text-foreground dark:text-white">{cleanupAnalysis.signalsWithMockTrades}</p>
+                  <p className="text-xs text-muted-foreground">Mock Trades</p>
+                  <p className="text-lg font-bold text-foreground">{cleanupAnalysis.signalsWithMockTrades}</p>
                 </div>
               </div>
 
               {/* Mock Signals List */}
               {cleanupAnalysis.mockSignals?.length > 0 && (
                 <div className="mt-4">
-                  <h5 className="text-xs font-semibold text-muted-foreground dark:text-gray-400 mb-2">
+                  <h5 className="text-xs font-semibold text-muted-foreground mb-2">
                     Mock Signals (showing first 5):
                   </h5>
                   <div className="space-y-2">
                     {cleanupAnalysis.mockSignals.slice(0, 5).map((signal: any) => (
                       <div
                         key={signal._id}
-                        className="text-xs p-2 bg-white dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700"
+                        className="text-xs p-2 bg-card rounded border border-border"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-mono text-foreground dark:text-white">{signal.symbol}</span>
+                          <span className="font-mono text-foreground">{signal.symbol}</span>
                           <Badge variant="outline" className="text-xs">
                             {signal.status}
                           </Badge>
                         </div>
-                        <p className="text-muted-foreground dark:text-gray-400 mt-1">{signal.reason}</p>
+                        <p className="text-muted-foreground mt-1">{signal.reason}</p>
                       </div>
                     ))}
                     {cleanupAnalysis.mockSignals.length > 5 && (
-                      <p className="text-xs text-muted-foreground dark:text-gray-400 text-center">
+                      <p className="text-xs text-muted-foreground text-center">
                         ...and {cleanupAnalysis.mockSignals.length - 5} more
                       </p>
                     )}

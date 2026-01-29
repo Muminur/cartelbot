@@ -329,15 +329,15 @@ export default function OCOOrdersPage() {
 
   const getStatusBadge = (status: string) => {
     const colors: Record<string, string> = {
-      NEW: "bg-blue-500 text-white",
-      FILLED: "bg-green-500 text-white",
-      CANCELED: "bg-gray-500 text-white",
-      PARTIALLY_FILLED: "bg-yellow-500 text-white",
-      EXECUTING: "bg-yellow-500 text-white",
-      ALL_DONE: "bg-green-500 text-white",
+      NEW: "bg-blue-500 dark:bg-blue-600 text-white",
+      FILLED: "bg-green-500 dark:bg-green-600 text-white",
+      CANCELED: "bg-muted text-muted-foreground",
+      PARTIALLY_FILLED: "bg-yellow-500 dark:bg-yellow-600 text-white",
+      EXECUTING: "bg-yellow-500 dark:bg-yellow-600 text-white",
+      ALL_DONE: "bg-green-500 dark:bg-green-600 text-white",
     };
     return (
-      <Badge className={colors[status] || "bg-gray-500 text-white"}>
+      <Badge className={colors[status] || "bg-muted text-muted-foreground"}>
         {status}
       </Badge>
     );
@@ -364,10 +364,10 @@ export default function OCOOrdersPage() {
             <Badge
               className={
                 order.status === "FILLED"
-                  ? "bg-green-500 text-white text-xs"
+                  ? "bg-green-500 dark:bg-green-600 text-white text-xs"
                   : order.status === "CANCELED"
-                  ? "bg-gray-500 text-white text-xs"
-                  : "bg-blue-500 text-white text-xs"
+                  ? "bg-muted text-muted-foreground text-xs"
+                  : "bg-blue-500 dark:bg-blue-600 text-white text-xs"
               }
             >
               {order.status === "NEW" ? "" : order.status}
@@ -383,10 +383,10 @@ export default function OCOOrdersPage() {
             <Badge
               className={
                 order.status === "FILLED"
-                  ? "bg-red-500 text-white text-xs"
+                  ? "bg-red-500 dark:bg-red-600 text-white text-xs"
                   : order.status === "CANCELED"
-                  ? "bg-gray-500 text-white text-xs"
-                  : "bg-yellow-500 text-white text-xs"
+                  ? "bg-muted text-muted-foreground text-xs"
+                  : "bg-yellow-500 dark:bg-yellow-600 text-white text-xs"
               }
             >
               {order.status === "NEW" ? "" : order.status}
@@ -405,14 +405,14 @@ export default function OCOOrdersPage() {
     switch (status) {
       case "FILLED":
       case "ALL_DONE":
-        return "bg-green-50 hover:bg-green-100 dark:bg-green-950/20 dark:hover:bg-green-950/30";
+        return "bg-green-100 hover:bg-green-200 dark:bg-green-950/30 dark:hover:bg-green-950/40";
       case "CANCELED":
-        return "bg-gray-50 hover:bg-gray-100 dark:bg-gray-950/20 dark:hover:bg-gray-950/30";
+        return "bg-muted hover:bg-muted/80";
       case "PARTIALLY_FILLED":
       case "EXECUTING":
-        return "bg-yellow-50 hover:bg-yellow-100 dark:bg-yellow-950/20 dark:hover:bg-yellow-950/30";
+        return "bg-yellow-100 hover:bg-yellow-200 dark:bg-yellow-950/30 dark:hover:bg-yellow-950/40";
       case "NEW":
-        return "bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-950/30";
+        return "bg-blue-100 hover:bg-blue-200 dark:bg-blue-950/30 dark:hover:bg-blue-950/40";
       default:
         return "hover:bg-muted/50";
     }
@@ -429,7 +429,7 @@ export default function OCOOrdersPage() {
       return (
         <div className="space-y-1">
           <div className="text-sm text-muted-foreground">Loading price...</div>
-          <RefreshCw className="h-4 w-4 animate-spin text-gray-400" />
+          <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
         </div>
       );
     }
@@ -444,8 +444,8 @@ export default function OCOOrdersPage() {
         <Badge
           className={`${
             isPositive
-              ? "bg-green-500 text-white"
-              : "bg-red-500 text-white"
+              ? "bg-green-500 dark:bg-green-600 text-white"
+              : "bg-red-500 dark:bg-red-600 text-white"
           } text-xs flex items-center gap-1 w-fit`}
         >
           {isPositive ? (
@@ -482,7 +482,7 @@ export default function OCOOrdersPage() {
     return (
       <DashboardLayout userEmail={user?.email || ""}>
         <div className="flex items-center justify-center h-96">
-          <RefreshCw className="h-8 w-8 animate-spin text-purple-600" />
+          <RefreshCw className="h-8 w-8 animate-spin text-purple-600 dark:text-purple-400" />
         </div>
       </DashboardLayout>
     );
@@ -513,15 +513,15 @@ export default function OCOOrdersPage() {
 
         {/* API Keys Warning */}
         {apiKeysError && (
-          <Alert variant="destructive" className="border-orange-500 bg-orange-50">
-            <AlertCircle className="h-4 w-4 text-orange-600" />
-            <AlertTitle className="text-orange-900">API Keys Required</AlertTitle>
-            <AlertDescription className="text-orange-800">
+          <Alert variant="destructive" className="border-orange-500 dark:border-orange-600 bg-orange-50 dark:bg-orange-950/30">
+            <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+            <AlertTitle className="text-orange-900 dark:text-orange-200">API Keys Required</AlertTitle>
+            <AlertDescription className="text-orange-800 dark:text-orange-300">
               {apiKeysError}
               <Button
                 variant="outline"
                 size="sm"
-                className="ml-4 border-orange-600 text-orange-600 hover:bg-orange-100"
+                className="ml-4 border-orange-600 dark:border-orange-500 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-950/50"
                 onClick={() => router.push("/settings")}
               >
                 <Settings className="h-4 w-4 mr-2" />
@@ -612,14 +612,14 @@ export default function OCOOrdersPage() {
                     <>
                       <TableRow
                         key={`header-${signalId}`}
-                        className={`${groupIdx % 2 === 0 ? 'bg-slate-100 dark:bg-slate-800' : 'bg-slate-50 dark:bg-slate-900'} border-t-2 border-slate-300 dark:border-slate-600`}
+                        className={`${groupIdx % 2 === 0 ? 'bg-secondary' : 'bg-muted'} border-t-2 border-border`}
                       >
                         <TableCell colSpan={9} className="py-2">
                           <div className="flex items-center gap-2">
                             <Badge variant="outline" className="font-mono text-xs">
                               Signal: {signalId.slice(-8)}
                             </Badge>
-                            <Badge className="bg-purple-500 text-white">
+                            <Badge className="bg-purple-500 dark:bg-purple-600 text-white">
                               {signalOrders.length} OCO{signalOrders.length > 1 ? 's' : ''}
                             </Badge>
                           </div>
@@ -643,8 +643,8 @@ export default function OCOOrdersPage() {
                                 variant="outline"
                                 className={
                                   order.testnet
-                                    ? "bg-orange-100 text-orange-800 border-orange-300"
-                                    : "bg-green-100 text-green-800 border-green-300"
+                                    ? "bg-orange-100 dark:bg-orange-950/30 text-orange-800 dark:text-orange-300 border-orange-300 dark:border-orange-600"
+                                    : "bg-green-100 dark:bg-green-950/30 text-green-800 dark:text-green-300 border-green-300 dark:border-green-600"
                                 }
                               >
                                 {order.testnet ? "TESTNET" : "MAINNET"}

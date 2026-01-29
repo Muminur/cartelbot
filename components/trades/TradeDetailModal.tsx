@@ -208,7 +208,7 @@ export function TradeDetailModal({
         return orders.map((order: IOrder) => (
           <div key={order.orderId} className="bg-muted/50 p-4 rounded-lg border border-border">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-semibold text-foreground">
+              <span className="text-sm font-semibold">
                 Order #{order.orderId}
               </span>
               <Badge className={getOrderStatusColor(order.status)}>
@@ -248,25 +248,25 @@ export function TradeDetailModal({
       return (
         <div key={takeProfit.orderListId} className="bg-muted/50 p-4 rounded-lg border-2 border-border space-y-3">
           {/* OCO Pair Header */}
-          <div className="text-xs font-semibold text-muted-foreground/80 mb-2">
+          <div className="text-xs font-semibold text-muted-foreground mb-2">
             OCO Pair #{currentTpIndex} (Order List ID: {takeProfit.orderListId})
           </div>
 
           {/* Take Profit Section */}
           <div className={`p-3 rounded-lg border-2 ${
             tpTriggered
-              ? 'bg-green-50 border-green-300 dark:bg-green-950/20 dark:border-green-800'
+              ? 'bg-green-50 border-green-300 dark:bg-green-950/30 dark:border-green-800'
               : tpStatus === 'CANCELED' || tpStatus === 'CANCELLED'
               ? 'bg-muted/70 border-border'
-              : 'bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800'
+              : 'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800'
           }`}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-foreground">
+                <span className="text-xs font-bold">
                   Take Profit #{currentTpIndex}
                 </span>
                 {tpTriggered && (
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
                 )}
               </div>
               <Badge
@@ -283,7 +283,7 @@ export function TradeDetailModal({
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <span className="text-muted-foreground">Target Price:</span>
-                <span className="ml-2 font-medium text-green-700">
+                <span className="ml-2 font-medium text-green-700 dark:text-green-400">
                   ${formatPrice(takeProfit.price || 0, 6)}
                 </span>
               </div>
@@ -295,7 +295,7 @@ export function TradeDetailModal({
                 <>
                   <div>
                     <span className="text-muted-foreground">Executed:</span>
-                    <span className="ml-2 font-semibold text-green-600">
+                    <span className="ml-2 font-semibold text-green-600 dark:text-green-400">
                       {formatNumber(tpExecutedQty, 6)}
                     </span>
                   </div>
@@ -311,8 +311,8 @@ export function TradeDetailModal({
               </div>
             </div>
             {tpTriggered && (slStatus === 'CANCELED' || slStatus === 'CANCELLED') && (
-              <div className="mt-2 pt-2 border-t border-green-200">
-                <span className="text-xs text-green-700 font-medium">
+              <div className="mt-2 pt-2 border-t border-green-200 dark:border-green-800">
+                <span className="text-xs text-green-700 dark:text-green-400 font-medium">
                   ✓ Take profit executed successfully
                 </span>
               </div>
@@ -322,18 +322,18 @@ export function TradeDetailModal({
           {/* Stop Loss Section */}
           <div className={`p-3 rounded-lg border-2 ${
             slTriggered
-              ? 'bg-red-50 border-red-300 dark:bg-red-950/20 dark:border-red-800'
+              ? 'bg-red-50 border-red-300 dark:bg-red-950/30 dark:border-red-800'
               : slStatus === 'CANCELED' || slStatus === 'CANCELLED'
               ? 'bg-muted/70 border-border'
-              : 'bg-orange-50 border-orange-200 dark:bg-orange-950/20 dark:border-orange-800'
+              : 'bg-orange-50 border-orange-200 dark:bg-orange-950/30 dark:border-orange-800'
           }`}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-foreground">
+                <span className="text-xs font-bold">
                   Stop Loss for TP #{currentTpIndex}
                 </span>
                 {slTriggered && (
-                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
                 )}
               </div>
               <Badge
@@ -350,7 +350,7 @@ export function TradeDetailModal({
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <span className="text-muted-foreground">Stop Price:</span>
-                <span className="ml-2 font-medium text-red-700">
+                <span className="ml-2 font-medium text-red-700 dark:text-red-400">
                   ${formatPrice(stopLoss.stopPrice || 0, 6)}
                 </span>
               </div>
@@ -362,7 +362,7 @@ export function TradeDetailModal({
                 <>
                   <div>
                     <span className="text-muted-foreground">Executed:</span>
-                    <span className="ml-2 font-semibold text-red-600">
+                    <span className="ml-2 font-semibold text-red-600 dark:text-red-400">
                       {formatNumber(slExecutedQty, 6)}
                     </span>
                   </div>
@@ -378,8 +378,8 @@ export function TradeDetailModal({
               </div>
             </div>
             {slTriggered && (tpStatus === 'CANCELED' || tpStatus === 'CANCELLED') && (
-              <div className="mt-2 pt-2 border-t border-red-200">
-                <span className="text-xs text-red-700 font-medium">
+              <div className="mt-2 pt-2 border-t border-red-200 dark:border-red-800">
+                <span className="text-xs text-red-700 dark:text-red-400 font-medium">
                   ⚠ Stop loss triggered - position closed at loss
                 </span>
               </div>
@@ -423,15 +423,15 @@ export function TradeDetailModal({
   const getStatusColor = (status: string) => {
     switch (status) {
       case "open":
-        return "bg-blue-100 text-blue-800";
+        return "bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-400";
       case "partial":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/30 dark:text-yellow-400";
       case "closed":
-        return "bg-green-100 text-green-800";
+        return "bg-green-100 text-green-800 dark:bg-green-950/30 dark:text-green-400";
       case "cancelled":
         return "bg-muted text-muted-foreground";
       case "pending_approval":
-        return "bg-purple-100 text-purple-800 dark:bg-purple-950/30 dark:text-purple-300";
+        return "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary";
       default:
         return "bg-muted text-muted-foreground";
     }
@@ -440,11 +440,11 @@ export function TradeDetailModal({
   const getCloseReasonColor = (reason?: string) => {
     switch (reason) {
       case "target":
-        return "bg-green-100 text-green-800";
+        return "bg-green-100 text-green-800 dark:bg-green-950/30 dark:text-green-400";
       case "stop_loss":
-        return "bg-red-100 text-red-800";
+        return "bg-red-100 text-red-800 dark:bg-red-950/30 dark:text-red-400";
       case "manual":
-        return "bg-blue-100 text-blue-800";
+        return "bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-400";
       case "cancelled":
         return "bg-muted text-muted-foreground";
       default:
@@ -455,16 +455,16 @@ export function TradeDetailModal({
   const getOrderStatusColor = (status: string) => {
     switch (status) {
       case "FILLED":
-        return "bg-green-100 text-green-800";
+        return "bg-green-100 text-green-800 dark:bg-green-950/30 dark:text-green-400";
       case "PARTIALLY_FILLED":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/30 dark:text-yellow-400";
       case "NEW":
-        return "bg-blue-100 text-blue-800";
+        return "bg-blue-100 text-blue-800 dark:bg-blue-950/30 dark:text-blue-400";
       case "CANCELED":
       case "CANCELLED":
         return "bg-muted text-muted-foreground";
       case "REJECTED":
-        return "bg-red-100 text-red-800 dark:bg-red-950/30 dark:text-red-300";
+        return "bg-red-100 text-red-800 dark:bg-red-950/30 dark:text-red-400";
       default:
         return "bg-muted text-muted-foreground";
     }
@@ -476,7 +476,7 @@ export function TradeDetailModal({
         <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
           <DialogTitle className="sr-only">Loading Trade Details</DialogTitle>
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         </DialogContent>
       </Dialog>
@@ -536,7 +536,7 @@ export function TradeDetailModal({
             <DialogDescription className="flex items-center justify-between">
               <span>Trade ID: {String(trade._id)}</span>
               {lastSyncTime && (
-                <span className="flex items-center gap-1 text-xs text-green-600">
+                <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                   <Radio className="h-3 w-3 animate-pulse" />
                   Live data from Binance (synced {lastSyncTime.toLocaleTimeString()})
                 </span>
@@ -561,7 +561,7 @@ export function TradeDetailModal({
 
             {/* Entry Details */}
             <div>
-              <h3 className="font-semibold mb-3 text-foreground">Entry Details</h3>
+              <h3 className="font-semibold mb-3">Entry Details</h3>
               <div className="grid grid-cols-2 gap-4 bg-muted/50 p-4 rounded-lg">
                 <div>
                   <p className="text-sm text-muted-foreground">Entry Price</p>
@@ -585,7 +585,7 @@ export function TradeDetailModal({
             {/* Exit Details (if closed) */}
             {trade.status === "closed" && trade.exitPrice && (
               <div>
-                <h3 className="font-semibold mb-3 text-foreground">Exit Details</h3>
+                <h3 className="font-semibold mb-3">Exit Details</h3>
                 <div className="grid grid-cols-2 gap-4 bg-muted/50 p-4 rounded-lg">
                   <div>
                     <p className="text-sm text-muted-foreground">Exit Price</p>
@@ -614,7 +614,7 @@ export function TradeDetailModal({
             {/* P&L Breakdown */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h3 className="font-semibold text-foreground">P&L Breakdown</h3>
+                <h3 className="font-semibold">P&L Breakdown</h3>
                 {(trade.status === "open" || trade.status === "partial") && (
                   <Button
                     variant="outline"
@@ -652,11 +652,11 @@ export function TradeDetailModal({
                     {trade.status === "closed" ? "Realized P&L" : "Unrealized P&L"}
                   </span>
                   <div className="text-right">
-                    <div className={`font-bold text-lg ${pnl >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    <div className={`font-bold text-lg ${pnl >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
                       {pnl >= 0 ? <TrendingUp className="inline h-5 w-5 mr-1" /> : <TrendingDown className="inline h-5 w-5 mr-1" />}
                       {formatCurrency(pnl)}
                     </div>
-                    <div className={`text-sm ${pnl >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    <div className={`text-sm ${pnl >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
                       ({pnlPercentage >= 0 ? "+" : ""}{pnlPercentage.toFixed(2)}%)
                     </div>
                   </div>
@@ -666,7 +666,7 @@ export function TradeDetailModal({
 
             {/* Buy Order */}
             <div>
-              <h3 className="font-semibold mb-3 text-foreground">Buy Order</h3>
+              <h3 className="font-semibold mb-3">Buy Order</h3>
               <div className="bg-muted/50 p-4 rounded-lg space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Order ID</span>
@@ -727,12 +727,12 @@ export function TradeDetailModal({
             {/* Signal Information */}
             {trade.signalId && (
               <div>
-                <h3 className="font-semibold mb-3 text-foreground">Signal Information</h3>
+                <h3 className="font-semibold mb-3">Signal Information</h3>
                 <div className="bg-muted/50 p-4 rounded-lg">
                   <div className="flex justify-between items-start gap-4">
                     <div className="flex-1 min-w-0">
                       <span className="text-sm text-muted-foreground block mb-1">Signal ID</span>
-                      <code className="text-xs text-foreground/80 break-all block">
+                      <code className="text-xs text-muted-foreground break-all block">
                         {typeof trade.signalId === "string"
                           ? trade.signalId
                           : (trade.signalId as { _id?: string })._id || "N/A"}

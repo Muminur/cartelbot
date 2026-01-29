@@ -13,7 +13,7 @@ export function Sidebar({ className }: SidebarProps) {
   const router = useRouter();
 
   return (
-    <div className={cn("w-64 bg-white dark:bg-card border-r dark:border-border min-h-screen transition-colors", className)}>
+    <div className={cn("w-64 bg-card border-r border-border min-h-screen transition-colors", className)}>
       <nav className="p-4 space-y-1" role="navigation" aria-label="Main navigation">
         {NAVIGATION_ITEMS.map((item) => {
           const isActive = pathname === item.href;
@@ -25,8 +25,8 @@ export function Sidebar({ className }: SidebarProps) {
               className={cn(
                 "w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400"
-                  : "text-muted-foreground dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-accent"
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-muted"
               )}
             >
               <item.icon className="w-5 h-5" />

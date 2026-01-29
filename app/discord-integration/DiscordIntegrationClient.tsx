@@ -282,7 +282,7 @@ export default function DiscordIntegrationClient() {
           </div>
           {/* Live Notifications Status */}
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-card">
-            <Radio className={`h-4 w-4 ${isNotificationsConnected ? "text-green-500 animate-pulse" : "text-gray-400"}`} />
+            <Radio className={`h-4 w-4 ${isNotificationsConnected ? "text-green-500 animate-pulse" : "text-muted-foreground"}`} />
             <div className="text-sm">
               <div className="font-medium">
                 {isNotificationsConnected ? "Live Notifications" : "Connecting..."}
@@ -414,7 +414,7 @@ export default function DiscordIntegrationClient() {
                         id="tos-checkbox"
                         checked={tosAccepted}
                         onChange={(e) => setTosAccepted(e.target.checked)}
-                        className="h-4 w-4 rounded border-gray-300"
+                        className="h-4 w-4 rounded border-border"
                       />
                       <label htmlFor="tos-checkbox" className="text-sm font-medium">
                         I understand and accept the risks
