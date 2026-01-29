@@ -420,10 +420,10 @@ export async function POST(request: NextRequest) {
             });
           }
 
-          // Update signal status to active (trade fully executed)
+          // Update signal status to completed (trade fully executed with OCO orders)
           await Signal.updateOne(
             { _id: signal._id },
-            { status: "active" }
+            { status: "completed" }
           );
 
           // Emit: Trade completed successfully
