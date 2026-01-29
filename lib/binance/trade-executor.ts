@@ -406,17 +406,19 @@ async function retryOCOCreation<T>(
     } catch (error: unknown) {
       const isInsufficientBalance =
         error instanceof BinanceAPIError && error.binanceCode === -2010;
-      const isLastAttempt = attempt === maxRetries;
 
-      if (isInsufficientBalance && !isLastAttempt) {
-        const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff: 2s, 4s, 8s
+      // For -2010 errors: Do NOT retry here. The createOCOOrder method already
+      // handles fallbacks internally (new API -> legacy API -> individual orders).
+      // Retrying would just repeat the same 3-approach fallback unnecessarily.
+      if (isInsufficientBalance) {
         console.warn(
-          `[OCO] ${symbol} - Insufficient balance on attempt ${attempt}/${maxRetries}. ` +
-          `Retrying in ${delay}ms... (elapsed: ${elapsed}ms)`
+          `[OCO] ${symbol} - Insufficient balance (-2010) on attempt ${attempt}/${maxRetries}. ` +
+          `Not retrying - createOCOOrder already tried all fallback approaches.`
         );
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
+        throw error;
       }
+
+      const isLastAttempt = attempt === maxRetries;
 
       // Log final error with full context
       console.error(
