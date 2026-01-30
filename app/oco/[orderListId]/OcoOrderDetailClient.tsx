@@ -487,8 +487,8 @@ export default function OCODetailPage() {
                     <p className="text-sm text-muted-foreground mb-2">
                       Raw Signal Text
                     </p>
-                    <div className="bg-gray-100 p-4 rounded-md">
-                      <pre className="text-sm whitespace-pre-wrap">
+                    <div className="bg-muted p-4 rounded-md">
+                      <pre className="text-sm whitespace-pre-wrap text-foreground">
                         {signal.rawSignal}
                       </pre>
                     </div>
@@ -841,8 +841,8 @@ export default function OCODetailPage() {
                   <p className="text-sm text-muted-foreground mb-2">
                     Raw Signal Text
                   </p>
-                  <div className="bg-gray-100 p-4 rounded-md">
-                    <pre className="text-sm whitespace-pre-wrap">
+                  <div className="bg-muted p-4 rounded-md">
+                    <pre className="text-sm whitespace-pre-wrap text-foreground">
                       {tradeData.signalId.rawSignal}
                     </pre>
                   </div>
