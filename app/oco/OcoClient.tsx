@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -609,9 +609,8 @@ export default function OCOOrdersPage() {
                 </TableHeader>
                 <TableBody>
                   {Object.entries(groupedOrders).map(([signalId, signalOrders], groupIdx) => (
-                    <>
+                    <Fragment key={`group-${signalId}`}>
                       <TableRow
-                        key={`header-${signalId}`}
                         className={`${groupIdx % 2 === 0 ? 'bg-secondary' : 'bg-muted'} border-t-2 border-border`}
                       >
                         <TableCell colSpan={9} className="py-2">
@@ -679,7 +678,7 @@ export default function OCOOrdersPage() {
                           </TableRow>
                         );
                       })}
-                    </>
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>
