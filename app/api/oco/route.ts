@@ -2,12 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/auth";
 import { connectDB } from "@/lib/db/connection";
 import { Trade } from "@/lib/db/models/Trade";
+import "@/lib/db/models/Signal"; // Ensure Signal model is registered for populate
 import type { ITrade, IOrder } from "@/types";
 import { serializeResponse } from "@/lib/utils/serialize";
 
+type PopulatedSignal = {
+  _id: string;
+  symbol: string;
+  entries: number[];
+  targets: number[];
+  stopLoss: number;
+  status: string;
+  rawSignal: string;
+} | null;
+
 type LeanTrade = {
   _id: string;
-  signalId: string;
+  signalId: string | PopulatedSignal;
   symbol: string;
   sellOrders?: IOrder[];
   testnet?: boolean;
@@ -117,6 +128,7 @@ export async function GET(request: NextRequest) {
     try {
       tradesResult = await Trade.find(query)
         .select("signalId symbol sellOrders testnet createdAt")
+        .populate("signalId", "_id symbol entries targets stopLoss status rawSignal")
         .sort({ createdAt: -1 })
         .maxTimeMS(5000)
         .lean()
